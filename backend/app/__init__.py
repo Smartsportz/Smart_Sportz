@@ -1,0 +1,1 @@
+"""Smart Sportz backend package."""

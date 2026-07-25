@@ -1,0 +1,201 @@
+from __future__ import annotations
+
+from app.db.database import connect, ensure_storage
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sports (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  active INTEGER NOT NULL,
+  color TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tournaments (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  status TEXT NOT NULL,
+  location TEXT NOT NULL,
+  date TEXT NOT NULL,
+  registration_start TEXT NOT NULL DEFAULT '',
+  registration_end TEXT NOT NULL DEFAULT '',
+  teams INTEGER NOT NULL,
+  capacity INTEGER NOT NULL,
+  team_size INTEGER NOT NULL DEFAULT 16,
+  prize TEXT NOT NULL,
+  image TEXT NOT NULL,
+  accent TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tournament_cities (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  city TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(tournament_slug, city),
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
+CREATE TABLE IF NOT EXISTS teams (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  rank TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  players INTEGER NOT NULL,
+  wins INTEGER NOT NULL,
+  rating INTEGER NOT NULL,
+  image TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS live_matches (
+  id TEXT PRIMARY KEY,
+  tournament TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  home TEXT NOT NULL,
+  away TEXT NOT NULL,
+  score TEXT NOT NULL,
+  away_score TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL,
+  image TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS timeline_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id TEXT NOT NULL,
+  time TEXT NOT NULL,
+  type TEXT NOT NULL,
+  text TEXT NOT NULL,
+  score TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(match_id) REFERENCES live_matches(id)
+);
+
+CREATE TABLE IF NOT EXISTS registrations (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  team_name TEXT NOT NULL,
+  captain_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  city TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  payment_status TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
+CREATE TABLE IF NOT EXISTS registration_members (
+  id TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  jersey TEXT,
+  contact TEXT,
+  FOREIGN KEY(registration_id) REFERENCES registrations(id)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  method TEXT NOT NULL,
+  receipt_number TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(registration_id) REFERENCES registrations(id)
+);
+
+CREATE TABLE IF NOT EXISTS payment_intents (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  team_name TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  method TEXT NOT NULL,
+  contact TEXT NOT NULL,
+  status TEXT NOT NULL,
+  receipt_number TEXT NOT NULL,
+  qr_payload TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
+CREATE TABLE IF NOT EXISTS bracket_nodes (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  label TEXT NOT NULL,
+  team TEXT,
+  round TEXT NOT NULL,
+  x INTEGER NOT NULL,
+  y INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
+CREATE TABLE IF NOT EXISTS bracket_connections (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
+CREATE TABLE IF NOT EXISTS notification_events (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  audience TEXT NOT NULL,
+  channels TEXT NOT NULL,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
+CREATE TABLE IF NOT EXISTS cms_content (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  type TEXT NOT NULL,
+  body TEXT NOT NULL,
+  path TEXT NOT NULL,
+  published INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  entity TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+"""
+
+
+def init_schema() -> None:
+    ensure_storage()
+    with connect() as conn:
+        conn.executescript(SCHEMA)
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(tournaments)").fetchall()]
+        if "registration_start" not in columns:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN registration_start TEXT NOT NULL DEFAULT ''")
+        if "registration_end" not in columns:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN registration_end TEXT NOT NULL DEFAULT ''")
+        if "team_size" not in columns:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN team_size INTEGER NOT NULL DEFAULT 16")
+        registration_columns = [row[1] for row in conn.execute("PRAGMA table_info(registrations)").fetchall()]
+        if "city" not in registration_columns:
+            conn.execute("ALTER TABLE registrations ADD COLUMN city TEXT NOT NULL DEFAULT ''")
+        conn.commit()

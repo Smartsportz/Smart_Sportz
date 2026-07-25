@@ -179,7 +179,7 @@ export function MatchControlTable() {
         `${m.home} vs ${m.away}`,
         `${m.score} - ${m.awayScore}`,
         <span className="status orange">{m.status}</span>,
-        <Link to="/management/matches/match-48/control">Control</Link>,
+        <span className="table-actions"><Link to={`/management/matches/${m.id}/control`}>Control</Link><Link to="/management/tournaments/bangalore-corporate-t20/bracket">Rounds</Link></span>,
       ])}
     />
   );

@@ -12,14 +12,19 @@ const fade = {
 };
 
 const featureLinks = [
-  { label: "Real-time score sync", path: "/live" },
-  { label: "Razorpay-ready registration", path: "/tournaments/mumbai-premier-bash/register" },
-  { label: "Tournament fixture control", path: "/management/tournaments" },
-  { label: "CMS and sponsor content", path: "/admin/cms" },
-  { label: "Role-based dashboards", path: "/admin/dashboard" },
+  "Real-time score sync",
+  "Razorpay-ready registration",
+  "Tournament fixture control",
+  "CMS and sponsor content",
+  "Role-based dashboards",
 ];
 
 export function HomePage() {
+  const featured = [...tournaments].sort((a, b) => {
+    const priority = { Upcoming: 0, "Registration Open": 1, Live: 2, Completed: 3 } as Record<string, number>;
+    return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
+  }).slice(0, 3);
+
   return (
     <Page>
       <section className="hero">
@@ -29,7 +34,7 @@ export function HomePage() {
           <p>Run registrations, live scores, payments, teams, venues, sponsors, and reports from one premium enterprise sports platform.</p>
           <div className="hero-actions">
             <Link className="btn btn-primary" to="/tournaments">Explore tournaments</Link>
-            <Link className="btn btn-secondary" to="/tournaments/mumbai-premier-bash/register">Register team</Link>
+            <Link className="btn btn-secondary" to="/tournaments">Register team</Link>
           </div>
           <div className="hero-stats">
             {["500+ Events", "12K+ Athletes", "99.9% Sync"].map((item) => <span key={item}>{item}</span>)}
@@ -46,14 +51,14 @@ export function HomePage() {
       </section>
       <section className="section">
         <SectionTitle eyebrow="Tournament Discovery" title="Featured tournaments" text="Premium light theme by default, designed from the Remix UI references." />
-        <div className="card-grid">{tournaments.slice(0, 3).map((item) => <TournamentCard key={item.slug} item={item} />)}</div>
+        <div className="card-grid">{featured.map((item) => <TournamentCard key={item.slug} item={item} />)}</div>
       </section>
       <section className="section split">
         <motion.div {...fade}>
           <SectionTitle eyebrow="Platform Capability" title="Complete enterprise operations" text="Public website, participant portal, management portal, super admin, live score engine, CMS, reports, payments, and notifications are structured in one frontend." />
           <div className="feature-list">
             {featureLinks.map((feature) => (
-              <Link to={feature.path} key={feature.label}><CheckCircle2 size={18} />{feature.label}</Link>
+              <div className="feature-label" key={feature}><CheckCircle2 size={18} />{feature}</div>
             ))}
           </div>
         </motion.div>

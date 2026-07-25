@@ -1,7 +1,10 @@
 import { AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { Footer, PublicHeader } from "./components/UI";
+import { ScreenLoader } from "./loading/ScreenLoader";
+import { useLoading } from "./loading/LoadingContext";
 import {
   AdminPage,
   ArticleDetailPage,
@@ -12,7 +15,10 @@ import {
   LiveMatchPage,
   LoginPage,
   ManagementPage,
+  RegistrationPaymentPage,
   RegistrationPage,
+  RegistrationReviewPage,
+  RegistrationRosterPage,
   SettingsPage,
   SportDetailPage,
   SportsPage,
@@ -24,7 +30,41 @@ import {
   UserSectionPage,
   UtilityDetailPage,
   UserDashboardPage,
+  RoleProgramsPage,
+  BracketWorkspacePage,
+  TournamentRoundsPage,
 } from "./pages";
+
+function ScrollToTop() {
+  const { pathname, search } = useLocation();
+  const { showFor } = useLoading();
+
+  useEffect(() => {
+    function handleInternalNavigation(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      const link = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!link || link.target || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      const destination = new URL(link.href);
+      const current = new URL(window.location.href);
+      if (destination.origin !== current.origin || destination.pathname === current.pathname) {
+        return;
+      }
+      showFor(1300);
+    }
+
+    document.addEventListener("click", handleInternalNavigation, true);
+    return () => document.removeEventListener("click", handleInternalNavigation, true);
+  }, [showFor]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    showFor(window.location.search.includes("loading=1") ? 3000 : 1200);
+  }, [pathname, search]);
+
+  return null;
+}
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("smart-sportz-theme") === "dark");
@@ -38,15 +78,21 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <ScrollToTop />
+      <ScreenLoader />
       {!isPortal && <PublicHeader darkMode={darkMode} setDarkMode={setDarkMode} />}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />
           <Route path="/tournaments" element={<TournamentsPage />} />
           <Route path="/tournaments/:slug" element={<TournamentDetailPage />} />
-          <Route path="/tournaments/:slug/register" element={<RegistrationPage />} />
-          <Route path="/registration/:id/payment" element={<RegistrationPage />} />
-          <Route path="/payments/:id/receipt" element={<UtilityDetailPage type="payment" />} />
+          <Route path="/tournaments/:slug/rounds" element={<TournamentRoundsPage />} />
+          <Route path="/tournaments/:slug/register" element={<ProtectedRoute roles={["user"]}><RegistrationPage /></ProtectedRoute>} />
+          <Route path="/tournaments/:slug/register/roster" element={<ProtectedRoute roles={["user"]}><RegistrationRosterPage /></ProtectedRoute>} />
+          <Route path="/tournaments/:slug/register/payment" element={<ProtectedRoute roles={["user"]}><RegistrationPaymentPage /></ProtectedRoute>} />
+          <Route path="/tournaments/:slug/register/review" element={<ProtectedRoute roles={["user"]}><RegistrationReviewPage /></ProtectedRoute>} />
+          <Route path="/registration/:id/payment" element={<ProtectedRoute roles={["user"]}><RegistrationPaymentPage /></ProtectedRoute>} />
+          <Route path="/payments/:id/receipt" element={<ProtectedRoute roles={["user", "super_admin"]}><UtilityDetailPage type="payment" /></ProtectedRoute>} />
           <Route path="/sports" element={<SportsPage />} />
           <Route path="/sports/:slug" element={<SportDetailPage />} />
           <Route path="/live" element={<LiveHubPage />} />
@@ -66,33 +112,47 @@ export default function App() {
           <Route path="/forgot-password" element={<LoginPage recovery />} />
           <Route path="/otp" element={<LoginPage recovery />} />
           <Route path="/reset-password" element={<LoginPage recovery />} />
-          <Route path="/user/profile" element={<UserSectionPage section="profile" />} />
-          <Route path="/user/registrations" element={<UserSectionPage section="registrations" />} />
-          <Route path="/user/payments" element={<UserSectionPage section="payments" />} />
-          <Route path="/user/certificates" element={<UserSectionPage section="certificates" />} />
-          <Route path="/user/settings" element={<UserSectionPage section="settings" />} />
-          <Route path="/user/*" element={<UserDashboardPage />} />
-          <Route path="/management/tournaments" element={<ManagementSectionPage section="tournaments" />} />
-          <Route path="/management/registrations" element={<ManagementSectionPage section="registrations" />} />
-          <Route path="/management/matches" element={<ManagementSectionPage section="matches" />} />
-          <Route path="/management/players" element={<ManagementSectionPage section="players" />} />
-          <Route path="/management/reports" element={<ManagementSectionPage section="reports" />} />
-          <Route path="/management/*" element={<ManagementPage />} />
-          <Route path="/management/matches/:id/control" element={<LiveMatchPage />} />
-          <Route path="/admin/dashboard" element={<AdminPage />} />
-          <Route path="/admin/tournaments" element={<AdminPage section="tournaments" />} />
-          <Route path="/admin/teams" element={<AdminPage section="teams" />} />
-          <Route path="/admin/players" element={<AdminPage section="players" />} />
-          <Route path="/admin/payments" element={<AdminPage section="payments" />} />
-          <Route path="/admin/payments/operations" element={<UtilityDetailPage type="admin-payments" />} />
-          <Route path="/admin/cms" element={<AdminPage section="cms" />} />
-          <Route path="/admin/cms/:section" element={<CmsSectionPage />} />
-          <Route path="/admin/reports" element={<AdminPage section="reports" />} />
-          <Route path="/admin/reports/detail" element={<UtilityDetailPage type="admin-reports" />} />
-          <Route path="/admin/logs" element={<AdminPage section="logs" />} />
-          <Route path="/admin/logs/detail" element={<UtilityDetailPage type="admin-logs" />} />
-          <Route path="/live-ops/*" element={<LiveMatchPage />} />
-          <Route path="/settings" element={<SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} />} />
+          <Route path="/participant" element={<Navigate to="/participant/programs" replace />} />
+          <Route path="/participant/programs" element={<ProtectedRoute roles={["user"]}><RoleProgramsPage role="user" /></ProtectedRoute>} />
+          <Route path="/participant/*" element={<Navigate to="/user/dashboard" replace />} />
+          <Route path="/user/profile" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="profile" /></ProtectedRoute>} />
+          <Route path="/user/registrations" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="registrations" /></ProtectedRoute>} />
+          <Route path="/user/payments" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="payments" /></ProtectedRoute>} />
+          <Route path="/user/certificates" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="certificates" /></ProtectedRoute>} />
+          <Route path="/user/schedules" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="schedules" /></ProtectedRoute>} />
+          <Route path="/user/documents" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="documents" /></ProtectedRoute>} />
+          <Route path="/user/settings" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="settings" /></ProtectedRoute>} />
+          <Route path="/user/*" element={<ProtectedRoute roles={["user"]}><UserDashboardPage /></ProtectedRoute>} />
+          <Route path="/management/programs" element={<ProtectedRoute roles={["management"]}><RoleProgramsPage role="management" /></ProtectedRoute>} />
+          <Route path="/management/tournaments" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/management/registrations" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="registrations" /></ProtectedRoute>} />
+          <Route path="/management/matches" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="matches" /></ProtectedRoute>} />
+          <Route path="/management/players" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="players" /></ProtectedRoute>} />
+          <Route path="/management/announcements" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="announcements" /></ProtectedRoute>} />
+          <Route path="/management/reports" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="reports" /></ProtectedRoute>} />
+          <Route path="/management/matches/:id/control" element={<ProtectedRoute roles={["management", "super_admin"]}><LiveMatchPage /></ProtectedRoute>} />
+          <Route path="/management/tournaments/:slug/bracket" element={<ProtectedRoute roles={["management", "super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
+          <Route path="/management/*" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementPage /></ProtectedRoute>} />
+          <Route path="/super-admin" element={<Navigate to="/super-admin/programs" replace />} />
+          <Route path="/super-admin/programs" element={<ProtectedRoute roles={["super_admin"]}><RoleProgramsPage role="super_admin" /></ProtectedRoute>} />
+          <Route path="/super-admin/*" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/admin/dashboard" element={<ProtectedRoute roles={["super_admin"]}><AdminPage /></ProtectedRoute>} />
+          <Route path="/admin/tournaments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="users" /></ProtectedRoute>} />
+          <Route path="/admin/roles" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="roles" /></ProtectedRoute>} />
+          <Route path="/admin/teams" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="teams" /></ProtectedRoute>} />
+          <Route path="/admin/players" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="players" /></ProtectedRoute>} />
+          <Route path="/admin/payments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="payments" /></ProtectedRoute>} />
+          <Route path="/admin/payments/operations" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-payments" /></ProtectedRoute>} />
+          <Route path="/admin/cms" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="cms" /></ProtectedRoute>} />
+          <Route path="/admin/cms/:section" element={<ProtectedRoute roles={["super_admin"]}><CmsSectionPage /></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="reports" /></ProtectedRoute>} />
+          <Route path="/admin/reports/detail" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-reports" /></ProtectedRoute>} />
+          <Route path="/admin/logs" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="logs" /></ProtectedRoute>} />
+          <Route path="/admin/logs/detail" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-logs" /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute roles={["super_admin"]}><SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} /></ProtectedRoute>} />
+          <Route path="/live-ops/*" element={<ProtectedRoute roles={["management", "super_admin"]}><LiveMatchPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute roles={["super_admin", "management", "user"]}><SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>

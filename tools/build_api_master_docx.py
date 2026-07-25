@@ -42,11 +42,11 @@ def document_xml() -> str:
         ["Document", "API Master Internal and External API Specification"],
         ["Project", "Smart Sportz"],
         ["Scope", "External APIs needed, where to get credentials, internal REST APIs, Socket.IO events, page-to-endpoint mapping, webhooks, API security, response format, and implementation rules"],
-        ["Backend Stack", "Node.js, Express, Socket.IO, PostgreSQL, Prisma, Redis, service layer, repository pattern, middleware, validation, caching, audit logs"],
+        ["Backend Stack", "Production target: Node.js, Express, Socket.IO, PostgreSQL, Prisma, Redis, service layer, repository pattern, middleware, validation, caching, audit logs. Current local implementation: Python FastAPI with SQLite/local storage until external providers are connected."],
         ["Frontend Stack", "React, Vite, TypeScript, Tailwind, Redux, React Query, Framer Motion, reusable UI components"],
         ["Style", "Same compact black phase-document style: Times New Roman, black headings, single spacing, fixed tables, page border, compact margins"],
-        ["Date", "July 5, 2026"],
-        ["Version", "1.0"],
+        ["Date", "July 24, 2026"],
+        ["Version", "1.1"],
     ], [2400, 6960], header=False, fill="FFFFFF"))
     body.append(p(""))
     body.append(rich_callout("API Master Intent", [
@@ -136,13 +136,14 @@ def document_xml() -> str:
         ["Module", "Core Endpoints"],
         ["Auth", "POST /auth/login, POST /auth/otp/send, POST /auth/otp/verify, POST /auth/refresh, POST /auth/logout, POST /auth/forgot-password, POST /auth/reset-password, GET /auth/me"],
         ["Users and RBAC", "GET/POST /admin/users, GET/PATCH/DELETE /admin/users/:id, GET/POST /admin/roles, GET/POST /admin/permissions, PATCH /admin/users/:id/status"],
-        ["Tournament", "GET/POST /tournaments, GET/PATCH/DELETE /tournaments/:id, POST /tournaments/:id/publish, POST /tournaments/:id/fixtures/generate, GET /tournaments/:id/brackets"],
-        ["Registration", "POST /registrations/team, POST /registrations/player, POST /registrations/:id/documents, PATCH /registrations/:id/approve, PATCH /registrations/:id/reject, GET /registrations/status/:code"],
+        ["Tournament", "GET/POST /tournaments, GET/PATCH/DELETE /tournaments/:id, PATCH /management/tournaments/:slug/team-size, POST /tournaments/:id/publish, POST /tournaments/:id/fixtures/generate, GET /public/tournaments/:slug/bracket"],
+        ["Registration", "POST /registrations/team or POST /registrations, POST /registrations/player, POST /registrations/:id/documents, PATCH /management/registrations/:id/approve, PATCH /management/registrations/:id/reject, GET /registrations/status/:code"],
         ["Teams and Players", "GET/POST /teams, GET/PATCH /teams/:id, GET/POST /players, GET/PATCH /players/:id, POST /teams/:id/roster"],
         ["Payments", "POST /payments/orders, POST /payments/verify, POST /payments/webhook/razorpay, POST /payments/:id/refund, GET /payments/:id/receipt, GET /payments/:id/invoice"],
         ["Live Score", "GET /matches/live, POST /matches/:id/events, PATCH /matches/:id/score, PATCH /matches/:id/status, GET /matches/:id/timeline, GET /matches/:id/statistics"],
         ["CMS", "GET/POST /cms/pages, GET/POST /cms/sponsors, GET/POST /cms/gallery, GET/POST /cms/blogs, GET/POST /cms/faqs, POST /cms/publish"],
-        ["Notifications", "POST /notifications/send, GET/POST /notifications/templates, GET /notifications/logs, POST /notifications/test"],
+        ["Bracket and Rounds", "GET /public/tournaments/:slug/bracket, GET /management/brackets/:tournamentSlug, POST /management/brackets/:tournamentSlug/save, POST /management/brackets/:tournamentSlug/advance-winner, POST /management/brackets/:tournamentSlug/notify"],
+        ["Notifications", "POST /notifications/send, POST /management/brackets/:tournamentSlug/notify, GET/POST /notifications/templates, GET /notifications/logs, POST /notifications/test"],
         ["Reports and Logs", "GET /reports/dashboard, GET /reports/tournaments, GET /reports/payments, GET /reports/export, GET /logs/audit, GET /logs/login, GET /logs/webhooks"],
     ], [2200, 7160]))
 
@@ -151,16 +152,20 @@ def document_xml() -> str:
     body.append(table([
         ["Page Area", "Internal APIs Needed"],
         ["Landing Home", "GET /public/home, GET /public/tournaments/live, GET /public/sponsors, GET /public/stats, GET /public/gallery, GET /public/testimonials"],
-        ["Tournament Listing", "GET /public/tournaments?status=&sport=&search=&page=, GET /public/sports, GET /public/venues"],
-        ["Tournament Detail", "GET /public/tournaments/:slug, GET /public/tournaments/:id/fixtures, GET /public/tournaments/:id/standings, GET /public/tournaments/:id/gallery"],
-        ["Registration Form", "POST /registrations/team, POST /registrations/player, POST /registrations/:id/documents, GET /registrations/status/:code"],
+        ["Tournament Listing", "GET /public/tournaments?status=&sport=&search=&page=, GET /public/sports, GET /public/sports/:slug, GET /public/venues"],
+        ["Tournament Detail", "GET /public/tournaments/:slug, GET /public/tournaments/:slug/bracket, GET /public/tournaments/:id/fixtures, GET /public/tournaments/:id/standings, GET /public/tournaments/:id/gallery"],
+        ["Sport Tournament Page", "GET /public/sports/:slug returns only selected sport tournaments grouped as upcoming, live, and existing/completed. Do not mix all-sport tournaments on selected sport pages."],
+        ["Registration Form", "GET /public/tournaments/:slug for team_size, POST /registrations or /registrations/team with members[] exactly matching tournament team_size, POST /registrations/:id/documents, GET /registrations/status/:code"],
         ["Payment Page", "POST /payments/orders, POST /payments/verify, GET /payments/:id/receipt, GET /payments/:id/invoice"],
         ["Auth Pages", "POST /auth/login, POST /auth/otp/send, POST /auth/otp/verify, POST /auth/forgot-password, POST /auth/reset-password, POST /auth/refresh, GET /auth/me"],
         ["Super Admin Dashboard", "GET /admin/dashboard, GET /reports/dashboard, GET /logs/audit, GET /logs/login, GET /reports/payments"],
         ["Super Admin Users/RBAC", "GET/POST /admin/users, GET/POST /admin/roles, GET/POST /admin/permissions, PATCH /admin/users/:id/status, POST /admin/users/:id/reset-password"],
-        ["Super Admin Tournament Builder", "GET/POST/PATCH /tournaments, POST /tournaments/:id/fixtures/generate, POST /tournaments/:id/publish, GET /tournaments/:id/brackets"],
+        ["Super Admin Tournament Builder", "GET/POST/PATCH /tournaments, PATCH /management/tournaments/:slug/team-size, POST /tournaments/:id/fixtures/generate, POST /tournaments/:id/publish, GET /public/tournaments/:slug/bracket"],
         ["Super Admin CMS", "GET/POST/PATCH /cms/pages, /cms/sponsors, /cms/gallery, /cms/blogs, /cms/faqs, POST /cms/publish"],
         ["Management Dashboard", "GET /management/dashboard, GET /management/tournaments/:id/overview, GET /matches/live, GET /registrations?status=pending"],
+        ["Management Registration Approval", "POST /management/registrations/:registrationId/approve, POST /management/registrations/:registrationId/reject. Accepted teams feed bracket allocation."],
+        ["Manager Bracket Allocation Workspace", "GET /management/brackets/:tournamentSlug, POST /management/brackets/:tournamentSlug/save, POST /management/brackets/:tournamentSlug/advance-winner, POST /management/brackets/:tournamentSlug/notify"],
+        ["Public/User Rounds Viewer", "GET /public/tournaments/:slug/bracket. Upcoming tournaments show locked blank round circles and connector lines only; live/existing tournaments show published team progression and score details."],
         ["Match Control", "GET /matches/:id, PATCH /matches/:id/status, POST /matches/:id/events, PATCH /matches/:id/score, GET /matches/:id/timeline"],
         ["Player Control", "GET /teams/:id, PATCH /players/:id, POST /teams/:id/roster, POST /players/:id/documents, GET /players/:id/statistics"],
         ["Announcements", "POST /announcements, GET /announcements, POST /notifications/send, GET /notifications/templates"],
@@ -173,14 +178,38 @@ def document_xml() -> str:
         ["Workflow", "API Sequence"],
         ["Login", "POST /auth/login -> create session in Redis -> return access token and refresh token -> DB-3 login event."],
         ["OTP Login or Verification", "POST /auth/otp/send -> SMS provider adapter -> POST /auth/otp/verify -> mark verified -> audit event."],
-        ["Team Registration", "POST /registrations/team -> validate roster -> upload documents -> pending approval -> notify manager."],
+        ["Team Registration", "GET /public/tournaments/:slug -> read team_size -> POST /registrations/team or POST /registrations with members[] -> validate exact roster count including captain/sub-captain -> upload documents -> pending approval -> notify manager."],
         ["Approval", "PATCH /registrations/:id/approve or reject -> DB-1 status change -> DB-2 mirror -> DB-3 approval audit -> notification queue."],
         ["Payment", "POST /payments/orders -> Razorpay order -> frontend checkout -> POST /payments/verify -> pending confirmation."],
         ["Payment Webhook", "POST /payments/webhook/razorpay -> signature verify -> idempotent status update -> receipt/invoice -> notification."],
         ["Live Score", "POST /matches/:id/events -> DB-1 match event -> Redis active state -> Socket.IO broadcast -> DB-3 operator audit."],
+        ["Bracket Allocation", "POST /management/registrations/:id/approve -> accepted team appears in bracket workspace -> GET /management/brackets/:slug -> manager edits nodes/connections -> POST /management/brackets/:slug/save -> public bracket updates."],
+        ["Winner Progression", "PATCH /matches/:id/score or POST /matches/:id/events -> result calculation -> POST /management/brackets/:slug/advance-winner when approved -> next round node updated -> public rounds viewer refreshes."],
+        ["Manual Bracket Notification", "POST /management/brackets/:slug/notify with channels sms/email/both -> local notification event now, external SMS/email provider later."],
     ], [2300, 7060]))
 
-    body.append(p("10. Socket.IO Event Contract", style="Heading1"))
+    body.append(p("10. Sport-Specific Tournament, Registration Member, and Bracket APIs", style="Heading1"))
+    body.append(p("This section records the new frontend/backend update: selected sport pages show only that sport, upcoming public rounds show clean locked bracket circles with connector lines, and management users control accepted teams through a bracket workspace. Current local backend uses Python FastAPI and SQLite/local storage; production can map the same contracts to Node/Express/PostgreSQL."))
+    body.append(table([
+        ["API", "Auth", "Purpose", "Request / Response Notes"],
+        ["GET /api/v1/public/sports/:slug", "Public", "Return selected sport details and grouped tournaments in exact order: upcoming, live, existing/completed.", "Response includes sport, tournaments[], groups.upcoming[], groups.live[], groups.existing[]. Selected sport page must not display tournaments from other sports."],
+        ["GET /api/v1/public/tournaments/:slug", "Public", "Return tournament detail used by status-aware pages and registration.", "Response includes status, sport, teams, capacity, team_size, prize, venue/date/image metadata. Registration form uses team_size."],
+        ["GET /api/v1/public/tournaments/:slug/bracket", "Public", "Return published bracket nodes/connections for Rounds page.", "Upcoming tournaments render blank locked circles and connector lines only. Live/existing tournaments can render teams, rounds, score records, and winner paths."],
+        ["POST /api/v1/registrations", "Public with validation / CAPTCHA in production", "Create tournament registration with team details and member details.", "Body includes tournament_slug, team_name, captain_name, email, phone, members[]. members[] count must equal tournament.team_size and includes captain plus sub-captain."],
+        ["POST /api/v1/management/registrations/:registrationId/approve", "Management or Super Admin", "Approve registration after payment/document review.", "Updates registration status to accepted, writes audit log, and makes team available to bracket allocation."],
+        ["POST /api/v1/management/registrations/:registrationId/reject", "Management or Super Admin", "Reject registration with audit trail.", "Updates registration status to rejected, writes audit log, and should trigger manual/queued notification."],
+        ["PATCH /api/v1/management/tournaments/:slug/team-size", "Management or Super Admin", "Set members-per-team on tournament create/configuration page.", "Body: { team_size: number }. Accepted range: 2-60. Registration uses this number for member-name inputs and backend validation."],
+        ["GET /api/v1/management/brackets/:tournamentSlug", "Management or Super Admin", "Load manager bracket allocation workspace.", "Response includes acceptedTeams[], nodes[], connections[], notifications[]. Accepted registrations feed the team list."],
+        ["POST /api/v1/management/brackets/:tournamentSlug/save", "Management or Super Admin", "Persist bracket nodes, connections, rounds, pair state, cancel/rematch state, and winner paths.", "Body includes nodes[], connections[], publish, audit_reason. No autosave; frontend enables Save only after changes."],
+        ["POST /api/v1/management/brackets/:tournamentSlug/advance-winner", "Management or Super Admin", "Move winner into next round from score result or approved override.", "Body includes winner_team, target_node_id, audit_reason. Manual override requires role permission and audit reason."],
+        ["POST /api/v1/management/brackets/:tournamentSlug/notify", "Management or Super Admin", "Send manual saved-bracket notification.", "Body includes channels[] such as sms/email, audience, message. Local implementation stores notification event; production adapter sends SMS/email."],
+    ], [2050, 1300, 2750, 3260]))
+    body.append(rich_callout("Bracket API Rendering Rule", [
+        "Public upcoming rounds must not expose manager controls, team bank, plus icons, or editable nodes. They render only round labels, blank circular slots, and clean connector lines until the manager publishes teams.",
+        "Manager workspace can display accepted teams, editable circular nodes, add/remove actions, save button, winner advance, cancel/rematch, and manual notification controls."
+    ]))
+
+    body.append(p("11. Socket.IO Event Contract", style="Heading1"))
     body.append(table([
         ["Event", "Purpose"],
         ["client:joinTournament", "Public users, admin users, and management users join tournament room for updates."],
@@ -193,7 +222,7 @@ def document_xml() -> str:
         ["dashboard:metricUpdated", "Super Admin and management dashboards receive live counters and alerts."],
     ], [2600, 6760]))
 
-    body.append(p("11. Webhook API Rules", style="Heading1"))
+    body.append(p("12. Webhook API Rules", style="Heading1"))
     body.extend(bullets([
         "Webhook routes must be public URLs, but protected by provider signature validation, secret tokens, replay protection, and idempotency.",
         "Razorpay webhook should update payment, order, refund, invoice, receipt, registration payment status, and DB-3 webhook log records.",
@@ -202,7 +231,7 @@ def document_xml() -> str:
         "Every webhook payload should be stored in DB-3 with provider, event type, provider event ID, checksum, status, and processed timestamp.",
     ]))
 
-    body.append(p("12. API Security Requirements", style="Heading1"))
+    body.append(p("13. API Security Requirements", style="Heading1"))
     body.append(table([
         ["Requirement", "Implementation Rule"],
         ["JWT", "Short-lived access tokens, rotating refresh tokens, Redis-backed revoke/session state."],
@@ -214,7 +243,7 @@ def document_xml() -> str:
         ["Audit", "Log sensitive read/write, login, export, score correction, payment, webhook, and settings operations in DB-3."],
     ], [2300, 7060]))
 
-    body.append(p("13. API Documentation Deliverables", style="Heading1"))
+    body.append(p("14. API Documentation Deliverables", style="Heading1"))
     body.extend(bullets([
         "Create OpenAPI/Swagger documentation for every REST route with method, path, auth, role, request body, query params, response, validation, and error codes.",
         "Create Postman collection grouped by Auth, Public, Tournament, Registration, Payment, Live Score, Admin, CMS, Notification, Reports, Logs, and Webhooks.",
@@ -223,7 +252,7 @@ def document_xml() -> str:
         "Create webhook setup guide with local tunneling, staging URL, production URL, signature validation, and replay testing.",
     ]))
 
-    body.append(p("14. External API Source Reference", style="Heading1"))
+    body.append(p("15. External API Source Reference", style="Heading1"))
     body.append(table([
         ["Provider", "Official Reference"],
         ["Razorpay API", "https://razorpay.com/docs/api/"],
@@ -240,9 +269,11 @@ def document_xml() -> str:
         ["Cloudflare Turnstile", "https://developers.cloudflare.com/turnstile/get-started/"],
         ["Google reCAPTCHA", "https://docs.cloud.google.com/recaptcha/docs/create-key-website"],
         ["OpenAI API", "https://platform.openai.com/docs/api-reference"],
+        ["Challonge Tournament Registration and Brackets", "https://challonge.com/features/tournaments and https://kb.challonge.com/en/article/hosting-a-sign-up-page-hsknjd/"],
+        ["Toornament Organizer Bracket Formats", "https://www.toornament.com/en_US/organizer-software"],
     ], [2600, 6760]))
 
-    body.append(p("15. AI Coding Instructions", style="Heading1"))
+    body.append(p("16. AI Coding Instructions", style="Heading1"))
     body.extend(bullets([
         "Build provider adapters under backend services so Razorpay, SMS, WhatsApp, email, push, media, maps, CAPTCHA, and AI providers can be swapped by configuration.",
         "Do not expose external provider secrets to React, public website pages, browser logs, or downloadable frontend bundles.",

@@ -267,6 +267,146 @@ def document_xml() -> str:
         "No page should ship without loading, empty, success, error, forbidden/unauthorized where relevant, and retry states.",
         "Use the design-system tokens and compact operational UI patterns from the phase documents.",
     ]))
+
+    body.append(p("21. Tournament Registration, Sport Discovery, and Bracket Workspace Addendum", style="Heading1"))
+    body.append(p("This addendum updates the frontend master plan with sport-specific tournament discovery, a stronger registration wizard, live and completed tournament detail behavior, manager registration approval, and a bracket allocation workspace based on real tournament management product patterns. Research references include Challonge for signup pages, roster management, seeding, brackets, and match chat; Toornament for single/double elimination, round-robin, league, Swiss, and custom brackets; and LeagueRepublic for automatic match creation as teams progress through tournament rounds."))
+    body.append(table([
+        ["Reference", "Pattern to Apply in Smart Sportz"],
+        ["Challonge", "Use signup pages, roster management, seeding, bracket visibility, and match-level communication patterns as product references."],
+        ["Toornament", "Support multiple tournament structures such as single elimination, double elimination, round-robin, league, Swiss, and custom brackets."],
+        ["LeagueRepublic", "Allow tournament matches to be generated as teams progress, with manager control over schedule, winner/replay, and round changes."],
+    ], [2200, 7160]))
+
+    body.append(p("21.1 Updated Registration Wizard", style="Heading2"))
+    body.append(p("Team tournament registration must add a new Team Member Details step immediately after Team Details. This keeps team identity and member identity separate, improves review quality for managers, and prepares the platform for sport-specific member validation later."))
+    body.append(image_paragraph("rIdImage7", "Registration Wizard Team Member Step", "Registration wizard with new team member details step", 7))
+    body.append(table([
+        ["Step Order", "Step Name", "Frontend Requirement"],
+        ["1", "Team Details", "Team name, logo, sport, category, city/location, captain contact, and basic eligibility fields."],
+        ["2", "Team Member Details", "Captain name and team member names are required for team registrations. Optional future fields: member role, jersey number, phone/email, document status, and player category."],
+        ["3", "Roster / Documents", "Player list review, verification files, identity documents, waiver/terms acceptance, and upload status."],
+        ["4", "Payment", "Fee summary, coupon/discount where enabled, payment or local payment state, receipt/invoice preview."],
+        ["5", "Review", "Final review, registration status, submitted summary, and next steps."],
+    ], [1200, 2200, 5960]))
+    body.extend(bullets([
+        "The Team Member Details step should support adding/removing members before submission.",
+        "Validation should prevent empty captain name and empty member names for team tournament registration.",
+        "The review page should display team details and member details as separate sections.",
+    ]))
+
+    body.append(p("21.2 Sport-Specific Tournament Discovery", style="Heading2"))
+    body.append(p("When a user selects a sport from the Sports menu, the application must show only tournaments for the selected sport. It must not mix all-sport tournament cards on the selected sport page. The selected sport tournament page must group tournaments by status in a predictable order."))
+    body.append(image_paragraph("rIdImage8", "Sport Specific Tournament Sections", "Selected sport tournament page grouped by upcoming live and existing tournaments", 8))
+    body.append(table([
+        ["Section Order", "Section", "Behavior"],
+        ["1", "Upcoming Tournaments", "Display upcoming/open-registration tournaments for the selected sport first. Cards open the upcoming tournament detail page with registration CTA."],
+        ["2", "Live Tournaments", "Display active tournaments for the selected sport. Cards open the live tournament detail page with live video, score, team-wise individual scores, timing, highlights, records, and rounds."],
+        ["3", "Existing / Completed Tournaments", "Display completed or historical tournaments for the selected sport. Cards open historical tournament detail with archived rounds, match/player score details, winners, highlights, and downloadable records."],
+    ], [1500, 2500, 5360]))
+    body.extend(bullets([
+        "The Sports page card action should be View Tournament and route to the selected sport tournament listing page.",
+        "A selected sport page should keep sport context visible through heading, breadcrumbs, filters, and empty states.",
+        "If a sport has no tournaments in a status group, show a compact empty state for that group rather than hiding the entire sport page.",
+    ]))
+
+    body.append(p("21.3 Tournament Detail Behavior by Status", style="Heading2"))
+    body.append(image_paragraph("rIdImage9", "Tournament Detail Status Model", "Upcoming live and existing tournament detail page model with rounds button", 9))
+    body.append(table([
+        ["Tournament Status", "Detail Page Requirements"],
+        ["Upcoming", "Show tournament overview, rules, venue, schedule, team capacity, prize, registration status, eligibility, sponsors, FAQs, and a Register button that opens the registration wizard."],
+        ["Live", "Show live video area, team score, individual scores separated team-wise, timing, live match status, highlights, score history, commentary/timeline, statistics, records, and Rounds button."],
+        ["Existing / Completed", "Show completed rounds, final result, winners, match history, player/team score details, highlights, records, downloadable summaries, and archived Rounds button."],
+    ], [2300, 7060]))
+    body.extend(bullets([
+        "Every tournament detail page should include a Rounds button inside the main tournament container and near round-related containers.",
+        "For live tournaments, the Rounds button opens active round progression and current bracket/tree state.",
+        "For completed tournaments, the Rounds button opens the archived bracket with clickable rounds and match/player score details.",
+    ]))
+
+    body.append(p("21.4 Manager Registration Approval and Bracket Entry", style="Heading2"))
+    body.append(p("Management users must be able to review team registrations for assigned tournaments, accept or reject registrations, and use accepted teams as the source for bracket allocation. For example, accepted cricket tournament teams should appear in the manager bracket allocation page for that cricket tournament."))
+    body.append(table([
+        ["Manager Area", "Frontend Requirement"],
+        ["Registration Approval", "Show pending team registrations with captain, members, payment state, documents, eligibility, and accept/reject actions."],
+        ["Accepted Teams", "Accepted teams become eligible for bracket allocation and should appear in the bracket workspace team panel."],
+        ["Audit Visibility", "Manager decisions should show reviewer, decision time, reason where required, and notification status."],
+        ["User Visibility", "Accepted registration status should appear on the participant/user page after manager save/publish."],
+    ], [2300, 7060]))
+
+    body.append(p("21.5 Bracket Allocation Workspace", style="Heading2"))
+    body.append(p("The default bracket workflow should be auto bracket first. Accepted teams automatically populate a tournament bracket/tree structure, then managers can manually adjust before saving. The workspace should support the user's circular node model while keeping real tournament operations clear and recoverable."))
+    body.append(image_paragraph("rIdImage10", "Manager Bracket Workspace Canvas", "Bracket allocation workspace with accepted team panel circular nodes inspector and toolbar", 10))
+    body.append(table([
+        ["Workspace Zone", "Required UI / Behavior"],
+        ["Left Team Panel", "Accepted team cards with logo, team name, seed/rank where available, status, and draggable behavior."],
+        ["Main Workspace", "Canvas/tree workspace with circular nodes representing team slots, matches, round slots, or winner positions."],
+        ["Node Add", "A node can receive a team by drag/drop from the left panel or by clicking the center plus icon and selecting an accepted team."],
+        ["Node Remove", "Removing a mistaken team clears only the team assignment. It should not delete the node unless manager chooses Delete node."],
+        ["Pair Action", "Selecting two nodes and clicking Pair connects teams into a match pair."],
+        ["Next Round Action", "Clicking Next Round creates or connects the winner path to the next round node."],
+        ["Repair / Delete", "Managers can repair broken connections, delete selected nodes/connections, and reassign teams before saving."],
+        ["Cancel / Rematch", "Cancel selected round/match and create rematch or regenerate the next-round path with manager permission."],
+        ["Save Rule", "No autosave. Save button becomes enabled after changes. Save validates bracket consistency before publish."],
+    ], [2300, 7060]))
+    body.extend(bullets([
+        "The workspace should display round labels such as Round 1, Semi-Final, and Final.",
+        "Connections should be flexible enough for custom brackets but validated before save.",
+        "The UI should include zoom, fit-to-screen, undo/redo history where feasible, and selected-node inspector details.",
+        "Saved bracket changes should display on public/user tournament pages only after save/publish, not while manager is still editing.",
+    ]))
+
+    body.append(p("21.6 Automatic Winner Progression", style="Heading2"))
+    body.append(image_paragraph("rIdImage11", "Winner Progression Flow", "Live score result advancing winners to next round with override and rematch controls", 11))
+    body.append(table([
+        ["Progression Rule", "Frontend Requirement"],
+        ["Score Linked Winner", "When a round/match score identifies a winner, the winner should automatically move to the next round node."],
+        ["Manager Override", "Manager can override winner movement only with permission and audit reason."],
+        ["Rematch", "Manager can create rematch after cancellation, disputed result, or operational issue."],
+        ["Archived History", "Completed bracket history remains visible to public/user pages, including previous rounds and score details."],
+        ["Draft vs Published", "Unsaved manager changes remain draft-only until Save/Publish is clicked."],
+    ], [2300, 7060]))
+
+    body.append(p("21.7 Manual SMS / Email Notification Flow", style="Heading2"))
+    body.append(p("Notifications must be manager-controlled after saved changes. The system should not send SMS or email during every canvas edit because that would create noisy and incorrect communication. After saving bracket or registration changes, the manager gets a manual notification action."))
+    body.append(image_paragraph("rIdImage12", "Manual SMS and Email Notification Flow", "Manual SMS and email notification flow after saved bracket or registration changes", 12))
+    body.append(table([
+        ["Notification Trigger", "Manual Channel Behavior"],
+        ["Registration Accepted", "Manager can select SMS, Email, or both to notify team captain and members where contact data exists."],
+        ["Bracket Published", "Manager can notify all accepted teams after bracket is saved/published."],
+        ["Match Pair Created", "Manager can notify affected teams only."],
+        ["Round Changed", "Manager can notify affected teams and optionally all tournament teams."],
+        ["Match Cancelled / Rematch", "Manager can notify affected teams with cancellation/rematch details."],
+        ["Winner Advanced", "Manager can notify winning team and next opponent after score-linked progression."],
+    ], [2600, 6760]))
+    body.extend(bullets([
+        "Notification button should appear after saved changes, not while the bracket is dirty/unsaved.",
+        "Notification modal should show audience, selected channel, message preview, and send confirmation.",
+        "Delivery status should be visible in manager audit/activity area.",
+    ]))
+
+    body.append(p("21.8 Backend and API Notes for Frontend Planning", style="Heading2"))
+    body.append(table([
+        ["API / Data Need", "Frontend Contract Expectation"],
+        ["Accepted Registration Feed", "Manager bracket workspace reads accepted teams from assigned tournament registrations."],
+        ["Bracket Save", "Endpoint persists nodes, teams, connections, rounds, pairs, winner paths, cancelled state, rematch state, and draft/published state."],
+        ["Winner Progression", "Live score result can auto-advance winner to next round and return updated bracket state."],
+        ["Manual Override", "Override requires manager/admin role, audit reason, and refreshed bracket state."],
+        ["Notification Send", "Endpoint accepts selected channel: SMS, Email, or both, plus audience and message context."],
+    ], [2500, 6860]))
+
+    body.append(p("21.9 Acceptance Scenarios for This Addendum", style="Heading2"))
+    body.extend(bullets([
+        "Register a team and add captain/member details in the new Team Member Details step.",
+        "Select Cricket from Sports and see only Cricket tournaments grouped as Upcoming, Live, and Existing.",
+        "Open an upcoming tournament and see registration button plus rules, venue, capacity, prize, and schedule.",
+        "Open a live tournament and see live video area, team-wise scores, individual scores, timing, highlights, records, and Rounds button.",
+        "Open an existing tournament and see archived rounds and score details.",
+        "Manager accepts a registration and the accepted team appears in bracket allocation.",
+        "Auto bracket generates from accepted teams, manager edits it, Save enables, and saved state appears on public/user pages.",
+        "Winner advances automatically from live score result, with manager override, cancel, rematch, repair, and delete actions available by permission.",
+        "Manager sends manual SMS/email notification after saved bracket or registration changes.",
+    ]))
+
     body.append(rich_callout("Frontend Master Completion Criteria", [
         "This frontend master document is complete when it gives the implementation team a single source of truth for public pages, portal pages, route groups, user workflows, live score flows, registration/payment flows, shared components, frontend state, data fetching, permissions, page states, responsiveness, accessibility, SEO, performance, testing, and production delivery expectations."
     ]))
@@ -293,6 +433,12 @@ def document_rels_xml() -> str:
   <Relationship Id="rIdImage4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_live_score_workflow.png"/>
   <Relationship Id="rIdImage5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_state_architecture.png"/>
   <Relationship Id="rIdImage6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_route_state_model.png"/>
+  <Relationship Id="rIdImage7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_addendum_registration_member_step.png"/>
+  <Relationship Id="rIdImage8" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_addendum_sport_tournament_sections.png"/>
+  <Relationship Id="rIdImage9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_addendum_tournament_detail_status_model.png"/>
+  <Relationship Id="rIdImage10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_addendum_bracket_workspace_canvas.png"/>
+  <Relationship Id="rIdImage11" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_addendum_winner_progression_flow.png"/>
+  <Relationship Id="rIdImage12" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/frontend_addendum_manual_notification_flow.png"/>
 </Relationships>'''
 
 
@@ -318,6 +464,12 @@ def build() -> None:
         "word/media/frontend_live_score_workflow.png": ASSET_DIR / "frontend_live_score_workflow.png",
         "word/media/frontend_state_architecture.png": ASSET_DIR / "frontend_state_architecture.png",
         "word/media/frontend_route_state_model.png": ASSET_DIR / "frontend_route_state_model.png",
+        "word/media/frontend_addendum_registration_member_step.png": ASSET_DIR / "frontend_addendum_registration_member_step.png",
+        "word/media/frontend_addendum_sport_tournament_sections.png": ASSET_DIR / "frontend_addendum_sport_tournament_sections.png",
+        "word/media/frontend_addendum_tournament_detail_status_model.png": ASSET_DIR / "frontend_addendum_tournament_detail_status_model.png",
+        "word/media/frontend_addendum_bracket_workspace_canvas.png": ASSET_DIR / "frontend_addendum_bracket_workspace_canvas.png",
+        "word/media/frontend_addendum_winner_progression_flow.png": ASSET_DIR / "frontend_addendum_winner_progression_flow.png",
+        "word/media/frontend_addendum_manual_notification_flow.png": ASSET_DIR / "frontend_addendum_manual_notification_flow.png",
     }
     for source in assets.values():
         if not source.exists():

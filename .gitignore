@@ -11,6 +11,7 @@ frontend/tsconfig.tsbuildinfo
 *.log
 vite-output.log
 vite-error.log
+backend/storage/
 
 # Python cache files from document tooling
 __pycache__/

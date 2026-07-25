@@ -3,6 +3,7 @@ import { ArrowRight, ChevronRight, Moon, Search, Settings, Sun } from "lucide-re
 import { useEffect, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { navItems } from "../data/platform";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -22,6 +23,7 @@ export function Page({ children, className = "" }: { children: React.ReactNode; 
 export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; setDarkMode: (value: boolean) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -49,8 +51,12 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
           <button className="icon-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <Link to="/login" className="btn btn-secondary desktop-action">Login</Link>
-          <Link to="/tournaments/mumbai-premier-bash/register" className="btn btn-primary desktop-action">Register</Link>
+          {user ? (
+            <Link to={user.homePath} className="btn btn-secondary desktop-action">{user.roleLabel}</Link>
+          ) : (
+            <Link to="/login" className="btn btn-secondary desktop-action">Login</Link>
+          )}
+          <Link to="/tournaments" className="btn btn-primary desktop-action">Register</Link>
           <button
             className="icon-btn mobile-menu-btn"
             type="button"
@@ -77,8 +83,15 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
           </NavLink>
         ))}
         <div className="mobile-actions">
-          <Link to="/login" className="btn btn-secondary">Login</Link>
-          <Link to="/tournaments/mumbai-premier-bash/register" className="btn btn-primary">Register</Link>
+          {user ? (
+            <>
+              <Link to={user.homePath} className="btn btn-secondary">{user.roleLabel}</Link>
+              <button type="button" className="btn btn-secondary" onClick={logout}>Logout</button>
+            </>
+          ) : (
+            <Link to="/login" className="btn btn-secondary">Login</Link>
+          )}
+          <Link to="/tournaments" className="btn btn-primary">Register</Link>
         </div>
       </nav>
     </header>
@@ -117,6 +130,13 @@ export function PortalShell({
   children: React.ReactNode;
   action?: React.ReactNode;
 }) {
+  const { user, logout } = useAuth();
+  const primaryAction = user?.role === "super_admin"
+    ? { label: "Create Tournament", path: "/admin/tournaments" }
+    : user?.role === "management"
+      ? { label: "Live Control", path: "/management/matches" }
+      : { label: "Register Team", path: "/tournaments/mumbai-premier-bash/register" };
+
   return (
     <div className="portal-shell">
       <aside className="portal-sidebar">
@@ -135,8 +155,9 @@ export function PortalShell({
             );
           })}
         </nav>
-        <Link className="btn btn-primary wide" to="/tournaments/mumbai-premier-bash/register">Create Tournament</Link>
+        <Link className="btn btn-primary wide" to={primaryAction.path}>{primaryAction.label}</Link>
         <Link className="sidebar-link" to="/settings"><Settings size={16} /> Settings</Link>
+        <button className="sidebar-link sidebar-button" type="button" onClick={logout}><ArrowRight size={16} /> Logout</button>
       </aside>
       <section className="portal-main">
         <div className="portal-topbar">
@@ -145,7 +166,10 @@ export function PortalShell({
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          {action}
+          <div className="portal-actions">
+            {user && <span className="status blue">{user.roleLabel}</span>}
+            {action}
+          </div>
         </div>
         {children}
       </section>
@@ -190,6 +214,16 @@ export function MetricCard({
 }
 
 export function TournamentCard({ item }: { item: any }) {
+  const canRegister = item.status === "Registration Open";
+  const isUpcoming = item.status === "Upcoming";
+  const statusText = canRegister
+    ? `Register: ${item.registrationStart} - ${item.registrationEnd}`
+    : isUpcoming
+      ? `Registration opens ${item.registrationStart}`
+      : item.status === "Live"
+        ? "Live tournament in progress"
+        : `Registration closed ${item.registrationEnd}`;
+
   return (
     <Link to={`/tournaments/${item.slug}`} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
@@ -197,6 +231,7 @@ export function TournamentCard({ item }: { item: any }) {
       <div className="card-body">
         <span className={`status ${item.accent}`}>{item.status}</span>
         <h3>{item.name}</h3>
+        <p className="registration-window">{statusText}</p>
         <p>{item.sport} • {item.location} • {item.date}</p>
         <div className="card-meta">
           <span>{item.teams}/{item.capacity} teams</span>
