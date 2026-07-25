@@ -33,12 +33,12 @@ export const assets = {
 
 export const navItems = [
   { label: "Home", path: "/" },
-  { label: "Tournaments", path: "/tournaments" },
-  { label: "Sports", path: "/sports" },
-  { label: "Live", path: "/live" },
-  { label: "Teams", path: "/teams" },
+  { label: "Tournament", path: "/tournaments" },
   { label: "Gallery", path: "/gallery" },
-  { label: "Blog", path: "/blog" },
+  { label: "Live", path: "/live" },
+  { label: "News", path: "/news" },
+  { label: "Sports", path: "/sports" },
+  { label: "Teams", path: "/teams" },
   { label: "Contact", path: "/contact" },
 ];
 
@@ -299,12 +299,12 @@ export const sidebar = [
 ];
 
 export const userSidebar = [
-  { label: "Dashboard", path: "/user/dashboard", icon: BarChart3 },
-  { label: "Profile", path: "/user/profile", icon: Users },
-  { label: "Registrations", path: "/user/registrations", icon: Trophy },
-  { label: "Payments", path: "/user/payments", icon: CircleDollarSign },
+  { label: "Home", path: "/user/dashboard", icon: BarChart3 },
+  { label: "Tournament", path: "/user/registrations", icon: Trophy },
+  { label: "Gallery", path: "/user/documents", icon: GalleryHorizontal },
+  { label: "Live", path: "/user/payments", icon: Activity },
   { label: "Certificates", path: "/user/certificates", icon: Medal },
-  { label: "Schedules", path: "/user/schedules", icon: CalendarDays },
+  { label: "News", path: "/user/schedules", icon: CalendarDays },
   { label: "Documents", path: "/user/documents", icon: FileText },
   { label: "Settings", path: "/user/settings", icon: ShieldCheck },
 ];
@@ -316,6 +316,7 @@ export const managementSidebar = [
   { label: "Matches", path: "/management/matches", icon: Activity },
   { label: "Players", path: "/management/players", icon: Users },
   { label: "Announcements", path: "/management/announcements", icon: FileText },
+  { label: "News", path: "/management/news", icon: GalleryHorizontal },
   { label: "Reports", path: "/management/reports", icon: BarChart3 },
 ];
 
@@ -327,13 +328,115 @@ export const timeline = [
 ];
 
 export const contentCards = [
-  { slug: "ai-sports-analytics", title: "The Future of AI in Professional Sports Analytics", type: "Article", icon: FileText, path: "/blog/ai-sports-analytics" },
+  { slug: "ai-sports-analytics", title: "The Future of AI in Professional Sports Analytics", type: "Article", icon: FileText, path: "/news/corporate-t20-live-score-surge" },
   { slug: "regional-masters-highlights", title: "Regional Masters Photo Highlights", type: "Gallery", icon: GalleryHorizontal, path: "/gallery" },
   { slug: "payment-refund-guide", title: "Tournament Payment and Refund Guide", type: "FAQ", icon: LifeBuoy, path: "/faq" },
   { slug: "venue-operations", title: "Venue Operations in Major Indian Cities", type: "Guide", icon: MapPin, path: "/contact" },
 ];
 
-export const cmsSections = ["Homepage Hero", "Sponsors", "Gallery", "Blogs", "FAQs", "About", "Contact", "Footer"];
+export const newsPosts = [
+  {
+    slug: "mumbai-mavericks-lift-premier-bash",
+    title: "Mumbai Mavericks Lift Premier Bash Trophy",
+    shortDescription: "Winner team ceremony, MVP moments, and final over highlights from Mumbai Premier Bash.",
+    image: assets.cricket,
+    category: "Winner Teams",
+    sport: "Cricket",
+    tournamentSlug: "mumbai-premier-bash",
+    city: "Mumbai",
+    status: "Published",
+    date: "Jul 25, 2026",
+    blocks: [
+      { type: "heading", content: "Championship final recap" },
+      { type: "paragraph", content: "Mumbai Mavericks controlled the final phase with disciplined bowling, clean fielding, and a decisive captaincy call in the last over." },
+      { type: "quote", content: "The squad stayed calm under pressure and trusted the tournament plan." },
+    ],
+  },
+  {
+    slug: "corporate-t20-live-score-surge",
+    title: "Corporate T20 Live Score Surge",
+    shortDescription: "India Forge take control with a late batting burst and updated live match records.",
+    image: assets.cricket,
+    category: "Match Updates",
+    sport: "Cricket",
+    tournamentSlug: "bangalore-corporate-t20",
+    city: "Bengaluru",
+    status: "Published",
+    date: "Jul 25, 2026",
+    blocks: [
+      { type: "heading", content: "Live match intelligence" },
+      { type: "paragraph", content: "The match center recorded batting momentum, score history, and team-wise individual performance updates throughout the innings." },
+      { type: "list", content: "Live score sync|Timeline commentary|Team records|Player highlights" },
+    ],
+  },
+  {
+    slug: "football-cup-registration-opens-delhi",
+    title: "Youth Football Cup Registration Window Opens",
+    shortDescription: "Delhi, Noida, and Gurugram teams can prepare rosters before the official deadline.",
+    image: assets.football,
+    category: "Tournament Updates",
+    sport: "Football",
+    tournamentSlug: "national-youth-football",
+    city: "Delhi",
+    status: "Published",
+    date: "Jul 24, 2026",
+    blocks: [
+      { type: "heading", content: "Registration guidance" },
+      { type: "paragraph", content: "Team captains should confirm city eligibility, roster size, documents, and registration payment before submission." },
+      { type: "bold", content: "Only configured tournament cities are available in the registration form." },
+    ],
+  },
+  {
+    slug: "kerala-volleyball-classic-archive",
+    title: "Kerala Volleyball Classic Archived Records",
+    shortDescription: "Completed match reports, player scorecards, and winner records are now available.",
+    image: assets.volleyball,
+    category: "Winner Teams",
+    sport: "Volleyball",
+    tournamentSlug: "kerala-volleyball-classic",
+    city: "Kochi",
+    status: "Published",
+    date: "Dec 14, 2025",
+    blocks: [
+      { type: "heading", content: "Completed tournament archive" },
+      { type: "paragraph", content: "Archived rounds, scorecards, final result, and downloadable records remain available for teams and spectators." },
+      { type: "image", content: assets.volleyball },
+    ],
+  },
+];
+
+export const sportHomeVisibility = [
+  { sportSlug: "cricket", showOnHome: true, sortOrder: 1 },
+  { sportSlug: "football", showOnHome: true, sortOrder: 2 },
+  { sportSlug: "basketball", showOnHome: true, sortOrder: 3 },
+  { sportSlug: "volleyball", showOnHome: false, sortOrder: 4 },
+  { sportSlug: "badminton", showOnHome: false, sortOrder: 5 },
+  { sportSlug: "table-tennis", showOnHome: false, sortOrder: 6 },
+  { sportSlug: "e-sports", showOnHome: false, sortOrder: 7 },
+  { sportSlug: "athletics", showOnHome: false, sortOrder: 8 },
+];
+
+export const leaderboardRecords = [
+  { sport: "Cricket", teamName: "Mumbai Mavericks", city: "Mumbai", rank: 1, tournamentsWon: 12, winRate: 88, points: 4820, recordLabel: "15 wins / 2 finals" },
+  { sport: "Cricket", teamName: "India Forge", city: "Bengaluru", rank: 2, tournamentsWon: 9, winRate: 84, points: 4510, recordLabel: "11 wins / live finalist" },
+  { sport: "Cricket", teamName: "Kochi Kings", city: "Mysuru", rank: 3, tournamentsWon: 7, winRate: 76, points: 3920, recordLabel: "Accepted playoff seed" },
+  { sport: "Football", teamName: "Bengaluru Bulls", city: "Delhi", rank: 1, tournamentsWon: 8, winRate: 82, points: 4140, recordLabel: "18 goals / 5 clean sheets" },
+  { sport: "Football", teamName: "Delhi Strikers", city: "Delhi", rank: 2, tournamentsWon: 6, winRate: 74, points: 3660, recordLabel: "Youth cup qualifier" },
+  { sport: "Basketball", teamName: "Chennai Chargers", city: "Chennai", rank: 1, tournamentsWon: 6, winRate: 79, points: 3710, recordLabel: "Pro Elite top seed" },
+  { sport: "Volleyball", teamName: "Kerala Spikers", city: "Kochi", rank: 1, tournamentsWon: 10, winRate: 86, points: 3980, recordLabel: "Classic champions" },
+  { sport: "Badminton", teamName: "Metro Smashers", city: "Mumbai", rank: 1, tournamentsWon: 5, winRate: 72, points: 3210, recordLabel: "Mixed doubles leaders" },
+  { sport: "Table Tennis", teamName: "Spin Masters", city: "Bengaluru", rank: 1, tournamentsWon: 4, winRate: 70, points: 3025, recordLabel: "Rapid rally record" },
+  { sport: "E-Sports", teamName: "Pixel Titans", city: "Bengaluru", rank: 1, tournamentsWon: 11, winRate: 90, points: 5060, recordLabel: "LAN cup champions" },
+  { sport: "Athletics", teamName: "Track Hawks", city: "Delhi", rank: 1, tournamentsWon: 7, winRate: 81, points: 4115, recordLabel: "Relay record holders" },
+];
+
+export const managerUsers = [
+  { name: "Tournament Manager", email: "manager@smartsportz.in", cities: ["Bengaluru", "Mysuru", "Mumbai"], status: "Active" },
+  { name: "North Zone Manager", email: "north.manager@smartsportz.in", cities: ["Delhi", "Noida", "Gurugram"], status: "Draft" },
+  { name: "South Venue Manager", email: "south.manager@smartsportz.in", cities: ["Chennai", "Kochi"], status: "Draft" },
+];
+
+export const cmsSections = ["Homepage Hero", "Sponsors", "Gallery", "News", "FAQs", "About", "Contact", "Footer"];
 export const paymentRows = ["Razorpay order created", "Webhook verified", "Receipt generated", "Refund pending review"];
 export const logRows = ["Admin login success", "Score correction requested", "Payment webhook processed", "CMS page published"];
 export const reports = ["Tournament revenue", "Registration funnel", "Venue utilization", "Live score audit", "Player participation"];

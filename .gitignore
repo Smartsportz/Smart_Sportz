@@ -13,6 +13,13 @@ vite-output.log
 vite-error.log
 backend/storage/
 
+# Local verification artifacts
+.chrome-shot-profile*/
+.edge-shot-profile*/
+verification_*.png
+verification_*.jpg
+screen.png
+
 # Python cache files from document tooling
 __pycache__/
 *.pyc

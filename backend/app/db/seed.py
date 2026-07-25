@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -163,6 +164,85 @@ def seed_operational_data() -> None:
         ]
         statements += [("INSERT INTO bracket_nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in nodes]
         statements += [("INSERT INTO bracket_connections VALUES (?, ?, ?, ?)", item) for item in connections]
+    manager = row("SELECT id FROM users WHERE email = ?", ("manager@smartsportz.in",))
+    if manager and not row("SELECT id FROM manager_city_assignments WHERE manager_user_id = ? LIMIT 1", (manager["id"],)):
+        for city in ["Bengaluru", "Mysuru", "Mumbai"]:
+            statements.append((
+                "INSERT OR IGNORE INTO manager_city_assignments(id, manager_user_id, city) VALUES (?, ?, ?)",
+                (f"mcity_{uuid4().hex[:10]}", manager["id"], city),
+            ))
+    if not row("SELECT sport_slug FROM sport_home_visibility LIMIT 1"):
+        visibility = [
+            ("cricket", 1, 1),
+            ("football", 1, 2),
+            ("basketball", 1, 3),
+            ("volleyball", 0, 4),
+            ("badminton", 0, 5),
+            ("table-tennis", 0, 6),
+            ("e-sports", 0, 7),
+            ("athletics", 0, 8),
+        ]
+        for sport_slug, show_on_home, sort_order in visibility:
+            statements.append((
+                "INSERT OR IGNORE INTO sport_home_visibility(sport_slug, show_on_home, sort_order, updated_by) VALUES (?, ?, ?, ?)",
+                (sport_slug, show_on_home, sort_order, manager["id"] if manager else None),
+            ))
+    if not row("SELECT slug FROM news_posts LIMIT 1"):
+        published = now()
+        news_posts = [
+            ("mumbai-mavericks-lift-premier-bash", "Mumbai Mavericks Lift Premier Bash Trophy", "Winner team ceremony, MVP moments, and final over highlights from Mumbai Premier Bash.", "/assets/cricket-stadium.png", "Winner Teams", "Cricket", "mumbai-premier-bash", "Mumbai", "published", manager["id"] if manager else None, published, published, published),
+            ("corporate-t20-live-score-surge", "Corporate T20 Live Score Surge", "India Forge take control with a late batting burst and updated live match records.", "/assets/cricket-stadium.png", "Match Updates", "Cricket", "bangalore-corporate-t20", "Bengaluru", "published", manager["id"] if manager else None, published, published, published),
+            ("football-cup-registration-opens-delhi", "Youth Football Cup Registration Window Opens", "Delhi, Noida, and Gurugram teams can prepare rosters before the official deadline.", "/assets/football-match.png", "Tournament Updates", "Football", "national-youth-football", "Delhi", "published", manager["id"] if manager else None, published, published, published),
+            ("kerala-volleyball-classic-archive", "Kerala Volleyball Classic Archived Records", "Completed match reports, player scorecards, and winner records are now available.", "/assets/volleyball-match.png", "Winner Teams", "Volleyball", "kerala-volleyball-classic", "Kochi", "published", manager["id"] if manager else None, published, published, published),
+        ]
+        statements += [("INSERT INTO news_posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in news_posts]
+        news_blocks = {
+            "mumbai-mavericks-lift-premier-bash": [
+                ("heading", "Championship final recap"),
+                ("paragraph", "Mumbai Mavericks controlled the final phase with disciplined bowling, clean fielding, and a decisive captaincy call in the last over."),
+                ("quote", "The squad stayed calm under pressure and trusted the tournament plan."),
+            ],
+            "corporate-t20-live-score-surge": [
+                ("heading", "Live match intelligence"),
+                ("paragraph", "The match center recorded batting momentum, score history, and team-wise individual performance updates throughout the innings."),
+                ("list", "Live score sync|Timeline commentary|Team records|Player highlights"),
+            ],
+            "football-cup-registration-opens-delhi": [
+                ("heading", "Registration guidance"),
+                ("paragraph", "Team captains should confirm city eligibility, roster size, documents, and registration payment before submission."),
+                ("bold", "Only configured tournament cities are available in the registration form."),
+            ],
+            "kerala-volleyball-classic-archive": [
+                ("heading", "Completed tournament archive"),
+                ("paragraph", "Archived rounds, scorecards, final result, and downloadable records remain available for teams and spectators."),
+                ("image", "/assets/volleyball-match.png"),
+            ],
+        }
+        for post_slug, blocks in news_blocks.items():
+            for sort_order, (block_type, content) in enumerate(blocks, start=1):
+                statements.append((
+                    "INSERT INTO news_blocks(id, post_slug, block_type, content_json, sort_order) VALUES (?, ?, ?, ?, ?)",
+                    (f"nblock_{uuid4().hex[:10]}", post_slug, block_type, json.dumps({"text": content}), sort_order),
+                ))
+    if not row("SELECT id FROM leaderboard_records LIMIT 1"):
+        leaderboard = [
+            ("Cricket", "Mumbai Mavericks", "Mumbai", 1, 12, 88, 4820, "15 wins / 2 finals"),
+            ("Cricket", "India Forge", "Bengaluru", 2, 9, 84, 4510, "11 wins / live finalist"),
+            ("Cricket", "Kochi Kings", "Mysuru", 3, 7, 76, 3920, "Accepted playoff seed"),
+            ("Football", "Bengaluru Bulls", "Delhi", 1, 8, 82, 4140, "18 goals / 5 clean sheets"),
+            ("Football", "Delhi Strikers", "Delhi", 2, 6, 74, 3660, "Youth cup qualifier"),
+            ("Basketball", "Chennai Chargers", "Chennai", 1, 6, 79, 3710, "Pro Elite top seed"),
+            ("Volleyball", "Kerala Spikers", "Kochi", 1, 10, 86, 3980, "Classic champions"),
+            ("Badminton", "Metro Smashers", "Mumbai", 1, 5, 72, 3210, "Mixed doubles leaders"),
+            ("Table Tennis", "Spin Masters", "Bengaluru", 1, 4, 70, 3025, "Rapid rally record"),
+            ("E-Sports", "Pixel Titans", "Bengaluru", 1, 11, 90, 5060, "LAN cup champions"),
+            ("Athletics", "Track Hawks", "Delhi", 1, 7, 81, 4115, "Relay record holders"),
+        ]
+        for sport, team_name, city, rank, tournaments_won, win_rate, points, record_label in leaderboard:
+            statements.append((
+                "INSERT INTO leaderboard_records(id, sport, team_name, city, rank, tournaments_won, win_rate, points, record_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (f"leader_{uuid4().hex[:10]}", sport, team_name, city, rank, tournaments_won, win_rate, points, record_label),
+            ))
     if statements:
         statements.append(("INSERT INTO audit_logs(actor, action, entity, entity_id, message, created_at) VALUES (?, ?, ?, ?, ?, ?)", ("system", "seed_upgrade", "database", "local", "Operational bracket and registration data seeded", now())))
         execute_many(statements)

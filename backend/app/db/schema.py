@@ -172,6 +172,62 @@ CREATE TABLE IF NOT EXISTS cms_content (
   published INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS news_posts (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  short_description TEXT NOT NULL,
+  image TEXT NOT NULL,
+  category TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  tournament_slug TEXT,
+  city TEXT NOT NULL,
+  status TEXT NOT NULL,
+  author_id TEXT,
+  published_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug),
+  FOREIGN KEY(author_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS news_blocks (
+  id TEXT PRIMARY KEY,
+  post_slug TEXT NOT NULL,
+  block_type TEXT NOT NULL,
+  content_json TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  FOREIGN KEY(post_slug) REFERENCES news_posts(slug)
+);
+
+CREATE TABLE IF NOT EXISTS sport_home_visibility (
+  sport_slug TEXT PRIMARY KEY,
+  show_on_home INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL,
+  updated_by TEXT,
+  FOREIGN KEY(sport_slug) REFERENCES sports(slug),
+  FOREIGN KEY(updated_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS manager_city_assignments (
+  id TEXT PRIMARY KEY,
+  manager_user_id TEXT NOT NULL,
+  city TEXT NOT NULL,
+  UNIQUE(manager_user_id, city),
+  FOREIGN KEY(manager_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS leaderboard_records (
+  id TEXT PRIMARY KEY,
+  sport TEXT NOT NULL,
+  team_name TEXT NOT NULL,
+  city TEXT NOT NULL,
+  rank INTEGER NOT NULL,
+  tournaments_won INTEGER NOT NULL,
+  win_rate INTEGER NOT NULL,
+  points INTEGER NOT NULL,
+  record_label TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor TEXT NOT NULL,

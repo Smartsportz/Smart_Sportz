@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.routes import admin, auth, live, management, payments, public, registrations, storage
+from app.api.routes import admin, auth, content, live, management, payments, public, registrations, storage
 from app.core.responses import ok
 from app.db.database import db_path
 
@@ -15,6 +15,7 @@ def health():
 
 
 api_router.include_router(auth.router)
+api_router.include_router(content.router)
 api_router.include_router(public.router)
 api_router.include_router(registrations.router)
 api_router.include_router(payments.router)

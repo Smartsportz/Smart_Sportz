@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { managementSidebar, registrationQueue, tournaments, userSidebar } from "../data/platform";
+import { managementSidebar, newsPosts, registrationQueue, sportHomeVisibility, sports, tournaments, userSidebar } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
+import { RichTextToolbarPreview } from "./NewsPages";
 
 const userContent = {
   profile: ["Identity verification", "Captain and player details", "Emergency contact", "Document upload"],
@@ -19,6 +20,7 @@ const managementContent = {
   matches: ["Live score control", "Timeline events", "Score correction", "Match closure"],
   players: ["Roster management", "Eligibility status", "Player documents", "Captain updates"],
   announcements: ["Tournament notices", "Team broadcast", "Schedule change alert", "Delivery status"],
+  news: ["Create winner-team news", "Upload match update image", "Format article sections", "Publish city-scoped updates"],
   reports: ["Revenue reports", "Registration funnel", "Live score audit", "Export center"],
 };
 
@@ -65,6 +67,51 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
         <span className="table-actions"><Link to={`/tournaments/${item.slug}`}>Open</Link><Link to={`/management/tournaments/${item.slug}/bracket`}>Bracket</Link></span>,
       ])}
     />
+  ) : section === "news" ? (
+    <div className="manager-news-layout">
+      <section className="panel news-editor-panel">
+        <span className="status emerald">Manager News Editor</span>
+        <h2>Create or edit news</h2>
+        <p>Managers publish only for assigned cities. Rich sections are stored as structured blocks.</p>
+        <RichTextToolbarPreview />
+        <div className="form-grid">
+          <label>Image<select>{newsPosts.map((post) => <option key={post.slug}>{post.image}</option>)}</select></label>
+          <label>Category<select><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
+          <label>Title<input placeholder="Winner team headline" /></label>
+          <label>City<select><option>Bengaluru</option><option>Mysuru</option><option>Mumbai</option></select></label>
+          <label>Sport<select>{sports.map((sport) => <option key={sport.slug}>{sport.name}</option>)}</select></label>
+          <label>Tournament<select>{tournaments.map((item) => <option key={item.slug}>{item.name}</option>)}</select></label>
+        </div>
+        <label>Short description<textarea placeholder="Summary shown on news cards" /></label>
+        <label>Article section<textarea placeholder="Add heading, paragraph, quote, list, or image block content" /></label>
+        <div className="hero-actions"><button className="btn btn-primary">Save Draft</button><button className="btn btn-secondary">Publish</button></div>
+      </section>
+      <section className="panel">
+        <h2>Homepage sport containers</h2>
+        <p>Managers choose which sport cards display in the Explore Your Sport section.</p>
+        <div className="visibility-list">
+          {sportHomeVisibility.map((item) => {
+            const sport = sports.find((entry) => entry.slug === item.sportSlug);
+            return (
+              <label className="visibility-row" key={item.sportSlug}>
+                <span>{sport?.name}</span>
+                <input type="checkbox" defaultChecked={item.showOnHome} />
+              </label>
+            );
+          })}
+        </div>
+      </section>
+      <DataTable
+        columns={["News", "Category", "City", "Status", "Action"]}
+        rows={newsPosts.map((post) => [
+          post.title,
+          post.category,
+          post.city,
+          <span className="status emerald">{post.status}</span>,
+          <span className="table-actions"><Link to={`/news/${post.slug}`}>Open</Link><button>Edit</button></span>,
+        ])}
+      />
+    </div>
   ) : <DashboardGrid />;
 
   return (

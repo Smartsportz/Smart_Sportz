@@ -74,6 +74,39 @@ class TournamentCitiesPayload(BaseModel):
     cities: list[str] = Field(min_length=1, max_length=12)
 
 
+class NewsBlockPayload(BaseModel):
+    block_type: str = Field(pattern="^(heading|paragraph|bold|italic|list|quote|image)$")
+    content: str = Field(min_length=1, max_length=1200)
+
+
+class NewsPostPayload(BaseModel):
+    title: str = Field(min_length=3, max_length=160)
+    short_description: str = Field(min_length=10, max_length=320)
+    image: str = Field(min_length=3, max_length=500)
+    category: str = Field(pattern="^(Winner Teams|Match Updates|Tournament Updates|Announcements)$")
+    sport: str = Field(min_length=2, max_length=80)
+    tournament_slug: str | None = Field(default=None, max_length=120)
+    city: str = Field(min_length=2, max_length=80)
+    status: str = Field(default="draft", pattern="^(draft|published)$")
+    blocks: list[NewsBlockPayload] = Field(default_factory=list)
+
+
+class SportHomeVisibilityPayload(BaseModel):
+    show_on_home: bool
+    sort_order: int = Field(default=1, ge=1, le=99)
+
+
+class ManagerCreatePayload(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=3, max_length=80)
+    cities: list[str] = Field(min_length=1, max_length=12)
+
+
+class ManagerCitiesPayload(BaseModel):
+    cities: list[str] = Field(min_length=1, max_length=12)
+
+
 class LocalPaymentCreate(BaseModel):
     registration_id: str
     method: str = "local"

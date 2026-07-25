@@ -1,31 +1,154 @@
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import require_roles
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, NotificationSendPayload, TournamentCitiesPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, WinnerAdvancePayload
 from app.services.audit import log
 
 router = APIRouter(prefix="/management", tags=["management"])
 
 
+def manager_cities(user: dict) -> list[str]:
+    if user["role"] == "super_admin":
+        return [item["city"] for item in rows("SELECT DISTINCT city FROM tournament_cities ORDER BY city")]
+    return [
+        item["city"]
+        for item in rows("SELECT city FROM manager_city_assignments WHERE manager_user_id = ? ORDER BY city", (user["id"],))
+    ]
+
+
+def ensure_city_access(user: dict, city: str) -> None:
+    if user["role"] == "super_admin":
+        return
+    if city.lower() not in [item.lower() for item in manager_cities(user)]:
+        raise HTTPException(status_code=403, detail="Manager is not assigned to this city")
+
+
+def slugify(title: str) -> str:
+    value = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return value or f"news-{uuid4().hex[:8]}"
+
+
 @router.get("/dashboard")
-def dashboard(_: dict = Depends(require_roles("super_admin", "management"))):
+def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
+    cities = manager_cities(user)
+    if user["role"] != "super_admin" and not cities:
+        return ok({"assignedCities": [], "assignedTournaments": [], "pendingRegistrations": [], "liveMatches": []})
+    tournament_filter = "" if user["role"] == "super_admin" else f" AND location IN ({','.join(['?'] * len(cities))})"
+    registration_filter = "" if user["role"] == "super_admin" else f" AND city IN ({','.join(['?'] * len(cities))})"
     return ok({
-        "assignedTournaments": rows("SELECT * FROM tournaments WHERE status IN ('Registration Open', 'Live')"),
-        "pendingRegistrations": rows("SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval')"),
+        "assignedCities": cities,
+        "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE status IN ('Registration Open', 'Live'){tournament_filter}", cities),
+        "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval'){registration_filter}", cities),
         "liveMatches": rows("SELECT * FROM live_matches"),
     })
 
 
 @router.get("/tournaments")
-def tournaments(_: dict = Depends(require_roles("super_admin", "management"))):
-    return ok(rows("SELECT * FROM tournaments ORDER BY name"))
+def tournaments(user: dict = Depends(require_roles("super_admin", "management"))):
+    cities = manager_cities(user)
+    if user["role"] == "super_admin" or not cities:
+        return ok(rows("SELECT * FROM tournaments ORDER BY name"))
+    return ok(rows(f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(cities))}) ORDER BY name", cities))
+
+
+@router.get("/news")
+def manager_news(user: dict = Depends(require_roles("super_admin", "management"))):
+    cities = manager_cities(user)
+    if user["role"] != "super_admin" and not cities:
+        return ok({"assignedCities": [], "posts": []})
+    params = [] if user["role"] == "super_admin" else cities
+    where = "" if user["role"] == "super_admin" else f"WHERE city IN ({','.join(['?'] * len(cities))})"
+    return ok({
+        "assignedCities": cities,
+        "posts": rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC", params),
+        "sports": rows(
+            """SELECT s.slug, s.name, s.color, COALESCE(v.show_on_home, 0) AS show_on_home, COALESCE(v.sort_order, 99) AS sort_order
+               FROM sports s LEFT JOIN sport_home_visibility v ON v.sport_slug = s.slug
+               ORDER BY COALESCE(v.sort_order, 99), s.name"""
+        ),
+    })
+
+
+@router.post("/news")
+def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_city_access(user, payload.city)
+    base_slug = slugify(payload.title)
+    slug = base_slug
+    counter = 2
+    while row("SELECT slug FROM news_posts WHERE slug = ?", (slug,)):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    now = datetime.now(timezone.utc).isoformat()
+    published_at = now if payload.status == "published" else None
+    execute(
+        """INSERT INTO news_posts(slug, title, short_description, image, category, sport, tournament_slug, city, status, author_id, published_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, user["id"], published_at, now, now),
+    )
+    statements = [
+        (
+            "INSERT INTO news_blocks(id, post_slug, block_type, content_json, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (f"nblock_{uuid4().hex[:10]}", slug, block.block_type, json.dumps({"text": block.content}), index),
+        )
+        for index, block in enumerate(payload.blocks, start=1)
+    ]
+    if statements:
+        execute_many(statements)
+    log(user["email"], "news_created", "news", slug, f"News post created for {payload.city}")
+    return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post created")
+
+
+@router.patch("/news/{slug}")
+def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM news_posts WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="News post not found")
+    ensure_city_access(user, item["city"])
+    ensure_city_access(user, payload.city)
+    now = datetime.now(timezone.utc).isoformat()
+    published_at = item["published_at"] or (now if payload.status == "published" else None)
+    execute(
+        """UPDATE news_posts
+           SET title = ?, short_description = ?, image = ?, category = ?, sport = ?, tournament_slug = ?, city = ?, status = ?, published_at = ?, updated_at = ?
+           WHERE slug = ?""",
+        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, published_at, now, slug),
+    )
+    execute("DELETE FROM news_blocks WHERE post_slug = ?", (slug,))
+    statements = [
+        (
+            "INSERT INTO news_blocks(id, post_slug, block_type, content_json, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (f"nblock_{uuid4().hex[:10]}", slug, block.block_type, json.dumps({"text": block.content}), index),
+        )
+        for index, block in enumerate(payload.blocks, start=1)
+    ]
+    if statements:
+        execute_many(statements)
+    log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
+    return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post updated")
+
+
+@router.patch("/sports/{sport_slug}/home-visibility")
+def update_sport_home_visibility(sport_slug: str, payload: SportHomeVisibilityPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    sport = row("SELECT slug FROM sports WHERE slug = ?", (sport_slug,))
+    if not sport:
+        raise HTTPException(status_code=404, detail="Sport not found")
+    execute(
+        """INSERT INTO sport_home_visibility(sport_slug, show_on_home, sort_order, updated_by)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(sport_slug) DO UPDATE SET show_on_home = excluded.show_on_home, sort_order = excluded.sort_order, updated_by = excluded.updated_by""",
+        (sport_slug, int(payload.show_on_home), payload.sort_order, user["id"]),
+    )
+    log(user["email"], "sport_home_visibility_updated", "sport", sport_slug, f"Show on home: {payload.show_on_home}")
+    return ok(row("SELECT * FROM sport_home_visibility WHERE sport_slug = ?", (sport_slug,)), "Sport homepage visibility updated")
 
 
 @router.patch("/tournaments/{tournament_slug}/team-size")

@@ -110,7 +110,7 @@ export function Footer() {
       </div>
       <div className="footer-grid">
         <div><b>Platform</b><Link to="/tournaments">Tournaments</Link><Link to="/live">Live</Link><Link to="/teams">Teams</Link></div>
-        <div><b>Resources</b><Link to="/blog">Blog</Link><Link to="/gallery">Gallery</Link><Link to="/faq">FAQ</Link></div>
+        <div><b>Resources</b><Link to="/news">News</Link><Link to="/gallery">Gallery</Link><Link to="/faq">FAQ</Link></div>
         <div><b>Company</b><Link to="/about">About</Link><Link to="/contact">Contact</Link><Link to="/sponsors">Sponsors</Link></div>
       </div>
     </footer>

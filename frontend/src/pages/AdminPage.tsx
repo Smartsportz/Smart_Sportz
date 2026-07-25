@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { cmsSections, logRows, paymentRows, reports, sidebar, teams, tournaments } from "../data/platform";
+import { cmsSections, logRows, managerUsers, paymentRows, reports, sidebar, teams, tournaments } from "../data/platform";
 import { AdminOverview, AthleteProfile, CatalogPage, DashboardGrid, ListPanel, TeamCard } from "./shared";
 
 export function AdminPage({ section = "dashboard" }: { section?: string }) {
@@ -35,14 +35,29 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
           </>
         )}
         {section === "users" && (
-          <DataTable
-            columns={["User", "Role", "Access", "Status"]}
-            rows={[
-              ["Smart Sportz Admin", <span className="status blue">Super Admin</span>, "All platform programs", "Active"],
-              ["Tournament Manager", <span className="status emerald">Management</span>, "Assigned tournaments", "Active"],
-              ["Aryan Player", <span className="status orange">Participant</span>, "Own records only", "Active"],
-            ]}
-          />
+          <>
+            <section className="panel tournament-create-panel">
+              <div>
+                <span className="status emerald">Manager Allocation</span>
+                <h2>Create city-scoped managers</h2>
+                <p>Super admins can add multiple managers and allocate one or more cities. Managers see only those city records.</p>
+              </div>
+              <div className="form-grid">
+                <label>Manager name<input placeholder="North Zone Manager" /></label>
+                <label>Email<input placeholder="manager@smartsportz.in" /></label>
+                <label>Temporary password<input placeholder="manager123" /></label>
+                <label>Allocated cities<input placeholder="Delhi, Noida, Gurugram" /></label>
+              </div>
+            </section>
+            <DataTable
+              columns={["User", "Role", "Allocated Places", "Status"]}
+              rows={[
+                ["Smart Sportz Admin", <span className="status blue">Super Admin</span>, "All platform programs", "Active"],
+                ...managerUsers.map((manager) => [manager.name, <span className="status emerald">Management</span>, manager.cities.join(", "), manager.status]),
+                ["Aryan Player", <span className="status orange">Participant</span>, "Own records only", "Active"],
+              ]}
+            />
+          </>
         )}
         {section === "roles" && (
           <DataTable

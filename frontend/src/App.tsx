@@ -7,14 +7,16 @@ import { ScreenLoader } from "./loading/ScreenLoader";
 import { useLoading } from "./loading/LoadingContext";
 import {
   AdminPage,
-  ArticleDetailPage,
   CmsSectionPage,
   ContentPage,
   HomePage,
+  LeaderboardsPage,
   LiveHubPage,
   LiveMatchPage,
   LoginPage,
   ManagementPage,
+  NewsDetailPage,
+  NewsPage,
   RegistrationPaymentPage,
   RegistrationPage,
   RegistrationReviewPage,
@@ -36,7 +38,7 @@ import {
 } from "./pages";
 
 function ScrollToTop() {
-  const { pathname, search } = useLocation();
+  const { hash, pathname, search } = useLocation();
   const { showFor } = useLoading();
 
   useEffect(() => {
@@ -59,9 +61,15 @@ function ScrollToTop() {
   }, [showFor]);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    if (hash) {
+      window.requestAnimationFrame(() => {
+        document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
+      });
+    } else {
+      window.scrollTo(0, 0);
+    }
     showFor(window.location.search.includes("loading=1") ? 3000 : 1200);
-  }, [pathname, search]);
+  }, [hash, pathname, search]);
 
   return null;
 }
@@ -97,13 +105,15 @@ export default function App() {
           <Route path="/sports/:slug" element={<SportDetailPage />} />
           <Route path="/live" element={<LiveHubPage />} />
           <Route path="/live/:matchId" element={<LiveMatchPage />} />
-          <Route path="/leaderboards" element={<ContentPage type="leaderboards" />} />
+          <Route path="/leaderboards" element={<LeaderboardsPage />} />
           <Route path="/teams" element={<TeamsPage />} />
           <Route path="/teams/:slug" element={<TeamDetailPage />} />
           <Route path="/athletes/:slug" element={<AdminPage section="players" />} />
           <Route path="/gallery" element={<ContentPage type="gallery" />} />
-          <Route path="/blog" element={<ContentPage type="blog" />} />
-          <Route path="/blog/:slug" element={<ArticleDetailPage />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/news/:slug" element={<NewsDetailPage />} />
+          <Route path="/blog" element={<Navigate to="/news" replace />} />
+          <Route path="/blog/:slug" element={<NewsDetailPage />} />
           <Route path="/about" element={<ContentPage type="about" />} />
           <Route path="/contact" element={<ContentPage type="contact" />} />
           <Route path="/sponsors" element={<ContentPage type="sponsors" />} />
@@ -129,6 +139,7 @@ export default function App() {
           <Route path="/management/matches" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="matches" /></ProtectedRoute>} />
           <Route path="/management/players" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="players" /></ProtectedRoute>} />
           <Route path="/management/announcements" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="announcements" /></ProtectedRoute>} />
+          <Route path="/management/news" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="news" /></ProtectedRoute>} />
           <Route path="/management/reports" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="reports" /></ProtectedRoute>} />
           <Route path="/management/matches/:id/control" element={<ProtectedRoute roles={["management", "super_admin"]}><LiveMatchPage /></ProtectedRoute>} />
           <Route path="/management/tournaments/:slug/bracket" element={<ProtectedRoute roles={["management", "super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
