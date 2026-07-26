@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import { BarChart3, CheckCircle2, MapPin, Radio, ShieldCheck, Trophy, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
 import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournaments } from "../data/platform";
 
@@ -32,10 +33,16 @@ const featureLinks = [
 
 export function HomePage() {
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
+  const leaderboardFilterRef = useRef<HTMLDivElement>(null);
+  const featuredRef = useRef<HTMLDivElement>(null);
+  const newsRef = useRef<HTMLDivElement>(null);
+  const organizerRef = useRef<HTMLDivElement>(null);
+  const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [organizerIndex, setOrganizerIndex] = useState(0);
   const featured = [...tournaments].sort((a, b) => {
     const priority = { Upcoming: 0, "Registration Open": 1, Live: 2, Completed: 3 } as Record<string, number>;
     return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
-  }).slice(0, 3);
+  });
   const homeSports = sportHomeVisibility
     .filter((item) => item.showOnHome)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -62,6 +69,35 @@ export function HomePage() {
     () => leaderboardRecords.filter((record) => record.sport === leaderboardSport).sort((a, b) => a.rank - b.rank),
     [leaderboardSport],
   );
+  const scrollLeaderboardFilter = (direction: "left" | "right") => {
+    leaderboardFilterRef.current?.scrollBy({ left: direction === "left" ? -180 : 180, behavior: "smooth" });
+  };
+  const scrollCarousel = (ref: RefObject<HTMLDivElement | null>, direction: "left" | "right") => {
+    ref.current?.scrollBy({ left: direction === "left" ? -360 : 360, behavior: "smooth" });
+  };
+  const moveOrganizer = (direction: "left" | "right") => {
+    setOrganizerIndex((current) => {
+      const next = direction === "left"
+        ? (current - 1 + organizerTools.length) % organizerTools.length
+        : (current + 1) % organizerTools.length;
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const timer = window.setInterval(() => moveOrganizer("right"), 3200);
+    return () => window.clearInterval(timer);
+  }, [organizerTools.length]);
+
+  useEffect(() => {
+    const container = organizerRef.current;
+    const card = organizerCardRefs.current[organizerIndex];
+    if (!container || !card) return;
+    container.scrollTo({
+      left: card.offsetLeft - (container.clientWidth - card.clientWidth) / 2,
+      behavior: "smooth",
+    });
+  }, [organizerIndex]);
 
   return (
     <Page className="home-reference-page">
@@ -83,9 +119,7 @@ export function HomePage() {
             <Link className="btn btn-secondary glass-btn" to="/sports">Explore Sports</Link>
           </motion.div>
         </motion.div>
-      </section>
-      <section className="hero-below-panel" aria-label="Live tournament shortcuts">
-        <div className="match-chip-row">
+        <div className="match-chip-row hero-quick-links">
           {[
             "Mumbai Live Matches",
             "Book a Facility",
@@ -93,6 +127,8 @@ export function HomePage() {
             "News Updates",
           ].map((item) => <span key={item}>{item}</span>)}
         </div>
+      </section>
+      <section className="hero-below-panel" aria-label="Live tournament scores">
         <div className="hero-score-strip">
           {[
             ["India", "Mumbai Mavericks", "156/4"],
@@ -115,7 +151,19 @@ export function HomePage() {
             ["50,000+", "Verified Players"],
             ["1,200+", "Sports Facilities"],
             ["INR 10Cr+", "Prizes Distributed"],
-          ].map(([value, label]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
+          ].map(([value, label], index) => (
+            <motion.div
+              className="trusted-card"
+              key={label}
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.45, delay: index * 0.06 }}
+            >
+              <strong>{value}</strong>
+              <span>{label}</span>
+            </motion.div>
+          ))}
         </div>
       </section>
       <section className="section">
@@ -135,10 +183,17 @@ export function HomePage() {
               <Link className="sport-home-card click-card" to={`/sports/${sport.slug}`} key={sport.slug}>
                 <Icon size={26} />
                 <span className={`status ${sport.color}`}>{sport.name}</span>
-                <div>
-                  <b>{counts.upcoming}</b><small>Upcoming</small>
-                  <b>{counts.live}</b><small>Live</small>
-                  <b>{counts.old}</b><small>Old</small>
+                <div className="sport-home-metrics">
+                  {[
+                    ["Upcoming", counts.upcoming],
+                    ["Live", counts.live],
+                    ["Old", counts.old],
+                  ].map(([label, value]) => (
+                    <span className="sport-home-metric" key={label}>
+                      <small>{label}</small>
+                      <b>{value}</b>
+                    </span>
+                  ))}
                 </div>
               </Link>
             );
@@ -146,8 +201,17 @@ export function HomePage() {
         </div>
       </section>
       <section className="section">
-        <SectionTitle eyebrow="Tournament Discovery" title="Featured tournaments" text="Premium light theme by default, designed from the Remix UI references." />
-        <div className="card-grid">{featured.map((item) => <TournamentCard key={item.slug} item={item} />)}</div>
+        <div className="section-title row-title">
+          <div>
+            <p className="eyebrow">Tournament Discovery</p>
+            <h2>Featured tournaments</h2>
+            <p>Premium light theme by default, designed from the Remix UI references.</p>
+          </div>        </div>
+        <div className="carousel-shell">
+          <button className="carousel-edge carousel-edge-left" type="button" aria-label="Previous featured tournaments" onClick={() => scrollCarousel(featuredRef, "left")}>&lt;</button>
+          <div className="card-grid carousel-row featured-carousel" ref={featuredRef}>{featured.map((item) => <TournamentCard key={item.slug} item={item} />)}</div>
+          <button className="carousel-edge carousel-edge-right" type="button" aria-label="Next featured tournaments" onClick={() => scrollCarousel(featuredRef, "right")}>&gt;</button>
+        </div>
       </section>
       <section className="section lifecycle-section">
         <SectionTitle title="The Tournament Lifecycle" text="A connected flow from registration to certificates." />
@@ -168,12 +232,14 @@ export function HomePage() {
         <motion.div {...fade}>
           <span className="live-dot">Live Now</span>
           <h2>Experience Every Match Live with Pro Analytics</h2>
-          <div className="score-mini-card">
-            <span>Wings SC</span>
-            <strong>128 - 110</strong>
-            <span>Titans Acad.</span>
+          <div className="live-action-row">
+            <div className="score-mini-card">
+              <span>Wings SC</span>
+              <strong>128 - 110</strong>
+              <span>Titans Acad.</span>
+            </div>
+            <Link className="btn btn-primary live-center-btn" to="/live">Open Match Center</Link>
           </div>
-          <Link className="btn btn-primary wide" to="/live">Open Match Center</Link>
           <div className="feature-list">
             {["Instant AI-powered highlights for every match", "Heatmaps and advanced performance telemetry"].map((feature) => (
               <div className="feature-label" key={feature}><CheckCircle2 size={18} />{feature}</div>
@@ -182,9 +248,25 @@ export function HomePage() {
         </motion.div>
       </section>
       <section className="section">
-        <SectionTitle title="Empowering Tournament Organizers" text="All-in-one suite of professional tools to run world-class sports competitions." />
-        <div className="organizer-grid">
-          {organizerTools.map((tool) => <div className="panel organizer-card" key={tool}><ShieldCheck size={18} /><h3>{tool}</h3><p>Premium workflow controls for secure tournament operations.</p></div>)}
+        <div className="section-title row-title">
+          <div>
+            <h2>Empowering Tournament Organizers</h2>
+            <p>All-in-one suite of professional tools to run world-class sports competitions.</p>
+          </div>        </div>
+        <div className="carousel-shell organizer-shell">
+          <button className="carousel-edge carousel-edge-left" type="button" aria-label="Previous organizer tool" onClick={() => moveOrganizer("left")}>&lt;</button>
+          <div className="organizer-grid" ref={organizerRef}>
+          {organizerTools.map((tool, index) => (
+            <div
+              className={`panel organizer-card ${index === organizerIndex ? "is-active" : ""}`}
+              key={tool}
+              ref={(element) => { organizerCardRefs.current[index] = element; }}
+            >
+              <ShieldCheck size={18} /><h3>{tool}</h3><p>Premium workflow controls for secure tournament operations.</p>
+            </div>
+          ))}
+        </div>
+          <button className="carousel-edge carousel-edge-right" type="button" aria-label="Next organizer tool" onClick={() => moveOrganizer("right")}>&gt;</button>
         </div>
       </section>
       <section className="section">
@@ -193,10 +275,11 @@ export function HomePage() {
             <p className="eyebrow">Old Match News</p>
             <h2>Completed match records and winner stories</h2>
             <p>Open a card to read the full news article and match archive details.</p>
-          </div>
-          <Link className="inline-link" to="/news">View More News</Link>
+          </div>          <Link className="inline-link" to="/news">View More News</Link>
         </div>
-        <div className="content-grid">
+        <div className="carousel-shell">
+          <button className="carousel-edge carousel-edge-left" type="button" aria-label="Previous completed match records" onClick={() => scrollCarousel(newsRef, "left")}>&lt;</button>
+          <div className="content-grid carousel-row news-carousel" ref={newsRef}>
           {oldMatchNews.map((post) => (
             <Link className="panel news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
               <img src={post.image} alt="" />
@@ -205,6 +288,8 @@ export function HomePage() {
               <p>{post.shortDescription}</p>
             </Link>
           ))}
+        </div>
+          <button className="carousel-edge carousel-edge-right" type="button" aria-label="Next completed match records" onClick={() => scrollCarousel(newsRef, "right")}>&gt;</button>
         </div>
       </section>
       <section className="section" id="home-leaderboards">
@@ -215,10 +300,14 @@ export function HomePage() {
             <p>Select any sport category here and inspect records by rank without leaving the homepage.</p>
           </div>
         </div>
-        <div className="leaderboard-filter home-leaderboard-filter">
-          {sports.map((sport) => (
-            <button className={sport.name === leaderboardSport ? "active" : ""} type="button" onClick={() => setLeaderboardSport(sport.name)} key={sport.slug}>{sport.name}</button>
-          ))}
+        <div className="leaderboard-filter-shell">
+          <button className="filter-arrow filter-arrow-left" type="button" aria-label="Scroll sports left" onClick={() => scrollLeaderboardFilter("left")}>&lt;</button>
+          <div className="leaderboard-filter home-leaderboard-filter" ref={leaderboardFilterRef}>
+            {sports.map((sport) => (
+              <button className={sport.name === leaderboardSport ? "active" : ""} type="button" onClick={() => setLeaderboardSport(sport.name)} key={sport.slug}>{sport.name}</button>
+            ))}
+          </div>
+          <button className="filter-arrow filter-arrow-right" type="button" aria-label="Scroll sports right" onClick={() => scrollLeaderboardFilter("right")}>&gt;</button>
         </div>
         <div className="leaderboard-preview panel">
           {selectedLeaders.map((record) => (
@@ -267,3 +356,4 @@ export function HomePage() {
     </Page>
   );
 }
+
