@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import require_roles
 from app.core.responses import ok
 from app.core.security import hash_password
-from app.db.database import execute, row, rows
+from app.db.database import audit_rows, execute, row, rows, sync_mirror
 from app.schemas import CmsUpdate, ManagerCitiesPayload, ManagerCreatePayload
 from app.services.audit import log
+from app.services.database_architecture import compare_primary_mirror, database_status, export_json_backups
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -124,4 +125,28 @@ def update_cms(slug: str, payload: CmsUpdate, user: dict = Depends(require_roles
 
 @router.get("/logs")
 def logs(_: dict = Depends(require_roles("super_admin"))):
-    return ok(rows("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200"))
+    return ok(audit_rows("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200"))
+
+
+@router.get("/database/status")
+def database_health(_: dict = Depends(require_roles("super_admin"))):
+    return ok(database_status())
+
+
+@router.get("/database/compare")
+def database_compare(_: dict = Depends(require_roles("super_admin"))):
+    return ok(compare_primary_mirror())
+
+
+@router.post("/database/mirror/sync")
+def database_mirror_sync(user: dict = Depends(require_roles("super_admin"))):
+    sync_mirror()
+    log(user["email"], "mirror_synced", "database", "db2", "DB-2 mirror synchronized from DB-1")
+    return ok(database_status(), "Mirror synchronized")
+
+
+@router.post("/database/backups/json")
+def database_json_backup(user: dict = Depends(require_roles("super_admin"))):
+    result = export_json_backups()
+    log(user["email"], "json_backup_created", "database", "db1_db2", "DB-1 and DB-2 JSON backups generated")
+    return ok(result, "JSON backups generated")

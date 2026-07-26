@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.core.security import hash_password
-from app.db.database import execute, execute_many, row
+from app.db.database import audit_execute, execute, execute_many, row
 
 
 def now() -> str:
@@ -68,8 +68,11 @@ def seed_data() -> None:
     statements += [("INSERT INTO live_matches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in matches]
     statements += [("INSERT INTO timeline_events(match_id, time, type, text, score, created_at) VALUES (?, ?, ?, ?, ?, ?)", item) for item in timeline]
     statements += [("INSERT INTO cms_content VALUES (?, ?, ?, ?, ?, ?)", item) for item in cms]
-    statements.append(("INSERT INTO audit_logs(actor, action, entity, entity_id, message, created_at) VALUES (?, ?, ?, ?, ?, ?)", ("system", "seed", "database", "local", "Initial local database seeded", now())))
     execute_many(statements)
+    audit_execute(
+        "INSERT INTO audit_logs(actor, action, entity, entity_id, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        ("system", "seed", "database", "local", "Initial local database seeded", now()),
+    )
 
 
 def seed_operational_data() -> None:
@@ -83,6 +86,16 @@ def seed_operational_data() -> None:
     execute("UPDATE tournaments SET registration_start = 'Jul 24, 2026', registration_end = 'Sep 25, 2026' WHERE slug = 'pro-elite-basketball'")
     execute("UPDATE registrations SET city = 'Bengaluru' WHERE id IN ('reg-101', 'reg-103') AND city = ''")
     execute("UPDATE registrations SET city = 'Mysuru' WHERE id = 'reg-102' AND city = ''")
+    if not row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",)):
+        statements.append((
+            "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("kerala-volleyball-classic", "Kerala Volleyball Classic 2025", "Volleyball", "Completed", "Kochi", "Dec 02 - Dec 12", "Oct 15, 2025", "Nov 25, 2025", 20, 20, 12, "INR 6,00,000", "/assets/volleyball-match.png", "pink"),
+        ))
+    if not row("SELECT slug FROM tournaments WHERE slug = ?", ("delhi-cricket-champions",)):
+        statements.append((
+            "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("delhi-cricket-champions", "Delhi Cricket Champions 2025", "Cricket", "Completed", "Delhi", "Nov 05 - Nov 24", "Sep 20, 2025", "Oct 25, 2025", 20, 20, 16, "INR 15,00,000", "/assets/cricket-stadium.png", "blue"),
+        ))
     city_map = {
         "mumbai-premier-bash": ["Mumbai", "Navi Mumbai", "Thane"],
         "bangalore-corporate-t20": ["Bengaluru", "Mysuru"],
@@ -99,16 +112,6 @@ def seed_operational_data() -> None:
                     "INSERT OR IGNORE INTO tournament_cities(id, tournament_slug, city, sort_order) VALUES (?, ?, ?, ?)",
                     (f"city_{uuid4().hex[:10]}", tournament_slug, city, sort_order),
                 ))
-    if not row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",)):
-        statements.append((
-            "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("kerala-volleyball-classic", "Kerala Volleyball Classic 2025", "Volleyball", "Completed", "Kochi", "Dec 02 - Dec 12", "Oct 15, 2025", "Nov 25, 2025", 20, 20, 12, "INR 6,00,000", "/assets/volleyball-match.png", "pink"),
-        ))
-    if not row("SELECT slug FROM tournaments WHERE slug = ?", ("delhi-cricket-champions",)):
-        statements.append((
-            "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("delhi-cricket-champions", "Delhi Cricket Champions 2025", "Cricket", "Completed", "Delhi", "Nov 05 - Nov 24", "Sep 20, 2025", "Oct 25, 2025", 20, 20, 16, "INR 15,00,000", "/assets/cricket-stadium.png", "blue"),
-        ))
     if not row("SELECT id FROM registrations WHERE id = ?", ("reg-101",)):
         registrations = [
             ("reg-101", "bangalore-corporate-t20", "Falcon Strikers", "Rahul Nair", "rahul@falcon.local", "+91 90000 00101", "Bengaluru", "pending_approval", "paid", 250000, now()),
@@ -244,5 +247,8 @@ def seed_operational_data() -> None:
                 (f"leader_{uuid4().hex[:10]}", sport, team_name, city, rank, tournaments_won, win_rate, points, record_label),
             ))
     if statements:
-        statements.append(("INSERT INTO audit_logs(actor, action, entity, entity_id, message, created_at) VALUES (?, ?, ?, ?, ?, ?)", ("system", "seed_upgrade", "database", "local", "Operational bracket and registration data seeded", now())))
         execute_many(statements)
+        audit_execute(
+            "INSERT INTO audit_logs(actor, action, entity, entity_id, message, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("system", "seed_upgrade", "database", "local", "Operational bracket and registration data seeded", now()),
+        )

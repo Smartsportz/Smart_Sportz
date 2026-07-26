@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import time
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from app.api.deps import current_user
 from app.core.rbac import ROLE_LABELS, ROLE_PERMISSIONS, ROLE_PROGRAMS, role_profile
 from app.core.responses import ok
-from app.core.security import create_token, verify_password
+from app.core.security import create_token, decode_token, verify_password
 from app.db.database import row
 from app.schemas import LoginRequest
 from app.services.audit import log
+from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -21,6 +24,12 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     access_token = create_token(user["id"], user["role"], expires_in=60 * 60)
     refresh_token = create_token(user["id"], user["role"], expires_in=60 * 60 * 24 * 7)
+    access_payload = decode_token(access_token)
+    refresh_payload = decode_token(refresh_token)
+    if access_payload:
+        runtime_state.mark_session(access_payload["jti"], {"userId": user["id"], "role": user["role"], "type": "access"}, 60 * 60)
+    if refresh_payload:
+        runtime_state.mark_session(refresh_payload["jti"], {"userId": user["id"], "role": user["role"], "type": "refresh"}, 60 * 60 * 24 * 7)
     log(user["email"], "login_success", "auth", user["id"], "User logged in")
     return ok({
         "accessToken": access_token,
@@ -49,6 +58,11 @@ def roles():
 
 
 @router.post("/logout")
-def logout(user: dict = Depends(current_user)):
+def logout(user: dict = Depends(current_user), authorization: str | None = Header(default=None)):
+    if authorization and authorization.lower().startswith("bearer "):
+        payload = decode_token(authorization.split(" ", 1)[1])
+        if payload and payload.get("jti"):
+            ttl = max(1, int(payload["exp"]) - int(time.time()))
+            runtime_state.revoke_token(payload["jti"], ttl)
     log(user["email"], "logout", "auth", user["id"], "User logged out")
     return ok(message="Logged out")

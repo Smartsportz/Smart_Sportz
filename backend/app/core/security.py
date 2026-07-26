@@ -39,7 +39,13 @@ def verify_password(password: str, stored_hash: str) -> bool:
 
 def create_token(subject: str, role: str, expires_in: int = 3600) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
-    payload = {"sub": subject, "role": role, "iat": int(time.time()), "exp": int(time.time()) + expires_in}
+    payload = {
+        "sub": subject,
+        "role": role,
+        "jti": secrets.token_urlsafe(18),
+        "iat": int(time.time()),
+        "exp": int(time.time()) + expires_in,
+    }
     signing_input = f"{_b64(json.dumps(header, separators=(',', ':')).encode())}.{_b64(json.dumps(payload, separators=(',', ':')).encode())}"
     signature = hmac.new(settings.secret_key.encode(), signing_input.encode(), hashlib.sha256).digest()
     return f"{signing_input}.{_b64(signature)}"
