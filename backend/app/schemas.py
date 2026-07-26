@@ -15,14 +15,31 @@ class RegistrationMemberCreate(BaseModel):
     contact: str | None = Field(default=None, max_length=40)
 
 
+class RegistrationDocumentCreate(BaseModel):
+    document_type: str = Field(min_length=2, max_length=80)
+    file_name: str = Field(min_length=2, max_length=180)
+    file_path: str = Field(min_length=1, max_length=500)
+    status: str = Field(default="uploaded", pattern="^(required|pending|uploaded)$")
+
+
 class RegistrationCreate(BaseModel):
     tournament_slug: str
     team_name: str = Field(min_length=2, max_length=120)
+    team_code: str = Field(min_length=2, max_length=40)
     captain_name: str = Field(min_length=2, max_length=120)
+    sub_captain_name: str = Field(min_length=2, max_length=120)
+    coach_name: str = Field(default="", max_length=120)
     email: EmailStr
     phone: str = Field(min_length=7, max_length=20)
     city: str = Field(min_length=2, max_length=80)
+    district_state: str = Field(default="", max_length=120)
+    team_logo: str = Field(default="", max_length=500)
+    primary_jersey_color: str = Field(default="#0b8852", max_length=20)
+    secondary_jersey_color: str = Field(default="#ffffff", max_length=20)
+    team_motto: str = Field(default="", max_length=180)
+    category: str = Field(default="", max_length=80)
     members: list[RegistrationMemberCreate] = []
+    documents: list[RegistrationDocumentCreate] = []
 
 
 class BracketNodePayload(BaseModel):

@@ -382,6 +382,92 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px 
 .selected-tournament-label strong { font-family: Poppins, sans-serif; font-size: 20px; letter-spacing: -0.02em; }
 .selected-tournament-label small { color: var(--muted); font-weight: 800; line-height: 1.45; }
 
+.registration-top-nav { position: sticky; top: 0; z-index: 50; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px; min-height: 62px; padding: 0 max(32px, calc((100vw - 1180px) / 2)); border-bottom: 1px solid rgba(11, 72, 38, .18); background: rgba(244, 252, 244, .96); backdrop-filter: blur(14px); }
+.registration-brand { display: inline-flex; align-items: center; gap: 10px; color: #0b6f3d; font-family: Poppins, sans-serif; font-size: 26px; font-weight: 900; letter-spacing: -0.045em; }
+.registration-brand img { width: 36px; height: 36px; border-radius: 9px; object-fit: contain; }
+.registration-top-nav nav { display: flex; align-items: center; gap: 28px; }
+.registration-top-nav nav a { min-height: 62px; display: inline-flex; align-items: center; color: #35443b; border-bottom: 2px solid transparent; font-weight: 700; }
+.registration-top-nav nav a.active { color: #08723f; border-color: #08723f; }
+.registration-nav-actions { display: flex; align-items: center; gap: 14px; }
+.registration-nav-actions > a:first-child { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: #1a2a20; }
+.registration-login { display: inline-flex; align-items: center; min-height: 40px; padding: 0 22px; border-radius: 8px; background: #08723f; color: #fff; font-weight: 900; box-shadow: 0 12px 24px rgba(8, 114, 63, .22); }
+.registration-reference-page { width: min(1180px, calc(100% - 64px)); padding-top: 38px; }
+.registration-reference-page::before { content: ""; position: fixed; inset: 0; z-index: -1; background: #f4fcf4; }
+.registration-hero-copy { max-width: 720px; margin-bottom: 28px; }
+.registration-hero-copy.compact { max-width: 860px; }
+.registration-hero-copy h1 { margin: 0; font-family: Poppins, sans-serif; font-size: clamp(42px, 6vw, 62px); line-height: 1; letter-spacing: -0.055em; }
+.registration-hero-copy h2 { margin: 10px 0 0; color: var(--primary-dark); font-size: clamp(18px, 2.4vw, 24px); }
+.registration-hero-copy p:not(.eyebrow) { max-width: 690px; color: var(--muted); line-height: 1.7; }
+.registration-stepper { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin: 20px 0 34px; padding-bottom: 18px; border-bottom: 1px solid rgba(11, 136, 82, .18); }
+.registration-step { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; color: var(--muted); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.registration-step span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; background: rgba(15, 23, 42, .08); color: var(--muted); font-size: 11px; }
+.registration-step.active { color: var(--primary-dark); }
+.registration-step.active span { background: var(--primary-dark); color: #fff; }
+.registration-reference-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; align-items: start; }
+.registration-main { display: grid; gap: 22px; min-width: 0; }
+.registration-form-section, .registration-summary-card, .registration-timeline, .verification-pass { border: 1px solid rgba(11, 72, 38, .20); border-radius: 18px; background: rgba(255, 255, 255, .96); box-shadow: 0 12px 26px rgba(8, 49, 30, .06); }
+.registration-form-section { display: grid; gap: 18px; padding: 30px; }
+.registration-form-section h2, .registration-summary-card h2, .registration-timeline h3, .verification-pass h2 { margin: 0; color: var(--primary-dark); font-family: Poppins, sans-serif; letter-spacing: -0.035em; }
+.registration-form-section p { margin: 4px 0 0; color: var(--muted); }
+.section-head-inline { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.autosave-pill { padding: 7px 12px; border-radius: 999px; color: #43513f; background: rgba(11, 136, 82, .09); font-size: 12px; font-weight: 900; }
+.section-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.team-logo-row { display: grid; grid-template-columns: 120px 1fr; gap: 18px; align-items: center; }
+.logo-upload-tile { position: relative; display: grid; place-items: center; align-content: center; min-height: 100px; border: 2px dashed rgba(11, 136, 82, .42); border-radius: 16px; color: var(--primary-dark); background: rgba(11, 136, 82, .04); text-align: center; cursor: pointer; }
+.logo-upload-tile input, .document-row input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.logo-upload-tile svg { margin: 0 auto 6px; }
+.team-logo-row p { display: grid; gap: 4px; margin: 0; }
+.team-logo-row small, .document-row small { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
+input[type="color"] { min-height: 44px; padding: 5px; cursor: pointer; }
+.player-roster-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-height: 500px; overflow: auto; padding-right: 4px; }
+.player-entry-card { grid-template-columns: 34px 110px 1fr; align-items: center; gap: 10px; min-height: 68px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #f7fcf6; }
+.player-entry-card span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; background: rgba(11, 136, 82, .12); color: var(--primary-dark); font-weight: 900; }
+.player-entry-card b { color: var(--primary-dark); font-size: 12px; }
+.document-list { display: grid; gap: 12px; }
+.document-row { position: relative; display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 14px; min-height: 74px; padding: 14px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 14px; background: #f8fdf7; cursor: pointer; }
+.document-row svg { display: grid; place-items: center; width: 34px; height: 34px; padding: 7px; border-radius: 10px; color: var(--primary-dark); background: rgba(37, 99, 235, .10); }
+.document-row strong { color: var(--primary-dark); font-size: 13px; }
+.registration-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0 28px; }
+.registration-actions.compact-actions { justify-content: start; padding: 0; flex-wrap: wrap; }
+.registration-side { position: sticky; top: 24px; display: grid; gap: 22px; min-width: 0; }
+.registration-summary-card { overflow: hidden; }
+.registration-summary-card > *:not(.registration-summary-head) { margin-inline: 24px; }
+.registration-summary-card .btn { margin: 18px 24px 24px; width: calc(100% - 48px); }
+.registration-summary-head { padding: 24px; color: #fff; background: linear-gradient(135deg, var(--primary-dark), #0b9259); }
+.registration-summary-head h2 { color: #fff; font-size: 22px; }
+.registration-summary-head small { display: block; margin-top: 7px; color: rgba(255, 255, 255, .76); font-weight: 900; letter-spacing: .09em; }
+.summary-tournament { display: grid; grid-template-columns: 64px 1fr; gap: 14px; align-items: center; padding: 22px 0 18px; border-bottom: 1px solid var(--line); }
+.summary-tournament img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; }
+.summary-tournament strong { display: block; color: var(--text); line-height: 1.25; }
+.summary-tournament span { color: var(--primary-dark); font-size: 12px; font-weight: 900; }
+.summary-lines, .prize-split { display: grid; gap: 0; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.summary-lines p, .prize-split p { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0; padding: 8px 0; color: var(--muted); }
+.summary-lines b, .prize-split b { color: var(--text); text-align: right; }
+.prize-split b { color: var(--primary-dark); }
+.summary-lines .payable { align-items: baseline; }
+.summary-lines .payable span { color: var(--text); font-size: 18px; font-weight: 900; }
+.summary-lines .payable b { color: var(--primary-dark); font-size: 28px; }
+.registration-timeline { padding: 24px; }
+.registration-timeline p { position: relative; display: grid; gap: 4px; margin: 20px 0 0 24px; color: var(--text); font-weight: 900; }
+.registration-timeline p::before { content: ""; position: absolute; left: -17px; top: 16px; bottom: -23px; width: 2px; background: rgba(11, 136, 82, .18); }
+.registration-timeline p:last-child::before { display: none; }
+.registration-timeline p span { position: absolute; left: -24px; top: 3px; width: 12px; height: 12px; border-radius: 999px; background: #c8d6ce; }
+.registration-timeline p.done span { background: var(--primary-dark); }
+.registration-timeline small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.confirmation-layout { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 24px; }
+.verification-pass { display: grid; justify-items: center; gap: 16px; padding: 28px; text-align: center; background: linear-gradient(180deg, #ffffff, #eef9f3); }
+.pass-head { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; color: var(--primary-dark); background: rgba(11, 136, 82, .10); font-weight: 900; }
+.verification-pass svg:not(.lucide) { padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: var(--shadow-soft); }
+.verification-pass h2 { color: var(--text); font-size: clamp(26px, 4vw, 38px); }
+.verification-pass p { margin: 0; color: var(--muted); }
+.pass-actions { display: grid; gap: 10px; width: 100%; }
+.registration-footer { display: grid; grid-template-columns: 1fr auto; gap: 28px; width: min(1180px, calc(100% - 64px)); margin: 64px auto 0; padding: 38px 0 42px; border-top: 1px solid rgba(11, 72, 38, .18); color: #4a574f; }
+.registration-footer h3 { margin: 0 0 8px; color: #1a211d; font-family: Poppins, sans-serif; letter-spacing: -0.025em; }
+.registration-footer p { max-width: 460px; margin: 0; line-height: 1.65; }
+.registration-footer nav { display: grid; grid-template-columns: repeat(2, auto); gap: 12px 34px; align-content: start; }
+.registration-footer a { color: #4a574f; font-weight: 700; }
+.registration-footer small { grid-column: 1 / -1; padding-top: 28px; border-top: 1px solid rgba(11, 72, 38, .14); color: #66736b; }
+
 .scoreboard { display: grid; grid-template-columns: .7fr 1.3fr; gap: 20px; padding: 28px; border-radius: var(--radius-xl); background: #101415; color: white; box-shadow: var(--shadow); }
 .scoreboard h1 { margin: 12px 0; font-family: Poppins, sans-serif; }
 .scoreboard p { color: #b8c2cc; }
@@ -520,6 +606,17 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
   .hero, .split, .detail-hero, .scoreboard, .score-layout, .form-layout, .dashboard-two, .profile-panel, .registration-two-column, .payment-layout, .news-feature-grid, .news-feature-card, .news-detail { grid-template-columns: 1fr; }
   .payment-summary-card { position: static; }
+  .registration-reference-layout, .confirmation-layout { grid-template-columns: 1fr; }
+  .registration-side { position: static; order: -1; }
+  .registration-top-nav { grid-template-columns: 1fr auto; padding: 0 18px; gap: 14px; }
+  .registration-top-nav nav { grid-column: 1 / -1; order: 3; gap: 18px; overflow-x: auto; scrollbar-width: none; }
+  .registration-top-nav nav::-webkit-scrollbar { display: none; }
+  .registration-top-nav nav a { min-height: 42px; flex: 0 0 auto; font-size: 13px; }
+  .registration-brand { font-size: 22px; }
+  .registration-login { min-height: 36px; padding: 0 14px; font-size: 13px; }
+  .registration-stepper { display: flex; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+  .registration-stepper::-webkit-scrollbar { display: none; }
+  .registration-step { flex: 0 0 auto; min-width: 138px; }
   .sport-home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sport-home-card { min-height: 142px; padding: 16px; }
   .reference-hero { min-height: clamp(480px, 58vw, 560px); }
@@ -662,6 +759,40 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .detail-hero img { height: 260px; border-radius: 14px; }
   .detail-hero h1 { font-size: clamp(32px, 11vw, 44px); }
   .wizard-step { padding: 12px; }
+  .registration-reference-page { width: min(100% - 24px, 1180px); padding-top: 22px; }
+  .registration-top-nav { min-height: 56px; }
+  .registration-brand { font-size: 16px; }
+  .registration-brand img { width: 32px; height: 32px; }
+  .registration-nav-actions { gap: 8px; }
+  .registration-nav-actions > a:first-child { display: none; }
+  .registration-login { min-height: 34px; padding: 0 11px; border-radius: 8px; font-size: 11px; }
+  .registration-hero-copy { text-align: center; margin-inline: auto; }
+  .registration-hero-copy h1 { font-size: clamp(32px, 10vw, 44px); }
+  .registration-hero-copy h2 { font-size: 16px; }
+  .registration-stepper { margin-bottom: 20px; padding-bottom: 12px; }
+  .registration-step { min-width: 124px; min-height: 36px; font-size: 11px; }
+  .registration-step span { width: 21px; height: 21px; }
+  .registration-form-section { padding: 18px; border-radius: 15px; }
+  .section-head-inline { align-items: stretch; flex-direction: column; }
+  .section-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .team-logo-row, .player-entry-card, .document-row { grid-template-columns: 1fr; text-align: left; }
+  .logo-upload-tile { min-height: 92px; }
+  .player-roster-grid { grid-template-columns: 1fr; max-height: 470px; padding-right: 0; }
+  .player-entry-card { gap: 8px; }
+  .player-entry-card input { width: 100%; }
+  .registration-actions { display: grid; grid-template-columns: 1fr; padding-bottom: 14px; }
+  .registration-summary-card > *:not(.registration-summary-head) { margin-inline: 16px; }
+  .registration-summary-card .btn { margin: 14px 16px 18px; width: calc(100% - 32px); }
+  .registration-summary-head, .registration-timeline { padding: 18px; }
+  .summary-tournament { grid-template-columns: 54px 1fr; }
+  .summary-tournament img { width: 54px; height: 54px; }
+  .summary-lines .payable b { font-size: 22px; }
+  .confirmation-layout { margin-top: 16px; }
+  .verification-pass { padding: 20px; }
+  .verification-pass svg:not(.lucide) { max-width: 100%; height: auto; }
+  .registration-footer { grid-template-columns: 1fr; width: min(100% - 24px, 1180px); margin-top: 36px; padding: 26px 0 32px; text-align: center; }
+  .registration-footer p { margin-inline: auto; }
+  .registration-footer nav { grid-template-columns: 1fr 1fr; justify-content: center; }
   .scoreboard { padding: 18px; border-radius: 18px; }
   .score-teams { grid-template-columns: 1fr; }
   .score-teams span { font-size: clamp(38px, 14vw, 64px); }

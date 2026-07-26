@@ -78,6 +78,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("smart-sportz-theme") === "dark");
   const location = useLocation();
   const isPortal = location.pathname.startsWith("/admin") || location.pathname.startsWith("/management") || location.pathname.startsWith("/user");
+  const isRegistrationFlow = /^\/tournaments\/[^/]+\/register/.test(location.pathname);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -88,7 +89,7 @@ export default function App() {
     <div className="app-shell">
       <ScrollToTop />
       <ScreenLoader />
-      {!isPortal && <PublicHeader darkMode={darkMode} setDarkMode={setDarkMode} />}
+      {!isPortal && !isRegistrationFlow && <PublicHeader darkMode={darkMode} setDarkMode={setDarkMode} />}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />
@@ -167,7 +168,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
-      {!isPortal && <Footer />}
+      {!isPortal && !isRegistrationFlow && <Footer />}
     </div>
   );
 }

@@ -12,6 +12,21 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def prize_rows(tournament_slug: str, total_amount: int) -> list[tuple[str, tuple]]:
+    prizes = [
+        (1, "1st Prize", int(total_amount * 0.60), 1),
+        (2, "2nd Prize", int(total_amount * 0.30), 2),
+        (3, "3rd Prize", total_amount - int(total_amount * 0.60) - int(total_amount * 0.30), 3),
+    ]
+    return [
+        (
+            "INSERT OR IGNORE INTO tournament_prizes(id, tournament_slug, position, label, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+            (f"prize_{tournament_slug}_{position}", tournament_slug, position, label, amount, sort_order),
+        )
+        for position, label, amount, sort_order in prizes
+    ]
+
+
 def seed_data() -> None:
     if row("SELECT id FROM users LIMIT 1"):
         return
@@ -64,6 +79,10 @@ def seed_data() -> None:
     statements += [("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", item) for item in users]
     statements += [("INSERT INTO sports VALUES (?, ?, ?, ?)", item) for item in sports]
     statements += [("INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in tournaments]
+    statements += prize_rows("mumbai-premier-bash", 250000000)
+    statements += prize_rows("bangalore-corporate-t20", 120000000)
+    statements += prize_rows("national-youth-football", 85000000)
+    statements += prize_rows("pro-elite-basketball", 100000000)
     statements += [("INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in teams]
     statements += [("INSERT INTO live_matches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in matches]
     statements += [("INSERT INTO timeline_events(match_id, time, type, text, score, created_at) VALUES (?, ?, ?, ?, ?, ?)", item) for item in timeline]
@@ -76,6 +95,14 @@ def seed_data() -> None:
 
 
 def seed_operational_data() -> None:
+    operational_ready = (
+        row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",))
+        and row("SELECT slug FROM news_posts LIMIT 1")
+        and row("SELECT id FROM leaderboard_records LIMIT 1")
+        and row("SELECT id FROM tournament_prizes LIMIT 1")
+    )
+    if operational_ready:
+        return
     statements: list[tuple[str, tuple]] = []
     execute("UPDATE tournaments SET team_size = 16 WHERE slug IN ('mumbai-premier-bash', 'bangalore-corporate-t20', 'delhi-cricket-champions')")
     execute("UPDATE tournaments SET team_size = 22 WHERE slug = 'national-youth-football'")
@@ -91,11 +118,21 @@ def seed_operational_data() -> None:
             "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             ("kerala-volleyball-classic", "Kerala Volleyball Classic 2025", "Volleyball", "Completed", "Kochi", "Dec 02 - Dec 12", "Oct 15, 2025", "Nov 25, 2025", 20, 20, 12, "INR 6,00,000", "/assets/volleyball-match.png", "pink"),
         ))
+        statements += prize_rows("kerala-volleyball-classic", 60000000)
     if not row("SELECT slug FROM tournaments WHERE slug = ?", ("delhi-cricket-champions",)):
         statements.append((
             "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             ("delhi-cricket-champions", "Delhi Cricket Champions 2025", "Cricket", "Completed", "Delhi", "Nov 05 - Nov 24", "Sep 20, 2025", "Oct 25, 2025", 20, 20, 16, "INR 15,00,000", "/assets/cricket-stadium.png", "blue"),
         ))
+        statements += prize_rows("delhi-cricket-champions", 150000000)
+    for tournament_slug, total_amount in [
+        ("mumbai-premier-bash", 250000000),
+        ("bangalore-corporate-t20", 120000000),
+        ("national-youth-football", 85000000),
+        ("pro-elite-basketball", 100000000),
+    ]:
+        if not row("SELECT id FROM tournament_prizes WHERE tournament_slug = ? LIMIT 1", (tournament_slug,)):
+            statements += prize_rows(tournament_slug, total_amount)
     city_map = {
         "mumbai-premier-bash": ["Mumbai", "Navi Mumbai", "Thane"],
         "bangalore-corporate-t20": ["Bengaluru", "Mysuru"],

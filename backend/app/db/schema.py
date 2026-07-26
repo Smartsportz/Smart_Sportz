@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS tournaments (
   accent TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tournament_prizes (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  label TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(tournament_slug, position),
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
 CREATE TABLE IF NOT EXISTS tournament_cities (
   id TEXT PRIMARY KEY,
   tournament_slug TEXT NOT NULL,
@@ -86,10 +97,21 @@ CREATE TABLE IF NOT EXISTS registrations (
   id TEXT PRIMARY KEY,
   tournament_slug TEXT NOT NULL,
   team_name TEXT NOT NULL,
+  team_code TEXT NOT NULL DEFAULT '',
   captain_name TEXT NOT NULL,
+  sub_captain_name TEXT NOT NULL DEFAULT '',
+  coach_name TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL,
   phone TEXT NOT NULL,
   city TEXT NOT NULL DEFAULT '',
+  district_state TEXT NOT NULL DEFAULT '',
+  team_logo TEXT NOT NULL DEFAULT '',
+  primary_jersey_color TEXT NOT NULL DEFAULT '#0b8852',
+  secondary_jersey_color TEXT NOT NULL DEFAULT '#ffffff',
+  team_motto TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  confirmation_code TEXT NOT NULL DEFAULT '',
+  confirmation_qr_payload TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,
   payment_status TEXT NOT NULL,
   amount INTEGER NOT NULL,
@@ -104,6 +126,17 @@ CREATE TABLE IF NOT EXISTS registration_members (
   role TEXT NOT NULL,
   jersey TEXT,
   contact TEXT,
+  FOREIGN KEY(registration_id) REFERENCES registrations(id)
+);
+
+CREATE TABLE IF NOT EXISTS registration_documents (
+  id TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL,
+  document_type TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  uploaded_at TEXT NOT NULL,
   FOREIGN KEY(registration_id) REFERENCES registrations(id)
 );
 
@@ -315,9 +348,41 @@ def _executescript(conn, sql: str) -> None:
             conn.execute(cleaned)
 
 
+def _column_exists(conn, table: str, column: str) -> bool:
+    if using_postgres():
+        result = conn.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
+            (table, column),
+        ).fetchone()
+        return bool(result)
+    columns = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    return column in columns
+
+
+def _add_column(conn, table: str, column: str, definition: str) -> None:
+    if _column_exists(conn, table, column):
+        return
+    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def _apply_operational_schema(path=None) -> None:
     with connect(path) as conn:
         _executescript(conn, SCHEMA)
+        registration_columns = {
+            "team_code": "TEXT NOT NULL DEFAULT ''",
+            "sub_captain_name": "TEXT NOT NULL DEFAULT ''",
+            "coach_name": "TEXT NOT NULL DEFAULT ''",
+            "district_state": "TEXT NOT NULL DEFAULT ''",
+            "team_logo": "TEXT NOT NULL DEFAULT ''",
+            "primary_jersey_color": "TEXT NOT NULL DEFAULT '#0b8852'",
+            "secondary_jersey_color": "TEXT NOT NULL DEFAULT '#ffffff'",
+            "team_motto": "TEXT NOT NULL DEFAULT ''",
+            "category": "TEXT NOT NULL DEFAULT ''",
+            "confirmation_code": "TEXT NOT NULL DEFAULT ''",
+            "confirmation_qr_payload": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in registration_columns.items():
+            _add_column(conn, "registrations", column, definition)
         if using_postgres():
             conn.commit()
             return
