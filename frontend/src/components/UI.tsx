@@ -20,6 +20,15 @@ export function Page({ children, className = "" }: { children: React.ReactNode; 
   );
 }
 
+function BrandLogo({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link to="/" className={`brand ${compact ? "compact" : ""}`}>
+      <img className="brand-mark" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in logo" />
+      <span>SmartSportz.in</span>
+    </Link>
+  );
+}
+
 export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; setDarkMode: (value: boolean) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
@@ -32,10 +41,7 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
   return (
     <header className={`site-header ${menuOpen ? "menu-open" : ""}`}>
       <div className="header-row">
-        <Link to="/" className="brand">
-          <span className="brand-mark">S</span>
-          <span>SmartSportz.in</span>
-        </Link>
+        <BrandLogo />
         <nav className="site-nav">
           {navItems.slice(0, 7).map((item) => (
             <NavLink key={item.path} to={item.path}>
@@ -102,10 +108,7 @@ export function Footer() {
   return (
     <footer className="footer">
       <div>
-        <Link to="/" className="brand compact">
-          <span className="brand-mark">S</span>
-          <span>SmartSportz.in</span>
-        </Link>
+        <BrandLogo compact />
         <p>Enterprise sports tournament management for registrations, payments, live scoring, and analytics.</p>
       </div>
       <div className="footer-grid">
@@ -140,10 +143,7 @@ export function PortalShell({
   return (
     <div className="portal-shell">
       <aside className="portal-sidebar">
-        <Link to="/" className="brand">
-          <span className="brand-mark">S</span>
-          <span>SmartSportz.in</span>
-        </Link>
+        <BrandLogo />
         <nav>
           {sidebar.map((item) => {
             const Icon = item.icon;
