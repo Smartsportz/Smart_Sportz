@@ -127,6 +127,7 @@ class ManagerCitiesPayload(BaseModel):
 class LocalPaymentCreate(BaseModel):
     registration_id: str
     method: str = "local"
+    amount: int | None = Field(default=None, gt=0, le=10000000)
 
 
 class PaymentIntentCreate(BaseModel):

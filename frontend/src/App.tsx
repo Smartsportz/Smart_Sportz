@@ -18,6 +18,7 @@ import {
   NewsDetailPage,
   NewsPage,
   RegistrationPaymentPage,
+  RegistrationPassPage,
   RegistrationPage,
   RegistrationReviewPage,
   RegistrationRosterPage,
@@ -82,7 +83,6 @@ export default function App() {
   const [systemDarkMode, setSystemDarkMode] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const location = useLocation();
   const isPortal = location.pathname.startsWith("/admin") || location.pathname.startsWith("/management") || location.pathname.startsWith("/user");
-  const isRegistrationFlow = /^\/tournaments\/[^/]+\/register/.test(location.pathname);
   const darkMode = themePreference === "system" ? systemDarkMode : themePreference === "dark";
 
   useEffect(() => {
@@ -103,7 +103,7 @@ export default function App() {
     <div className="app-shell">
       <ScrollToTop />
       <ScreenLoader />
-      {!isPortal && !isRegistrationFlow && <PublicHeader />}
+      {!isPortal && <PublicHeader />}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />
@@ -114,6 +114,7 @@ export default function App() {
           <Route path="/tournaments/:slug/register/roster" element={<ProtectedRoute roles={["user"]}><RegistrationRosterPage /></ProtectedRoute>} />
           <Route path="/tournaments/:slug/register/payment" element={<ProtectedRoute roles={["user"]}><RegistrationPaymentPage /></ProtectedRoute>} />
           <Route path="/tournaments/:slug/register/review" element={<ProtectedRoute roles={["user"]}><RegistrationReviewPage /></ProtectedRoute>} />
+          <Route path="/tournaments/:slug/registration-pass" element={<ProtectedRoute roles={["user"]}><RegistrationPassPage /></ProtectedRoute>} />
           <Route path="/registration/:id/payment" element={<ProtectedRoute roles={["user"]}><RegistrationPaymentPage /></ProtectedRoute>} />
           <Route path="/payments/:id/receipt" element={<ProtectedRoute roles={["user", "super_admin"]}><UtilityDetailPage type="payment" /></ProtectedRoute>} />
           <Route path="/sports" element={<SportsPage />} />
@@ -182,7 +183,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
-      {!isPortal && !isRegistrationFlow && <Footer />}
+      {!isPortal && <Footer />}
     </div>
   );
 }

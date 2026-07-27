@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
-import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournaments } from "../data/platform";
+import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments } from "../data/platform";
+import type { TournamentNotice } from "../data/platform";
 
 const fade = {
   initial: { opacity: 0, y: 24 },
@@ -31,6 +32,17 @@ const featureLinks = [
   "Role-based dashboards",
 ];
 
+const noticeStorageKey = "smart-sportz-tournament-notices";
+
+function readStoredNotices() {
+  try {
+    const raw = localStorage.getItem(noticeStorageKey);
+    return raw ? JSON.parse(raw) as TournamentNotice[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function HomePage() {
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
   const leaderboardFilterRef = useRef<HTMLDivElement>(null);
@@ -39,6 +51,7 @@ export function HomePage() {
   const organizerRef = useRef<HTMLDivElement>(null);
   const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [organizerIndex, setOrganizerIndex] = useState(0);
+  const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
   const featured = [...tournaments].sort((a, b) => {
     const priority = { Upcoming: 0, "Registration Open": 1, Live: 2, Completed: 3 } as Record<string, number>;
     return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
@@ -90,6 +103,25 @@ export function HomePage() {
   }, [organizerTools.length]);
 
   useEffect(() => {
+    const allNotices = [...readStoredNotices(), ...tournamentNotices]
+      .filter((notice) => notice.published)
+      .filter((notice, index, list) => list.findIndex((item) => item.id === notice.id) === index);
+    const notice = allNotices[0];
+    if (!notice) return;
+    const dismissedKey = `smart-sportz-notice-dismissed:${notice.id}`;
+    if (sessionStorage.getItem(dismissedKey)) return;
+    const timer = window.setTimeout(() => setActiveNotice(notice), 650);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function closeNotice() {
+    if (activeNotice) {
+      sessionStorage.setItem(`smart-sportz-notice-dismissed:${activeNotice.id}`, "1");
+    }
+    setActiveNotice(null);
+  }
+
+  useEffect(() => {
     const container = organizerRef.current;
     const card = organizerCardRefs.current[organizerIndex];
     if (!container || !card) return;
@@ -101,6 +133,20 @@ export function HomePage() {
 
   return (
     <Page className="home-reference-page">
+      {activeNotice && (
+        <div className="notice-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="home-notice-title">
+          <article className="notice-modal">
+            <button className="notice-close" type="button" aria-label="Close notice" onClick={closeNotice}>×</button>
+            <img src={activeNotice.image} alt="" />
+            <div>
+              <span className="status emerald">Tournament Notice</span>
+              <h2 id="home-notice-title">{activeNotice.title}</h2>
+              <p>{activeNotice.description}</p>
+              <Link className="btn btn-primary" to={`/tournaments/${activeNotice.tournamentSlug}`} onClick={closeNotice}>Open Tournament</Link>
+            </div>
+          </article>
+        </div>
+      )}
       <section className="reference-hero">
         <video className="reference-hero-video" autoPlay muted loop playsInline preload="auto">
           <source src={`${import.meta.env.BASE_URL}media/hero-video-short.mp4`} type="video/mp4" />

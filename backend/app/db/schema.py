@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS timeline_events (
 
 CREATE TABLE IF NOT EXISTS registrations (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT '',
   tournament_slug TEXT NOT NULL,
   team_name TEXT NOT NULL,
   team_code TEXT NOT NULL DEFAULT '',
@@ -369,6 +370,7 @@ def _apply_operational_schema(path=None) -> None:
     with connect(path) as conn:
         _executescript(conn, SCHEMA)
         registration_columns = {
+            "user_id": "TEXT NOT NULL DEFAULT ''",
             "team_code": "TEXT NOT NULL DEFAULT ''",
             "sub_captain_name": "TEXT NOT NULL DEFAULT ''",
             "coach_name": "TEXT NOT NULL DEFAULT ''",

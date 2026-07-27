@@ -153,6 +153,28 @@ export const tournaments = [
   },
 ];
 
+export type TournamentNotice = {
+  id: string;
+  tournamentSlug: string;
+  title: string;
+  description: string;
+  image: string;
+  published: boolean;
+  updatedBy: "admin" | "manager";
+};
+
+export const tournamentNotices: TournamentNotice[] = [
+  {
+    id: "notice_mumbai_premier_registration",
+    tournamentSlug: "mumbai-premier-bash",
+    title: "Mumbai Premier Bash registration window is live",
+    description: "Teams from Mumbai, Navi Mumbai, and Thane can submit roster, documents, and payment before the final registration deadline.",
+    image: assets.cricket,
+    published: true,
+    updatedBy: "manager",
+  },
+];
+
 export const liveMatches = [
   {
     id: "match-48",
@@ -301,7 +323,7 @@ export const sidebar = [
 export const userSidebar = [
   { label: "Home", path: "/user/dashboard", icon: BarChart3 },
   { label: "Tournament", path: "/user/registrations", icon: Trophy },
-  { label: "Gallery", path: "/user/documents", icon: GalleryHorizontal },
+  { label: "Gallery", path: "/gallery", icon: GalleryHorizontal },
   { label: "Live", path: "/user/payments", icon: Activity },
   { label: "Certificates", path: "/user/certificates", icon: Medal },
   { label: "News", path: "/user/schedules", icon: CalendarDays },

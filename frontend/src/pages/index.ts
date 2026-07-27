@@ -9,7 +9,7 @@ export { LiveMatchPage } from "./LiveMatchPage";
 export { LeaderboardsPage } from "./LeaderboardsPage";
 export { LoginPage } from "./LoginPage";
 export { ManagementPage } from "./ManagementPage";
-export { RegistrationPage, RegistrationPaymentPage, RegistrationReviewPage, RegistrationRosterPage } from "./RegistrationPage";
+export { RegistrationPage, RegistrationPassPage, RegistrationPaymentPage, RegistrationReviewPage, RegistrationRosterPage } from "./RegistrationPage";
 export { SettingsPage } from "./SettingsPage";
 export { SportDetailPage } from "./SportDetailPage";
 export { SportsPage } from "./SportsPage";

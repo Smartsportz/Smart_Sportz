@@ -1,7 +1,70 @@
-import { FileText } from "lucide-react";
+import { Bell, CheckCircle2, ImagePlus, FileText } from "lucide-react";
+import { useState } from "react";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { cmsSections, logRows, managerUsers, paymentRows, reports, sidebar, teams, tournaments } from "../data/platform";
+import type { TournamentNotice } from "../data/platform";
 import { AdminOverview, AthleteProfile, CatalogPage, DashboardGrid, ListPanel, TeamCard } from "./shared";
+
+const noticeStorageKey = "smart-sportz-tournament-notices";
+
+export function NoticeBuilder({ role = "admin" }: { role?: "admin" | "manager" }) {
+  const [selectedSlug, setSelectedSlug] = useState(tournaments[0]?.slug ?? "");
+  const selected = tournaments.find((item) => item.slug === selectedSlug) ?? tournaments[0];
+  const [title, setTitle] = useState(selected ? `${selected.name} notice` : "");
+  const [image, setImage] = useState(selected?.image ?? "");
+  const [description, setDescription] = useState("");
+  const [saved, setSaved] = useState("");
+
+  function chooseTournament(slug: string) {
+    const next = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+    setSelectedSlug(next.slug);
+    setTitle(`${next.name} notice`);
+    setImage(next.image);
+    setSaved("");
+  }
+
+  function saveNotice() {
+    const notice: TournamentNotice = {
+      id: `notice_${selectedSlug}_${Date.now()}`,
+      tournamentSlug: selectedSlug,
+      title: title.trim() || `${selected.name} notice`,
+      description: description.trim() || "Tournament notice published by SmartSportz operations.",
+      image: image.trim() || selected.image,
+      published: true,
+      updatedBy: role,
+    };
+    let current: TournamentNotice[] = [];
+    try {
+      current = JSON.parse(localStorage.getItem(noticeStorageKey) || "[]") as TournamentNotice[];
+    } catch {
+      current = [];
+    }
+    localStorage.setItem(noticeStorageKey, JSON.stringify([notice, ...current.filter((item) => item.tournamentSlug !== selectedSlug)]));
+    sessionStorage.removeItem(`smart-sportz-notice-dismissed:${notice.id}`);
+    setSaved(`Notice published for ${selected.name}. It will appear on the home page when the website opens fresh.`);
+  }
+
+  return (
+    <section className="panel tournament-notice-builder">
+      <div>
+        <span className="status emerald"><Bell size={14} />Add Notice</span>
+        <h2>Tournament website notice</h2>
+        <p>Create a tournament-specific popup for the home page. It does not display across every site page.</p>
+      </div>
+      {saved && <div className="form-alert success-alert">{saved}</div>}
+      <div className="form-grid">
+        <label>Tournament<select value={selectedSlug} onChange={(event) => chooseTournament(event.target.value)}>{tournaments.map((tournament) => <option value={tournament.slug} key={tournament.slug}>{tournament.name}</option>)}</select></label>
+        <label>Notice title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Registration notice title" /></label>
+        <label>Image URL or asset path<input value={image} onChange={(event) => setImage(event.target.value)} placeholder="/assets/cricket-stadium.png" /></label>
+        <label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Write the notice shown to website visitors." /></label>
+      </div>
+      <div className="registration-actions compact-actions">
+        <button className="btn btn-secondary" type="button" onClick={() => setImage(selected.image)}><ImagePlus size={16} />Use tournament image</button>
+        <button className="btn btn-primary" type="button" onClick={saveNotice}><CheckCircle2 size={16} />Publish notice</button>
+      </div>
+    </section>
+  );
+}
 
 export function AdminPage({ section = "dashboard" }: { section?: string }) {
   const title = section === "dashboard" ? "Executive Dashboard" : section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -12,6 +75,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
         {section === "dashboard" && <><DashboardGrid /><AdminOverview /></>}
         {section === "tournaments" && (
           <>
+            <NoticeBuilder role="admin" />
             <section className="panel tournament-create-panel">
               <div>
                 <span className="status emerald">Create Tournament</span>
@@ -29,8 +93,8 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
               </div>
             </section>
             <DataTable
-              columns={["Tournament", "Status", "Teams", "Team Size", "Cities", "Registration Window", "Prize"]}
-              rows={tournaments.map((t) => [t.name, <span className={`status ${t.accent}`}>{t.status}</span>, `${t.teams}/${t.capacity}`, `${t.teamSize} members`, t.cities.join(", "), `${t.registrationStart} - ${t.registrationEnd}`, t.prize])}
+              columns={["Tournament", "Status", "Teams", "Team Size", "Cities", "Registration Window", "Prize", "Notice"]}
+              rows={tournaments.map((t) => [t.name, <span className={`status ${t.accent}`}>{t.status}</span>, `${t.teams}/${t.capacity}`, `${t.teamSize} members`, t.cities.join(", "), `${t.registrationStart} - ${t.registrationEnd}`, t.prize, <span className="status emerald">Add notice</span>])}
             />
           </>
         )}

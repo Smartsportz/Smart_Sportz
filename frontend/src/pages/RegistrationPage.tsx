@@ -1,17 +1,19 @@
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowLeft, ArrowRight, Bell, CheckCircle2, Download, FileText, ImagePlus, Printer, Settings, ShieldCheck, Trophy, Upload, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Download, FileText, ImagePlus, Printer, ShieldCheck, Trophy, Upload, UserPlus, Users } from "lucide-react";
 import { Page } from "../components/UI";
-import { useAuth } from "../auth/AuthContext";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { tournaments } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
+import { useAuth } from "../auth/AuthContext";
 
 type SavedDocument = {
   documentType: string;
   fileName: string;
   filePath: string;
+  fileSize?: number;
   status: "required" | "pending" | "uploaded";
 };
 
@@ -73,6 +75,10 @@ function amountForTournament(slug: string) {
   return 517900;
 }
 
+function totalPayableForAmount(amount: number) {
+  return amount + Math.round(amount * 0.18);
+}
+
 function formatInr(cents: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(cents / 100);
 }
@@ -102,6 +108,19 @@ function registrationCode(seed: string) {
     .slice(0, 12);
 }
 
+function uniqueRegistrationCode(seed: string) {
+  const base = registrationCode(seed) || "TEAM";
+  const suffix = Date.now().toString(36).slice(-4).toUpperCase();
+  return `${base.slice(0, Math.max(2, 12 - suffix.length - 1))}-${suffix}`;
+}
+
+function formatFileSize(size?: number) {
+  if (!size) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
   const wizard = ["Tournament", "Category", "Team Details", "Players", "Documents", "Payment", "Confirmation"];
   return (
@@ -117,39 +136,8 @@ function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
 }
 
 function RegistrationShell({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
-  const initials = user?.name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "U";
-
   return (
     <>
-      <header className="registration-top-nav">
-        <Link className="registration-brand" to="/">
-          <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in" />
-          <span>SmartSportz.in</span>
-        </Link>
-        <nav>
-          <Link className="active" to="/tournaments/mumbai-premier-bash/register">Register</Link>
-          <Link to="/tournaments">Tournaments</Link>
-          <Link to="/live">Live Scores</Link>
-        </nav>
-        <div className="registration-nav-actions">
-          <Link to="/notifications" aria-label="Notifications"><Bell size={18} /></Link>
-          <Link to="/settings" aria-label="Settings"><Settings size={18} /></Link>
-          {isAuthenticated ? (
-            <Link className="registration-profile-avatar" to="/user/dashboard" aria-label="Open profile dashboard">
-              {user?.name ? initials : <Users size={18} />}
-            </Link>
-          ) : (
-            <Link className="registration-login" to="/login">Login</Link>
-          )}
-        </div>
-      </header>
       {children}
       <footer className="registration-footer">
         <div>
@@ -167,9 +155,9 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RegistrationSummary({ tournament, amount }: { tournament: (typeof tournaments)[number]; amount: number }) {
+function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: (typeof tournaments)[number]; amount: number; showTimeline?: boolean }) {
   const fees = Math.round(amount * 0.18);
-  const total = amount + fees;
+  const total = totalPayableForAmount(amount);
   return (
     <aside className="registration-side">
       <section className="registration-summary-card">
@@ -199,19 +187,26 @@ function RegistrationSummary({ tournament, amount }: { tournament: (typeof tourn
         </div>
         <button className="btn btn-secondary wide" type="button"><Download size={16} />Download Rulebook</button>
       </section>
-      <section className="registration-timeline">
-        <h3>Registration Timeline</h3>
-        <p className="done"><span />Registration Started<small>{tournament.registrationStart}</small></p>
-        <p><span />Early Bird Deadline<small>{tournament.registrationEnd}</small></p>
-        <p><span />Final Closing<small>{tournament.date}</small></p>
-      </section>
+      {showTimeline && (
+        <section className="registration-timeline">
+          <h3>Registration Timeline</h3>
+          <p className="done"><span />Registration Started<small>{tournament.registrationStart}</small></p>
+          <p><span />Early Bird Deadline<small>{tournament.registrationEnd}</small></p>
+          <p><span />Final Closing<small>{tournament.date}</small></p>
+        </section>
+      )}
     </aside>
   );
+}
+
+function scrollRegistrationTop() {
+  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
 export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
   const amount = amountForTournament(tournament.slug);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
@@ -246,8 +241,15 @@ export function RegistrationPage() {
   const [tournamentAccepted, setTournamentAccepted] = useState(false);
   const [categoryAccepted, setCategoryAccepted] = useState(false);
 
+  useEffect(() => {
+    if (getCompletedRegistration(tournament.slug)) {
+      navigate(`/tournaments/${tournament.slug}/registration-pass`, { replace: true });
+    }
+  }, [navigate, tournament.slug]);
+
   function showMissing(message: string) {
     setError(message);
+    scrollRegistrationTop();
     window.alert(message);
   }
 
@@ -267,10 +269,12 @@ export function RegistrationPage() {
     });
   }
 
-  function updateDocument(index: number, fileName: string) {
+  function updateDocument(index: number, file?: File) {
+    const fileName = file?.name ?? "";
     setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
       ...item,
       fileName,
+      fileSize: file?.size,
       filePath: fileName ? `/local-documents/${encodeURIComponent(fileName)}` : "",
       status: fileName ? "uploaded" : "required",
     } : item));
@@ -279,14 +283,17 @@ export function RegistrationPage() {
   async function continueToRoster() {
     const requiredFields = ["teamName", "teamCode", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
-    const missingMembers = members.filter((name) => !name.trim()).length;
+    const missingMemberLabels = members
+      .map((name, index) => ({ name: name.trim(), label: memberSlots[index] }))
+      .filter((item) => item.name.length < 2)
+      .map((item) => item.label);
     const missingDocuments = documents.filter((item) => item.status !== "uploaded").map((item) => item.documentType);
     if (missingTeamFields.length) {
       showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
       return;
     }
-    if (missingMembers) {
-      showMissing(`Please complete all ${tournament.teamSize} player names before continuing.`);
+    if (missingMemberLabels.length) {
+      showMissing(`Please complete these player names with at least 2 characters: ${missingMemberLabels.join(", ")}.`);
       return;
     }
     if (missingDocuments.length) {
@@ -295,6 +302,7 @@ export function RegistrationPage() {
     }
     setSaving(true);
     setError("");
+    const finalTeamCode = uniqueRegistrationCode(teamDetails.teamCode || teamDetails.teamName);
     try {
       const uploadedDocuments = documents.filter((item) => item.fileName.trim());
       const created = await apiRequest<BackendRegistration>("/registrations", {
@@ -302,7 +310,7 @@ export function RegistrationPage() {
         body: JSON.stringify({
           tournament_slug: tournament.slug,
           team_name: teamDetails.teamName,
-          team_code: teamDetails.teamCode,
+          team_code: finalTeamCode,
           captain_name: teamDetails.captainName,
           sub_captain_name: teamDetails.subCaptainName,
           coach_name: teamDetails.coachName,
@@ -316,7 +324,7 @@ export function RegistrationPage() {
           team_motto: teamDetails.teamMotto,
           category: teamDetails.category,
           members: members.map((name, index) => ({
-            name,
+            name: name.trim(),
             role: index === 0 ? "Captain" : index === 1 ? "Sub-captain" : "Player",
             jersey: "",
             contact: index === 0 ? teamDetails.phone : "",
@@ -328,19 +336,22 @@ export function RegistrationPage() {
             status: item.status,
           })),
         }),
-      });
+      }, token);
       const payload: SavedRegistration = {
         registrationId: created.id,
         tournament: tournament.name,
         tournamentSlug: tournament.slug,
         ...teamDetails,
+        teamCode: finalTeamCode,
         members,
         documents,
       };
       sessionStorage.setItem(`registration:${tournament.slug}`, JSON.stringify(payload));
       navigate(`/tournaments/${tournament.slug}/register/roster`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Registration could not be saved.");
+      const message = caught instanceof Error ? caught.message : "Registration could not be saved.";
+      setError(message);
+      scrollRegistrationTop();
     } finally {
       setSaving(false);
     }
@@ -354,6 +365,7 @@ export function RegistrationPage() {
         return;
       }
       setActiveStep(1);
+      scrollRegistrationTop();
       return;
     }
     if (activeStep === 1) {
@@ -362,6 +374,7 @@ export function RegistrationPage() {
         return;
       }
       setActiveStep(2);
+      scrollRegistrationTop();
       return;
     }
     if (activeStep === 2) {
@@ -372,6 +385,7 @@ export function RegistrationPage() {
         return;
       }
       setActiveStep(3);
+      scrollRegistrationTop();
       return;
     }
     if (activeStep === 3) {
@@ -381,6 +395,7 @@ export function RegistrationPage() {
         return;
       }
       setActiveStep(4);
+      scrollRegistrationTop();
       return;
     }
     void continueToRoster();
@@ -393,6 +408,7 @@ export function RegistrationPage() {
       return;
     }
     setActiveStep((step) => Math.max(0, step - 1));
+    scrollRegistrationTop();
   }
 
   return (
@@ -522,15 +538,28 @@ export function RegistrationPage() {
               <section className="registration-form-section">
                 <h2>Required Documentation</h2>
                 <p>Upload all required documents before continuing to roster review and payment.</p>
+                <div className="document-template-card">
+                  <FileText />
+                  <div>
+                    <h3>Team Authorization Letter Format</h3>
+                    <p>Use this Word template to prepare captain authorization, team consent, and tournament participation declaration.</p>
+                  </div>
+                  <a className="btn btn-secondary" href={`${import.meta.env.BASE_URL}templates/team-authorization-letter.docx`} download>
+                    <Download size={16} />Download DOCX
+                  </a>
+                </div>
                 <div className="document-list">
-                  {documents.map((document, index) => (
-                    <label className="document-row" key={document.documentType}>
-                      <FileText />
-                      <span><b>{document.documentType}</b><small>{document.fileName || "PDF, JPG, or PNG document required"}</small></span>
-                      <strong>{document.status === "uploaded" ? "Uploaded" : "Upload"}</strong>
-                      <input type="file" accept=".pdf,image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0]?.name ?? "")} />
-                    </label>
-                  ))}
+              {documents.map((document, index) => (
+                <label className="document-row" key={document.documentType}>
+                  <FileText />
+                      <span>
+                        <b>{document.documentType}</b>
+                        <small>{document.fileName ? `${document.fileName}${document.fileSize ? ` - ${formatFileSize(document.fileSize)}` : ""}` : "PDF, JPG, or PNG document required"}</small>
+                      </span>
+                  <strong>{document.status === "uploaded" ? "Uploaded" : "Upload"}</strong>
+                      <input type="file" accept=".pdf,image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0])} />
+                </label>
+              ))}
                 </div>
                 <p className="secure-note">Maximum file size: 10MB per document. Supported formats: PDF, JPG, PNG. Documents are stored as metadata in local demo mode.</p>
               </section>
@@ -541,7 +570,7 @@ export function RegistrationPage() {
               <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>{saving ? "Saving..." : activeStep === 4 ? "Save & Continue" : "Continue"}<ArrowRight size={16} /></button>
             </div>
           </main>
-          <RegistrationSummary tournament={tournament} amount={amount} />
+          <RegistrationSummary tournament={tournament} amount={amount} showTimeline={activeStep === 0} />
         </div>
       </Page>
     </RegistrationShell>
@@ -604,6 +633,7 @@ export function RegistrationPaymentPage() {
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
   const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
   const amount = amountForTournament(tournament.slug);
+  const totalPayable = totalPayableForAmount(amount);
   const [method, setMethod] = useState<"upi" | "card">("upi");
   const [contact, setContact] = useState(saved?.phone ?? "");
   const [card, setCard] = useState({ name: "", number: "", expiry: "", cvv: "" });
@@ -621,7 +651,7 @@ export function RegistrationPaymentPage() {
         body: JSON.stringify({
           tournament_slug: tournament.slug,
           team_name: saved.teamName,
-          amount,
+          amount: totalPayable,
           method: selectedMethod,
           contact,
         }),
@@ -633,7 +663,7 @@ export function RegistrationPaymentPage() {
       });
       const registrationPayment = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi" }>(`/registrations/${saved.registrationId}/local-payment`, {
         method: "POST",
-        body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod }),
+        body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable }),
       });
       const payment: SavedPayment = {
         id: registrationPayment.id,
@@ -701,7 +731,7 @@ export function RegistrationPaymentPage() {
             {method === "upi" ? (
               <div className="upi-payment-box">
                 <div className="qr-shell">
-                  <QRCodeSVG value={`upi://pay?pa=smartsportz@local&pn=SmartSportz&am=${(amount / 100).toFixed(2)}&tn=${saved.teamCode}`} size={154} />
+                  <QRCodeSVG value={`upi://pay?pa=smartsportz@local&pn=SmartSportz&am=${(totalPayable / 100).toFixed(2)}&tn=${saved.teamCode}`} size={154} />
                   <p>{qrGenerated ? "QR generated. Checking payment receipt..." : "Generate QR to scan and pay with any UPI app."}</p>
                 </div>
                 <button className="btn btn-primary" type="button" onClick={startUpiFlow} disabled={status === "checking"}>{status === "checking" ? "Checking payment..." : "Generate QR and check payment"}</button>
@@ -719,7 +749,7 @@ export function RegistrationPaymentPage() {
               </div>
             )}
           </section>
-          <RegistrationSummary tournament={tournament} amount={amount} />
+        <RegistrationSummary tournament={tournament} amount={amount} />
         </div>
       )}
     </Page>
@@ -766,6 +796,30 @@ export function RegistrationReviewPage() {
     receiptNumber: payment?.receiptNumber,
     verificationPath: saved ? `/registrations/${saved.registrationId}` : "",
   });
+
+  useEffect(() => {
+    if (!saved || !payment) return;
+    saveCompletedRegistration({
+      tournamentSlug: tournament.slug,
+      tournamentName: tournament.name,
+      registrationId: saved.registrationId,
+      confirmationCode,
+      qrPayload,
+      teamName: saved.teamName,
+      teamCode: saved.teamCode,
+      captainName: saved.captainName,
+      subCaptainName: saved.subCaptainName,
+      coachName: saved.coachName,
+      email: saved.email,
+      phone: saved.phone,
+      city: saved.city,
+      category: saved.category,
+      members: saved.members,
+      documents: saved.documents,
+      payment,
+      completedAt: new Date().toISOString(),
+    });
+  }, [saved, payment, tournament.slug, tournament.name, confirmationCode, qrPayload]);
 
   return (
     <RegistrationShell>
@@ -819,6 +873,82 @@ export function RegistrationReviewPage() {
         </div>
       )}
     </Page>
+    </RegistrationShell>
+  );
+}
+
+export function RegistrationPassPage() {
+  const { slug } = useParams();
+  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const completed = getCompletedRegistration(tournament.slug);
+
+  return (
+    <RegistrationShell>
+      <Page className="registration-reference-page">
+        <section className="registration-hero-copy compact">
+          <p className="eyebrow">Already Registered</p>
+          <h1>Your Tournament Registration</h1>
+          <p>This page is read-only after successful payment. Team, payment, unique ID, and QR verification details cannot be edited.</p>
+        </section>
+        {!completed ? (
+          <section className="panel">
+            <h2>No completed registration found</h2>
+            <p>Complete registration and payment first to generate your read-only verification pass.</p>
+            <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Register team</Link>
+          </section>
+        ) : (
+          <div className="registration-pass-layout">
+            <section className="verification-pass">
+              <div className="pass-head">
+                <ShieldCheck />
+                <span>Unique Team Pass</span>
+              </div>
+              <QRCodeSVG value={completed.qrPayload} size={220} level="M" includeMargin />
+              <h2>{completed.confirmationCode}</h2>
+              <p>{completed.teamName} - {completed.tournamentName}</p>
+              <div className="pass-actions">
+                <button className="btn btn-secondary" type="button" onClick={() => window.print()}><Printer size={16} />Print pass</button>
+                <Link className="btn btn-secondary" to={`/payments/${completed.payment.id}/receipt`}><Download size={16} />View receipt</Link>
+              </div>
+            </section>
+            <section className="panel review-summary">
+              <span className="status emerald">Registration locked</span>
+              <h2>{completed.teamName}</h2>
+              <div className="review-list">
+                <p><b>Tournament</b><span>{completed.tournamentName}</span></p>
+                <p><b>Registration ID</b><span>{completed.registrationId}</span></p>
+                <p><b>Team Code</b><span>{completed.teamCode}</span></p>
+                <p><b>Captain</b><span>{completed.captainName}</span></p>
+                <p><b>Sub-captain</b><span>{completed.subCaptainName}</span></p>
+                <p><b>Coach</b><span>{completed.coachName || "Not assigned"}</span></p>
+                <p><b>City</b><span>{completed.city}</span></p>
+                <p><b>Category</b><span>{completed.category}</span></p>
+                <p><b>Payment</b><span>{completed.payment.receiptNumber} - {formatInr(completed.payment.amount)}</span></p>
+              </div>
+            </section>
+            <section className="panel registration-pass-wide">
+              <h2>Team Members</h2>
+              <div className="roster-list readonly-roster">
+                {completed.members.map((member, index) => (
+                  <p key={`${member}-${index}`}><b>{index + 1}</b><span>{member}</span>{index === 0 && <small>Captain</small>}{index === 1 && <small>Sub-captain</small>}</p>
+                ))}
+              </div>
+            </section>
+            <section className="panel registration-pass-wide">
+              <h2>Uploaded Documents</h2>
+              <div className="document-list">
+                {completed.documents.map((document) => (
+                  <div className="document-row readonly-document" key={document.documentType}>
+                    <FileText />
+                    <span><b>{document.documentType}</b><small>{document.fileName || "Uploaded document"}</small></span>
+                    <strong>{document.status}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+      </Page>
     </RegistrationShell>
   );
 }

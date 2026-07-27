@@ -427,6 +427,7 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px 
 .team-logo-row p { display: grid; gap: 4px; margin: 0; }
 .team-logo-row small, .document-row small { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
 input[type="color"] { min-height: 44px; padding: 5px; cursor: pointer; }
+textarea { width: 100%; min-height: 112px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); color: var(--text); resize: vertical; }
 .player-roster-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-height: 500px; overflow: auto; padding-right: 4px; }
 .player-entry-card { grid-template-columns: 34px 110px 1fr; align-items: center; gap: 10px; min-height: 68px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #f7fcf6; }
 .player-entry-card span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; background: rgba(11, 136, 82, .12); color: var(--primary-dark); font-weight: 900; }
@@ -435,6 +436,10 @@ input[type="color"] { min-height: 44px; padding: 5px; cursor: pointer; }
 .document-row { position: relative; display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 14px; min-height: 74px; padding: 14px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 14px; background: #f8fdf7; cursor: pointer; }
 .document-row svg { display: grid; place-items: center; width: 34px; height: 34px; padding: 7px; border-radius: 10px; color: var(--primary-dark); background: rgba(37, 99, 235, .10); }
 .document-row strong { color: var(--primary-dark); font-size: 13px; }
+.document-template-card { display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 14px; padding: 14px; border: 1px solid rgba(11, 136, 82, .16); border-radius: 16px; background: linear-gradient(135deg, rgba(11, 136, 82, .08), rgba(255, 255, 255, .92)); }
+.document-template-card > svg { display: grid; place-items: center; width: 42px; height: 42px; padding: 10px; border-radius: 13px; color: var(--primary-dark); background: rgba(11, 136, 82, .12); }
+.document-template-card h3 { margin: 0 0 4px; font-size: 15px; }
+.document-template-card p { margin: 0; font-size: 13px; line-height: 1.45; }
 .registration-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0 28px; }
 .registration-actions .btn { min-width: 0; }
 .registration-actions.compact-actions { justify-content: start; padding: 0; flex-wrap: wrap; }
@@ -463,7 +468,10 @@ input[type="color"] { min-height: 44px; padding: 5px; cursor: pointer; }
 .registration-timeline p span { position: absolute; left: -24px; top: 3px; width: 12px; height: 12px; border-radius: 999px; background: #c8d6ce; }
 .registration-timeline p.done span { background: var(--primary-dark); }
 .registration-timeline small { color: var(--muted); font-size: 11px; font-weight: 700; }
-.confirmation-layout { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 24px; }
+.confirmation-layout, .registration-pass-layout { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 24px; }
+.registration-pass-wide { grid-column: 1 / -1; }
+.readonly-document { cursor: default; }
+.readonly-document strong { color: var(--primary-dark); text-transform: capitalize; }
 .verification-pass { display: grid; justify-items: center; gap: 16px; padding: 28px; text-align: center; background: linear-gradient(180deg, #ffffff, #eef9f3); }
 .pass-head { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; color: var(--primary-dark); background: rgba(11, 136, 82, .10); font-weight: 900; }
 .verification-pass svg:not(.lucide) { padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: var(--shadow-soft); }
@@ -607,6 +615,14 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .theme-choice-grid svg { color: var(--primary-dark); }
 .theme-choice-grid span { font-weight: 950; }
 .theme-choice-grid small { color: var(--muted); font-weight: 750; line-height: 1.45; }
+.notice-modal-backdrop { position: fixed; inset: 0; z-index: 9998; display: grid; place-items: center; padding: 18px; background: rgba(5, 12, 18, .48); backdrop-filter: blur(10px); }
+.notice-modal { position: relative; display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1fr); gap: 22px; width: min(760px, 100%); padding: 18px; border: 1px solid rgba(255, 255, 255, .7); border-radius: 22px; background: var(--surface); box-shadow: 0 28px 80px rgba(0, 0, 0, .28); }
+.notice-modal img { width: 100%; height: 250px; object-fit: cover; border-radius: 16px; }
+.notice-modal h2 { margin: 10px 0; font-family: Poppins, sans-serif; font-size: clamp(24px, 4vw, 38px); line-height: 1.05; letter-spacing: -0.04em; }
+.notice-modal p { color: var(--muted); line-height: 1.65; }
+.notice-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; box-shadow: var(--shadow-soft); }
+.tournament-notice-builder { display: grid; gap: 18px; margin-bottom: 22px; }
+.success-alert { border-color: rgba(11, 136, 82, .24); background: rgba(11, 136, 82, .10); color: var(--primary-dark); }
 
 @media (max-width: 1080px) {
   .site-nav, .search-pill, .desktop-action { display: none; }
@@ -620,10 +636,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .mobile-menu a.active, .mobile-menu a:hover { color: var(--primary-dark); background: rgba(11, 136, 82, .10); }
   .mobile-search { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
   .mobile-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
-  .hero, .split, .detail-hero, .scoreboard, .score-layout, .form-layout, .dashboard-two, .profile-panel, .registration-two-column, .payment-layout, .news-feature-grid, .news-feature-card, .news-detail { grid-template-columns: 1fr; }
+  .hero, .split, .detail-hero, .detail-grid, .scoreboard, .score-layout, .form-layout, .dashboard-two, .profile-panel, .registration-two-column, .payment-layout, .news-feature-grid, .news-feature-card, .news-detail { grid-template-columns: 1fr; }
   .tournament-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .payment-summary-card { position: static; }
-  .registration-reference-layout, .confirmation-layout { grid-template-columns: 1fr; }
+  .registration-reference-layout, .confirmation-layout, .registration-pass-layout { grid-template-columns: 1fr; }
+  .registration-pass-wide { grid-column: auto; }
   .registration-side { position: static; order: -1; }
   .registration-top-nav { grid-template-columns: 1fr auto; padding: 0 18px; gap: 14px; }
   .registration-top-nav nav { grid-column: 1 / -1; order: 3; gap: 18px; overflow-x: auto; scrollbar-width: none; }
@@ -765,6 +782,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .ops-flow { align-items: flex-start; }
   .form-grid, .footer, .footer-grid, .live-card, .auth-card { grid-template-columns: 1fr; }
   .payment-method-tabs { grid-template-columns: 1fr; }
+  .document-template-card { grid-template-columns: 34px 1fr; gap: 10px; padding: 12px; }
+  .document-template-card > svg { width: 34px; height: 34px; padding: 8px; }
+  .document-template-card .btn { grid-column: 1 / -1; min-height: 36px; font-size: 12px; }
+  .notice-modal { grid-template-columns: 1fr; gap: 14px; padding: 14px; border-radius: 18px; }
+  .notice-modal img { height: 180px; }
   .qr-code-grid { grid-template-columns: repeat(9, 10px); grid-auto-rows: 10px; gap: 2px; }
   .qr-cell { width: 10px; height: 10px; }
   .review-list p { display: grid; gap: 4px; }
@@ -778,6 +800,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .detail-hero img { height: 260px; border-radius: 14px; }
   .detail-hero h1 { font-size: clamp(32px, 11vw, 44px); }
   .tournament-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .review-summary, .roster-list { min-width: 0; }
+  .roster-list { max-height: none; overflow: visible; }
+  .roster-list p { display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 8px; }
+  .roster-list p span { min-width: 0; overflow-wrap: anywhere; }
+  .roster-list p small { font-size: 10px; color: var(--muted); }
   .tournament-info-grid .panel { min-height: 148px; padding: 13px; border-radius: 14px; }
   .tournament-info-grid .panel h3 { margin-bottom: 9px; font-size: 14px; }
   .tournament-info-grid .panel p { gap: 6px; margin: 7px 0; font-size: 11px; line-height: 1.3; }
@@ -820,7 +847,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .summary-tournament { grid-template-columns: 54px 1fr; }
   .summary-tournament img { width: 54px; height: 54px; }
   .summary-lines .payable b { font-size: 22px; }
-  .confirmation-layout { margin-top: 16px; }
+  .confirmation-layout, .registration-pass-layout { margin-top: 16px; }
   .verification-pass { padding: 20px; }
   .verification-pass svg:not(.lucide) { max-width: 100%; height: auto; }
   .registration-footer { grid-template-columns: 1fr; width: min(100% - 24px, 1180px); margin-top: 36px; padding: 26px 0 32px; text-align: center; }

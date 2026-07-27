@@ -4,8 +4,9 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.deps import current_user
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.schemas import LocalPaymentCreate, RegistrationCreate
@@ -26,10 +27,16 @@ def _prizes_for_tournament(tournament_slug: str) -> list[dict]:
 
 
 @router.post("")
-def create_registration(payload: RegistrationCreate):
+def create_registration(payload: RegistrationCreate, user: dict = Depends(current_user)):
     tournament = row("SELECT * FROM tournaments WHERE slug = ?", (payload.tournament_slug,))
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
+    paid_existing = row(
+        "SELECT id FROM registrations WHERE tournament_slug = ? AND user_id = ? AND payment_status = 'paid' ORDER BY created_at DESC LIMIT 1",
+        (payload.tournament_slug, user["id"]),
+    )
+    if paid_existing:
+        raise HTTPException(status_code=409, detail="You already completed registration and payment for this tournament")
     if tournament["teams"] >= tournament["capacity"]:
         raise HTTPException(status_code=409, detail="Tournament capacity is full")
     required_members = int(tournament.get("team_size") or 16)
@@ -52,13 +59,14 @@ def create_registration(payload: RegistrationCreate):
     amount = 250000
     execute(
         """INSERT INTO registrations(
-             id, tournament_slug, team_name, team_code, captain_name, sub_captain_name, coach_name,
+             id, user_id, tournament_slug, team_name, team_code, captain_name, sub_captain_name, coach_name,
              email, phone, city, district_state, team_logo, primary_jersey_color, secondary_jersey_color,
              team_motto, category, confirmation_code, confirmation_qr_payload, status, payment_status, amount, created_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             registration_id,
+            user["id"],
             payload.tournament_slug,
             payload.team_name,
             payload.team_code,
@@ -146,9 +154,10 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate):
         "receiptNumber": receipt_number,
         "verificationPath": f"/registrations/{registration_id}",
     }
+    paid_amount = payload.amount or item["amount"]
     execute(
         "INSERT INTO payments(id, registration_id, status, amount, method, receipt_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (payment_id, registration_id, "paid", item["amount"], payload.method, receipt_number, datetime.now(timezone.utc).isoformat()),
+        (payment_id, registration_id, "paid", paid_amount, payload.method, receipt_number, datetime.now(timezone.utc).isoformat()),
     )
     execute(
         "UPDATE registrations SET status = ?, payment_status = ?, confirmation_code = ?, confirmation_qr_payload = ? WHERE id = ?",

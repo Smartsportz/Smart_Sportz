@@ -5,6 +5,7 @@ import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { navItems } from "../data/platform";
+import { getCompletedRegistration } from "../lib/registrationStatus";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -211,22 +212,27 @@ export function MetricCard({
 }
 
 export function TournamentCard({ item }: { item: any }) {
+  const completedRegistration = getCompletedRegistration(item.slug);
   const canRegister = item.status === "Registration Open";
   const isUpcoming = item.status === "Upcoming";
-  const statusText = canRegister
+  const statusText = completedRegistration
+    ? "Already registered - payment complete"
+    : canRegister
     ? `Register: ${item.registrationStart} - ${item.registrationEnd}`
     : isUpcoming
       ? `Registration opens ${item.registrationStart}`
       : item.status === "Live"
         ? "Live tournament in progress"
         : `Registration closed ${item.registrationEnd}`;
+  const destination = completedRegistration ? `/tournaments/${item.slug}/registration-pass` : `/tournaments/${item.slug}`;
+  const actionLabel = completedRegistration ? "View your register" : "View details";
 
   return (
-    <Link to={`/tournaments/${item.slug}`} className="click-card">
+    <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
       <img src={item.image} alt={`${item.name} visual`} />
       <div className="card-body">
-        <span className={`status ${item.accent}`}>{item.status}</span>
+        <span className={`status ${completedRegistration ? "emerald" : item.accent}`}>{completedRegistration ? "Already registered" : item.status}</span>
         <h3>{item.name}</h3>
         <p className="registration-window">{statusText}</p>
         <p>{item.sport} • {item.location} • {item.date}</p>
@@ -234,7 +240,7 @@ export function TournamentCard({ item }: { item: any }) {
           <span>{item.teams}/{item.capacity} teams</span>
           <span>{item.prize}</span>
         </div>
-        <span className="inline-link">View details <ChevronRight size={16} /></span>
+        <span className="inline-link">{actionLabel} <ChevronRight size={16} /></span>
       </div>
     </motion.article>
     </Link>

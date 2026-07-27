@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
 import { individualScores, liveMatches, tournaments } from "../data/platform";
+import { getCompletedRegistration } from "../lib/registrationStatus";
 import { InfoPanel, Metric } from "./shared";
 
 export function TournamentDetailPage() {
@@ -9,9 +10,16 @@ export function TournamentDetailPage() {
   const isLive = item.phase === "live";
   const isExisting = item.phase === "existing";
   const canRegister = item.status === "Registration Open";
+  const completedRegistration = getCompletedRegistration(item.slug);
   const isUpcomingOnly = item.status === "Upcoming";
   const liveMatch = liveMatches.find((match) => match.tournament === item.name) ?? liveMatches[0];
-  const action = isLive ? (
+  const action = completedRegistration ? (
+    <>
+      <span className="btn btn-secondary disabled-action">Already registered</span>
+      <Link className="btn btn-primary" to={`/tournaments/${item.slug}/registration-pass`}>View your register</Link>
+      <Link className="btn btn-secondary" to={`/tournaments/${item.slug}/rounds`}>Rounds</Link>
+    </>
+  ) : isLive ? (
     <>
       <Link className="btn btn-primary" to={`/live/${liveMatch.id}`}>Open live center</Link>
       <Link className="btn btn-secondary" to={`/tournaments/${item.slug}/rounds`}>Rounds</Link>
