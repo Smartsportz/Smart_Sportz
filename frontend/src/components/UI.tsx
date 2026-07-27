@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronRight, Moon, Search, Settings, Sun } from "lucide-react";
+import { ArrowRight, ChevronRight, Search, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
@@ -29,7 +29,7 @@ function BrandLogo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; setDarkMode: (value: boolean) => void }) {
+export function PublicHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -54,9 +54,6 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
             <Search size={16} />
             <span>Search events...</span>
           </div>
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
-            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
           {user ? (
             <Link to={user.homePath} className="btn btn-secondary desktop-action">{user.roleLabel}</Link>
           ) : (

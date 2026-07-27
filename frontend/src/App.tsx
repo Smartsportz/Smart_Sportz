@@ -75,21 +75,35 @@ function ScrollToTop() {
 }
 
 export default function App() {
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("smart-sportz-theme") === "dark");
+  const [themePreference, setThemePreference] = useState<"system" | "light" | "dark">(() => {
+    const stored = localStorage.getItem("smart-sportz-theme");
+    return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+  });
+  const [systemDarkMode, setSystemDarkMode] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
   const location = useLocation();
   const isPortal = location.pathname.startsWith("/admin") || location.pathname.startsWith("/management") || location.pathname.startsWith("/user");
   const isRegistrationFlow = /^\/tournaments\/[^/]+\/register/.test(location.pathname);
+  const darkMode = themePreference === "system" ? systemDarkMode : themePreference === "dark";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
-    localStorage.setItem("smart-sportz-theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
+    localStorage.setItem("smart-sportz-theme", themePreference);
+  }, [darkMode, themePreference]);
+
+  useEffect(() => {
+    const query = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!query) return;
+    const updateSystemTheme = () => setSystemDarkMode(query.matches);
+    updateSystemTheme();
+    query.addEventListener("change", updateSystemTheme);
+    return () => query.removeEventListener("change", updateSystemTheme);
+  }, []);
 
   return (
     <div className="app-shell">
       <ScrollToTop />
       <ScreenLoader />
-      {!isPortal && !isRegistrationFlow && <PublicHeader darkMode={darkMode} setDarkMode={setDarkMode} />}
+      {!isPortal && !isRegistrationFlow && <PublicHeader />}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />
@@ -132,7 +146,7 @@ export default function App() {
           <Route path="/user/certificates" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="certificates" /></ProtectedRoute>} />
           <Route path="/user/schedules" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="schedules" /></ProtectedRoute>} />
           <Route path="/user/documents" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="documents" /></ProtectedRoute>} />
-          <Route path="/user/settings" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="settings" /></ProtectedRoute>} />
+          <Route path="/user/settings" element={<ProtectedRoute roles={["user"]}><SettingsPage darkMode={darkMode} themePreference={themePreference} setThemePreference={setThemePreference} /></ProtectedRoute>} />
           <Route path="/user/*" element={<ProtectedRoute roles={["user"]}><UserDashboardPage /></ProtectedRoute>} />
           <Route path="/management/programs" element={<ProtectedRoute roles={["management"]}><RoleProgramsPage role="management" /></ProtectedRoute>} />
           <Route path="/management/tournaments" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="tournaments" /></ProtectedRoute>} />
@@ -162,9 +176,9 @@ export default function App() {
           <Route path="/admin/reports/detail" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-reports" /></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="logs" /></ProtectedRoute>} />
           <Route path="/admin/logs/detail" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-logs" /></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute roles={["super_admin"]}><SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute roles={["super_admin"]}><SettingsPage darkMode={darkMode} themePreference={themePreference} setThemePreference={setThemePreference} /></ProtectedRoute>} />
           <Route path="/live-ops/*" element={<ProtectedRoute roles={["management", "super_admin"]}><LiveMatchPage /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute roles={["super_admin", "management", "user"]}><SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute roles={["super_admin", "management", "user"]}><SettingsPage darkMode={darkMode} themePreference={themePreference} setThemePreference={setThemePreference} /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
