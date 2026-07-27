@@ -389,8 +389,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px 
 .registration-top-nav nav a { min-height: 62px; display: inline-flex; align-items: center; color: #35443b; border-bottom: 2px solid transparent; font-weight: 700; }
 .registration-top-nav nav a.active { color: #08723f; border-color: #08723f; }
 .registration-nav-actions { display: flex; align-items: center; gap: 14px; }
-.registration-nav-actions > a:first-child { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: #1a2a20; }
+.registration-nav-actions > a:not(.registration-login):not(.registration-profile-avatar) { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; color: #1a2a20; }
 .registration-login { display: inline-flex; align-items: center; min-height: 40px; padding: 0 22px; border-radius: 8px; background: #08723f; color: #fff; font-weight: 900; box-shadow: 0 12px 24px rgba(8, 114, 63, .22); }
+.registration-profile-avatar { display: grid; place-items: center; width: 42px; height: 42px; border: 2px solid rgba(8, 114, 63, .18); border-radius: 999px; background: linear-gradient(135deg, #08723f, #0f9b62); color: #fff; font-size: 13px; font-weight: 950; box-shadow: 0 12px 24px rgba(8, 114, 63, .22); }
 .registration-reference-page { width: min(1180px, calc(100% - 64px)); padding-top: 38px; }
 .registration-reference-page::before { content: ""; position: fixed; inset: 0; z-index: -1; background: #f4fcf4; }
 .registration-hero-copy { max-width: 720px; margin-bottom: 28px; }
@@ -409,6 +410,15 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px 
 .registration-form-section { display: grid; gap: 18px; padding: 30px; }
 .registration-form-section h2, .registration-summary-card h2, .registration-timeline h3, .verification-pass h2 { margin: 0; color: var(--primary-dark); font-family: Poppins, sans-serif; letter-spacing: -0.035em; }
 .registration-form-section p { margin: 4px 0 0; color: var(--muted); }
+.registration-choice-card { display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: stretch; padding: 16px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 18px; background: linear-gradient(135deg, rgba(11, 136, 82, .08), rgba(255, 255, 255, .92)); }
+.registration-choice-card.compact-card { grid-template-columns: 58px 1fr; align-items: center; }
+.registration-choice-card > img { width: 100%; height: 170px; border-radius: 14px; object-fit: cover; }
+.registration-choice-card > svg { width: 46px; height: 46px; padding: 10px; border-radius: 999px; color: var(--primary-dark); background: rgba(11, 136, 82, .10); }
+.registration-choice-card h3 { margin: 0 0 8px; color: var(--text); font-family: Poppins, sans-serif; font-size: clamp(22px, 3vw, 32px); letter-spacing: -0.035em; }
+.rules-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.rules-list span { padding: 12px; border: 1px solid rgba(11, 136, 82, .14); border-radius: 12px; background: rgba(255, 255, 255, .72); color: #31433a; font-size: 13px; font-weight: 850; line-height: 1.35; }
+.acceptance-box { display: grid; grid-template-columns: 22px 1fr; align-items: start; gap: 12px; padding: 16px; border: 1px solid rgba(11, 136, 82, .22); border-radius: 14px; background: #f8fdf7; color: var(--text); font-weight: 850; line-height: 1.5; }
+.acceptance-box input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary-dark); }
 .section-head-inline { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .autosave-pill { padding: 7px 12px; border-radius: 999px; color: #43513f; background: rgba(11, 136, 82, .09); font-size: 12px; font-weight: 900; }
 .section-actions { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -764,8 +774,9 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .registration-brand { font-size: 16px; }
   .registration-brand img { width: 32px; height: 32px; }
   .registration-nav-actions { gap: 8px; }
-  .registration-nav-actions > a:first-child { display: none; }
+  .registration-nav-actions > a:not(.registration-login):not(.registration-profile-avatar):first-child { display: none; }
   .registration-login { min-height: 34px; padding: 0 11px; border-radius: 8px; font-size: 11px; }
+  .registration-profile-avatar { width: 36px; height: 36px; font-size: 12px; }
   .registration-hero-copy { text-align: center; margin-inline: auto; }
   .registration-hero-copy h1 { font-size: clamp(32px, 10vw, 44px); }
   .registration-hero-copy h2 { font-size: 16px; }
@@ -783,6 +794,10 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .registration-actions { display: grid; grid-template-columns: 1fr; padding-bottom: 14px; }
   .registration-summary-card > *:not(.registration-summary-head) { margin-inline: 16px; }
   .registration-summary-card .btn { margin: 14px 16px 18px; width: calc(100% - 32px); }
+  .registration-choice-card, .registration-choice-card.compact-card { grid-template-columns: 1fr; gap: 14px; padding: 12px; }
+  .registration-choice-card > img { height: 150px; }
+  .rules-list { grid-template-columns: 1fr; }
+  .acceptance-box { font-size: 13px; }
   .registration-summary-head, .registration-timeline { padding: 18px; }
   .summary-tournament { grid-template-columns: 54px 1fr; }
   .summary-tournament img { width: 54px; height: 54px; }

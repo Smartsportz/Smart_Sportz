@@ -1,6 +1,7 @@
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowLeft, ArrowRight, Bell, CheckCircle2, Download, FileText, ImagePlus, Printer, Settings, ShieldCheck, Trophy, Upload, UserPlus, Users } from "lucide-react";
 import { Page } from "../components/UI";
+import { useAuth } from "../auth/AuthContext";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
@@ -116,6 +117,15 @@ function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
 }
 
 function RegistrationShell({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
+  const initials = user?.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "U";
+
   return (
     <>
       <header className="registration-top-nav">
@@ -131,7 +141,13 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
         <div className="registration-nav-actions">
           <Link to="/notifications" aria-label="Notifications"><Bell size={18} /></Link>
           <Link to="/settings" aria-label="Settings"><Settings size={18} /></Link>
-          <Link className="registration-login" to="/user/dashboard">My Dashboard</Link>
+          {isAuthenticated ? (
+            <Link className="registration-profile-avatar" to="/user/dashboard" aria-label="Open profile dashboard">
+              {user?.name ? initials : <Users size={18} />}
+            </Link>
+          ) : (
+            <Link className="registration-login" to="/login">Login</Link>
+          )}
         </div>
       </header>
       {children}
@@ -226,6 +242,14 @@ export function RegistrationPage() {
   ]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const [tournamentAccepted, setTournamentAccepted] = useState(false);
+  const [categoryAccepted, setCategoryAccepted] = useState(false);
+
+  function showMissing(message: string) {
+    setError(message);
+    window.alert(message);
+  }
 
   function updateTeamDetails(field: keyof typeof teamDetails, value: string) {
     setTeamDetails((current) => {
@@ -256,8 +280,17 @@ export function RegistrationPage() {
     const requiredFields = ["teamName", "teamCode", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
     const missingMembers = members.filter((name) => !name.trim()).length;
-    if (missingTeamFields.length || missingMembers) {
-      setError(`Please complete required team details and all ${tournament.teamSize} player names before continuing.`);
+    const missingDocuments = documents.filter((item) => item.status !== "uploaded").map((item) => item.documentType);
+    if (missingTeamFields.length) {
+      showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
+      return;
+    }
+    if (missingMembers) {
+      showMissing(`Please complete all ${tournament.teamSize} player names before continuing.`);
+      return;
+    }
+    if (missingDocuments.length) {
+      showMissing(`Please upload required documents: ${missingDocuments.join(", ")}.`);
       return;
     }
     setSaving(true);
@@ -313,6 +346,55 @@ export function RegistrationPage() {
     }
   }
 
+  function goNext() {
+    setError("");
+    if (activeStep === 0) {
+      if (!tournamentAccepted) {
+        showMissing("Please accept the tournament rules and conditions before moving to category.");
+        return;
+      }
+      setActiveStep(1);
+      return;
+    }
+    if (activeStep === 1) {
+      if (!teamDetails.category.trim() || !categoryAccepted) {
+        showMissing("Please select and accept the category rules before moving to team details.");
+        return;
+      }
+      setActiveStep(2);
+      return;
+    }
+    if (activeStep === 2) {
+      const requiredFields = ["teamName", "teamCode", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
+      const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
+      if (missingTeamFields.length) {
+        showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
+        return;
+      }
+      setActiveStep(3);
+      return;
+    }
+    if (activeStep === 3) {
+      const missingMembers = members.map((name, index) => ({ name, label: memberSlots[index] })).filter((item) => !item.name.trim()).map((item) => item.label);
+      if (missingMembers.length) {
+        showMissing(`Please complete these player entries: ${missingMembers.join(", ")}.`);
+        return;
+      }
+      setActiveStep(4);
+      return;
+    }
+    void continueToRoster();
+  }
+
+  function goBack() {
+    setError("");
+    if (activeStep === 0) {
+      navigate(`/tournaments/${tournament.slug}`);
+      return;
+    }
+    setActiveStep((step) => Math.max(0, step - 1));
+  }
+
   return (
     <RegistrationShell>
       <Page className="registration-reference-page">
@@ -322,84 +404,141 @@ export function RegistrationPage() {
           <h2>Compete. Perform. Become a Champion.</h2>
           <p>Complete accurate team, player, document, and payment details to secure your tournament spot and avoid verification delays.</p>
         </section>
-        <RegistrationStepper activeIndex={4} />
+        <RegistrationStepper activeIndex={activeStep} />
         <div className="registration-reference-layout">
           <main className="registration-main">
             {error && <div className="form-alert">{error}</div>}
-            <section className="registration-form-section">
-            <div className="section-head-inline">
-              <h2>Team Information</h2>
-              <span className="autosave-pill">Draft saved locally</span>
-            </div>
-            <div className="form-grid">
-              <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
-              <label>Team code<input value={teamDetails.teamCode} onChange={(event) => updateTeamDetails("teamCode", registrationCode(event.target.value))} placeholder="e.g. MAV-2026" /></label>
-            </div>
-            <div className="team-logo-row">
-              <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
-              <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing.</small></p>
-            </div>
-            <div className="form-grid">
-              <label>Primary jersey color<input type="color" value={teamDetails.primaryJerseyColor} onChange={(event) => updateTeamDetails("primaryJerseyColor", event.target.value)} /></label>
-              <label>Secondary jersey color<input type="color" value={teamDetails.secondaryJerseyColor} onChange={(event) => updateTeamDetails("secondaryJerseyColor", event.target.value)} /></label>
-              <label>Home district/state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
-              <label>Category<select value={teamDetails.category} onChange={(event) => updateTeamDetails("category", event.target.value)}><option>{tournament.sport} League</option><option>Professional League</option><option>Corporate League</option><option>Youth League</option></select></label>
-            </div>
-            <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit in one sentence" /></label>
-            </section>
-
-            <section className="registration-form-section">
-            <h2>Team Management</h2>
-            <div className="form-grid">
-              <label>Captain name<input value={teamDetails.captainName} onChange={(event) => updateTeamDetails("captainName", event.target.value)} placeholder="Arjun Sharma" /></label>
-              <label>Sub-captain name<input value={teamDetails.subCaptainName} onChange={(event) => updateTeamDetails("subCaptainName", event.target.value)} placeholder="Rohan Sharma" /></label>
-              <label>Coach name<input value={teamDetails.coachName} onChange={(event) => updateTeamDetails("coachName", event.target.value)} placeholder="Naveen Rao" /></label>
-              <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
-              <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="captain@team.com" /></label>
-              <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91 98765 43210" /></label>
-            </div>
-            </section>
-
-            <section className="registration-form-section">
-            <div className="section-head-inline">
-              <div>
-                <h2>Player Roster</h2>
-                <p>Minimum and maximum: {tournament.teamSize} players. Captain and sub-captain are included.</p>
-              </div>
-              <div className="section-actions">
-                <button className="btn btn-secondary" type="button"><Upload size={16} />Import Excel</button>
-                <button className="btn btn-primary" type="button"><UserPlus size={16} />Add Player</button>
-              </div>
-            </div>
-            <div className="player-roster-grid">
-              {memberSlots.map((role, index) => (
-                <label className="player-entry-card" key={role}>
-                  <span>{index + 1}</span>
-                  <b>{role}</b>
-                  <input value={members[index]} onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} placeholder={index === 0 ? "Captain name" : index === 1 ? "Sub-captain name" : `Player ${index + 1}`} />
+            {activeStep === 0 && (
+              <section className="registration-form-section">
+                <div className="section-head-inline">
+                  <div>
+                    <h2>About Tournament</h2>
+                    <p>Review tournament details before selecting a category or entering team data.</p>
+                  </div>
+                  <span className={`status ${tournament.accent}`}>{tournament.status}</span>
+                </div>
+                <div className="registration-choice-card">
+                  <img src={tournament.image} alt={tournament.name} />
+                  <div>
+                    <h3>{tournament.name}</h3>
+                    <p>{tournament.sport} - {tournament.location} - {tournament.date}</p>
+                    <div className="rules-list">
+                      <span>Team size: {tournament.teamSize} members including captain and sub-captain</span>
+                      <span>Registration: {tournament.registrationStart} to {tournament.registrationEnd}</span>
+                      <span>Prize pool: {tournament.prize}</span>
+                      <span>Slots: {tournament.teams}/{tournament.capacity} filled</span>
+                    </div>
+                  </div>
+                </div>
+                <label className="acceptance-box">
+                  <input type="checkbox" checked={tournamentAccepted} onChange={(event) => setTournamentAccepted(event.target.checked)} />
+                  <span>I have read and accept the tournament rules, eligibility, schedule, document verification, and fair-play conditions.</span>
                 </label>
-              ))}
-            </div>
-            </section>
+              </section>
+            )}
 
-            <section className="registration-form-section">
-            <h2>Required Documentation</h2>
-            <div className="document-list">
-              {documents.map((document, index) => (
-                <label className="document-row" key={document.documentType}>
-                  <FileText />
-                  <span><b>{document.documentType}</b><small>{document.fileName || "PDF, JPG, or PNG document required"}</small></span>
-                  <strong>{document.status === "uploaded" ? "Uploaded" : "Upload"}</strong>
-                  <input type="file" accept=".pdf,image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0]?.name ?? "")} />
+            {activeStep === 1 && (
+              <section className="registration-form-section">
+                <h2>Category Selection</h2>
+                <p>Select the category for this tournament and accept category-specific conditions.</p>
+                <div className="form-grid">
+                  <label>Selected category<select value={teamDetails.category} onChange={(event) => updateTeamDetails("category", event.target.value)}><option>{tournament.sport} League</option><option>Professional League</option><option>Corporate League</option><option>Youth League</option></select></label>
+                  <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
+                </div>
+                <div className="registration-choice-card compact-card">
+                  <Trophy />
+                  <div>
+                    <h3>{teamDetails.category}</h3>
+                    <p>This category uses the tournament team-size limit, city eligibility, score verification, and manager approval workflow.</p>
+                  </div>
+                </div>
+                <label className="acceptance-box">
+                  <input type="checkbox" checked={categoryAccepted} onChange={(event) => setCategoryAccepted(event.target.checked)} />
+                  <span>I accept the selected category rules, roster size, city eligibility, and registration approval conditions.</span>
                 </label>
-              ))}
-            </div>
-            <p className="secure-note">Maximum file size: 10MB per document. Supported formats: PDF, JPG, PNG. Documents are stored as metadata in local demo mode.</p>
-            </section>
+              </section>
+            )}
+
+            {activeStep === 2 && (
+              <>
+                <section className="registration-form-section">
+                  <div className="section-head-inline">
+                    <h2>Team Information</h2>
+                    <span className="autosave-pill">Draft saved locally</span>
+                  </div>
+                  <div className="form-grid">
+                    <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
+                    <label>Team code<input value={teamDetails.teamCode} onChange={(event) => updateTeamDetails("teamCode", registrationCode(event.target.value))} placeholder="e.g. MAV-2026" /></label>
+                  </div>
+                  <div className="team-logo-row">
+                    <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
+                    <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing.</small></p>
+                  </div>
+                  <div className="form-grid">
+                    <label>Primary jersey color<input type="color" value={teamDetails.primaryJerseyColor} onChange={(event) => updateTeamDetails("primaryJerseyColor", event.target.value)} /></label>
+                    <label>Secondary jersey color<input type="color" value={teamDetails.secondaryJerseyColor} onChange={(event) => updateTeamDetails("secondaryJerseyColor", event.target.value)} /></label>
+                    <label>Home district/state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
+                    <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit" /></label>
+                  </div>
+                </section>
+                <section className="registration-form-section">
+                  <h2>Team Management</h2>
+                  <div className="form-grid">
+                    <label>Captain name<input value={teamDetails.captainName} onChange={(event) => updateTeamDetails("captainName", event.target.value)} placeholder="Arjun Sharma" /></label>
+                    <label>Sub-captain name<input value={teamDetails.subCaptainName} onChange={(event) => updateTeamDetails("subCaptainName", event.target.value)} placeholder="Rohan Sharma" /></label>
+                    <label>Coach name<input value={teamDetails.coachName} onChange={(event) => updateTeamDetails("coachName", event.target.value)} placeholder="Naveen Rao" /></label>
+                    <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="captain@team.com" /></label>
+                    <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91 98765 43210" /></label>
+                  </div>
+                </section>
+              </>
+            )}
+
+            {activeStep === 3 && (
+              <section className="registration-form-section">
+                <div className="section-head-inline">
+                  <div>
+                    <h2>Player Details</h2>
+                    <p>Minimum and maximum: {tournament.teamSize} players. Captain and sub-captain are included.</p>
+                  </div>
+                  <div className="section-actions">
+                    <button className="btn btn-secondary" type="button"><Upload size={16} />Import Excel</button>
+                    <button className="btn btn-primary" type="button"><UserPlus size={16} />Add Player</button>
+                  </div>
+                </div>
+                <div className="player-roster-grid">
+                  {memberSlots.map((role, index) => (
+                    <label className="player-entry-card" key={role}>
+                      <span>{index + 1}</span>
+                      <b>{role}</b>
+                      <input value={members[index]} onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} placeholder={index === 0 ? "Captain name" : index === 1 ? "Sub-captain name" : `Player ${index + 1}`} />
+                    </label>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {activeStep === 4 && (
+              <section className="registration-form-section">
+                <h2>Required Documentation</h2>
+                <p>Upload all required documents before continuing to roster review and payment.</p>
+                <div className="document-list">
+                  {documents.map((document, index) => (
+                    <label className="document-row" key={document.documentType}>
+                      <FileText />
+                      <span><b>{document.documentType}</b><small>{document.fileName || "PDF, JPG, or PNG document required"}</small></span>
+                      <strong>{document.status === "uploaded" ? "Uploaded" : "Upload"}</strong>
+                      <input type="file" accept=".pdf,image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0]?.name ?? "")} />
+                    </label>
+                  ))}
+                </div>
+                <p className="secure-note">Maximum file size: 10MB per document. Supported formats: PDF, JPG, PNG. Documents are stored as metadata in local demo mode.</p>
+              </section>
+            )}
 
             <div className="registration-actions">
-              <Link className="btn btn-secondary" to={`/tournaments/${tournament.slug}`}><ArrowLeft size={16} />Back to Category</Link>
-              <button className="btn btn-primary" type="button" onClick={continueToRoster} disabled={saving}>{saving ? "Saving..." : "Save & Continue"}<ArrowRight size={16} /></button>
+              <button className="btn btn-secondary" type="button" onClick={goBack}><ArrowLeft size={16} />{activeStep === 0 ? "Back to tournament" : "Back"}</button>
+              <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>{saving ? "Saving..." : activeStep === 4 ? "Save & Continue" : "Continue"}<ArrowRight size={16} /></button>
             </div>
           </main>
           <RegistrationSummary tournament={tournament} amount={amount} />
@@ -623,6 +762,7 @@ export function RegistrationReviewPage() {
     tournamentName: tournament.name,
     captainName: saved?.captainName,
     city: saved?.city,
+    paymentReceipt: payment?.receiptNumber,
     receiptNumber: payment?.receiptNumber,
     verificationPath: saved ? `/registrations/${saved.registrationId}` : "",
   });
