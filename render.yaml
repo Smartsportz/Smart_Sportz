@@ -8,11 +8,39 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     envVars:
+      - key: APP_NAME
+        value: Smart Sportz Backend
       - key: APP_ENV
         value: production
       - key: APP_SECRET_KEY
         generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.9
       - key: DATABASE_BACKEND
         value: sqlite
+      - key: DATABASE_PATH
+        value: storage/smart_sportz.db
+      - key: MIRROR_DATABASE_PATH
+        value: storage/smart_sportz_mirror.db
+      - key: AUDIT_DATABASE_PATH
+        value: storage/smart_sportz_audit.db
+      - key: DATABASE_URL
+        sync: false
+      - key: MIRROR_DATABASE_URL
+        sync: false
+      - key: AUDIT_DATABASE_URL
+        sync: false
+      - key: POSTGRES_PRIMARY_SCHEMA
+        value: primary_app
+      - key: POSTGRES_MIRROR_SCHEMA
+        value: mirror_backup
+      - key: POSTGRES_AUDIT_SCHEMA
+        value: audit_event
+      - key: BACKUP_DIR
+        value: storage/backups
+      - key: UPLOAD_DIR
+        value: storage/uploads
+      - key: REDIS_URL
+        sync: false
       - key: ALLOWED_ORIGINS
-        value: https://smart-sportz.vercel.app,https://smartsportz.github.io,http://127.0.0.1:5173,http://localhost:5173
+        value: https://smart-sportz.vercel.app,https://smartsportz.github.io,https://smartsportz.github.io/Smart_Sportz,http://127.0.0.1:5173,http://localhost:5173

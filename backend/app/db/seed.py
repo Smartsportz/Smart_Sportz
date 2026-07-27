@@ -155,7 +155,15 @@ def seed_operational_data() -> None:
             ("reg-102", "bangalore-corporate-t20", "Kochi Kings", "Sanjay Menon", "sanjay@kochi.local", "+91 90000 00102", "Mysuru", "accepted", "paid", 250000, now()),
             ("reg-103", "bangalore-corporate-t20", "Hyderabad Royals", "Imran Khan", "imran@royals.local", "+91 90000 00103", "Bengaluru", "pending_payment", "pending", 250000, now()),
         ]
-        statements += [("INSERT INTO registrations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in registrations]
+        statements += [(
+            """
+            INSERT INTO registrations (
+              id, tournament_slug, team_name, captain_name, email, phone, city,
+              status, payment_status, amount, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            item,
+        ) for item in registrations]
     default_bracket_count = row("SELECT COUNT(*) AS total FROM bracket_nodes WHERE tournament_slug = ?", ("bangalore-corporate-t20",))
     if default_bracket_count and int(default_bracket_count["total"]) != 19:
         execute("DELETE FROM bracket_connections WHERE tournament_slug = ?", ("bangalore-corporate-t20",))
