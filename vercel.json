@@ -5,6 +5,7 @@
   "outputDirectory": "frontend/dist",
   "env": {
     "VITE_BASE_PATH": "/",
+    "VITE_BACKEND_URL": "https://smart-sportz-backend.onrender.com",
     "VITE_API_BASE_URL": "https://smart-sportz-backend.onrender.com/api/v1",
     "VITE_APP_NAME": "Smart Sportz",
     "VITE_APP_ENV": "production"
