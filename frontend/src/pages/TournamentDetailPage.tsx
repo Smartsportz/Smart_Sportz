@@ -76,14 +76,14 @@ export function TournamentDetailPage() {
           </div>
         </>
       ) : isExisting ? (
-        <div className="detail-grid">
+        <div className="detail-grid tournament-info-grid">
           <InfoPanel title="Archived Rounds" items={["Round-1 scorecards", "Semi-final scorecards", "Final result", "Clickable player/team details"]} to={`/tournaments/${item.slug}/rounds`} highlight />
           <InfoPanel title="Final Result" items={["Winner: India Forge", "Runner-up: Mumbai Mavericks", "MVP: Rohan Sharma", "Downloadable records available"]} to="/leaderboards" />
           <InfoPanel title="Highlights" items={["Best plays", "Score history", "Match timeline", "Player records"]} to="/gallery" />
           <InfoPanel title="Documents" items={["Final fixture PDF", "Certificates", "Invoice archive", "Officials report"]} to="/user/documents" />
         </div>
       ) : (
-        <div className="detail-grid">
+        <div className="detail-grid tournament-info-grid">
           <InfoPanel title="Tournament Rules" items={["Roster min/max validation", "Team member details required", "Document verification required", "Payment required before approval"]} to="/faq" />
           <InfoPanel title="Prize Pool" items={[item.prize, "Winner trophy", "MVP award", "Digital certificates"]} to="/leaderboards" highlight />
           <InfoPanel title="Schedule" items={[`Registration opens: ${item.registrationStart}`, `Registration ends: ${item.registrationEnd}`, "Qualifiers", "Final"]} to="/live" />
