@@ -43,4 +43,4 @@ services:
       - key: REDIS_URL
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://smart-sportz.vercel.app,https://smartsportz.github.io,https://smartsportz.github.io/Smart_Sportz,http://127.0.0.1:5173,http://localhost:5173
+        value: https://smart-sportz-dun.vercel.app,https://smart-sportz.vercel.app,https://smartsportz.github.io,https://smartsportz.github.io/Smart_Sportz,http://127.0.0.1:5173,http://localhost:5173

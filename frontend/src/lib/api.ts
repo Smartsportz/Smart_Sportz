@@ -1,6 +1,21 @@
 import { beginGlobalLoading, endGlobalLoading } from "../loading/loadingBus";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1";
+const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+const PRODUCTION_API_BASE_URL = "https://smart-sportz-backend.onrender.com/api/v1";
+
+function resolveApiBaseUrl() {
+  const configuredUrl = import.meta.env.VITE_API_BASE_URL;
+  if (configuredUrl) return configuredUrl;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "127.0.0.1" || host === "localhost") {
+      return LOCAL_API_BASE_URL;
+    }
+  }
+  return PRODUCTION_API_BASE_URL;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export type ApiEnvelope<T> = {
   success: boolean;
