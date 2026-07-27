@@ -1,0 +1,16 @@
+{
+  "framework": "vite",
+  "installCommand": "cd frontend && npm ci",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
+  "env": {
+    "VITE_BASE_PATH": "/",
+    "VITE_API_BASE_URL": "https://smart-sportz-backend.onrender.com/api/v1"
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -142,6 +142,7 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate):
         "tournamentName": tournament["name"] if tournament else item["tournament_slug"],
         "captainName": item["captain_name"],
         "city": item["city"],
+        "paymentReceipt": receipt_number,
         "receiptNumber": receipt_number,
         "verificationPath": f"/registrations/{registration_id}",
     }

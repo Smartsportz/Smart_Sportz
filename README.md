@@ -10,6 +10,8 @@
   <img alt="Vite" src="https://img.shields.io/badge/Vite-6-646CFF?style=for-the-badge&logo=vite&logoColor=white" />
   <img alt="Framer Motion" src="https://img.shields.io/badge/Framer_Motion-Animations-ff4f8b?style=for-the-badge&logo=framer&logoColor=white" />
   <img alt="GitHub Pages" src="https://img.shields.io/badge/GitHub_Pages-Auto_Deploy-222222?style=for-the-badge&logo=githubpages&logoColor=white" />
+  <img alt="Vercel" src="https://img.shields.io/badge/Vercel-Frontend-000000?style=for-the-badge&logo=vercel&logoColor=white" />
+  <img alt="Render" src="https://img.shields.io/badge/Render-Backend-46E3B7?style=for-the-badge&logo=render&logoColor=0b1c30" />
 </p>
 
 <p>
@@ -34,11 +36,24 @@ The project is built as a separated React application, with each major page plac
 ## Live Deployment
 
 GitHub Actions is configured to deploy the Vite frontend to GitHub Pages on every push to `main`.
+The repository also includes Vercel and Render deployment configuration for free-tier hosting.
 
 Expected Pages URL after deployment:
 
 ```text
 https://mr-asmath.github.io/Smart_Sportz/
+```
+
+Expected Vercel frontend URL after importing this repository:
+
+```text
+https://smart-sportz.vercel.app/
+```
+
+Expected Render backend URL after creating the Blueprint service:
+
+```text
+https://smart-sportz-backend.onrender.com/api/v1/health
 ```
 
 ## Tech Stack
@@ -50,7 +65,7 @@ https://mr-asmath.github.io/Smart_Sportz/
 | Motion | Framer Motion |
 | Icons | Lucide React |
 | Styling | Custom CSS design system |
-| Deployment | GitHub Actions and GitHub Pages |
+| Deployment | GitHub Actions, GitHub Pages, Vercel, Render |
 
 ## Frontend Pages
 
@@ -156,6 +171,50 @@ The workflow:
 3. Builds the Vite app from `frontend`.
 4. Uploads `frontend/dist` as the GitHub Pages artifact.
 5. Deploys to GitHub Pages.
+
+## Vercel Frontend Deployment
+
+Vercel deployment is configured by:
+
+```text
+vercel.json
+```
+
+The config builds the React app from `frontend`, outputs `frontend/dist`, sets the hosted base path to `/`, and rewrites all routes to `index.html` for React Router.
+
+Default hosted API target:
+
+```text
+https://smart-sportz-backend.onrender.com/api/v1
+```
+
+If your Render backend URL is different, update `VITE_API_BASE_URL` in Vercel project environment variables.
+
+## Render Backend Deployment
+
+Render deployment is configured by:
+
+```text
+render.yaml
+```
+
+The free web service runs:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+The committed Blueprint uses SQLite for a zero-secret free deployment. For Supabase/PostgreSQL production mode, set these Render environment variables in the dashboard instead of committing credentials:
+
+```text
+DATABASE_BACKEND=postgres
+DATABASE_URL=<supabase pooled connection string with sslmode=require>
+MIRROR_DATABASE_URL=<same or protected mirror connection string>
+AUDIT_DATABASE_URL=<same or audit connection string>
+POSTGRES_PRIMARY_SCHEMA=primary_app
+POSTGRES_MIRROR_SCHEMA=mirror_backup
+POSTGRES_AUDIT_SCHEMA=audit_event
+```
 
 ## Design Direction
 
