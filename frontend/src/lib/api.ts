@@ -103,16 +103,16 @@ async function sendRequest(path: string, options: RequestInit, token?: string | 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
   beginGlobalLoading();
   try {
-    let response = await sendRequest(path, options, token);
+    const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+    const requestToken = token ?? storedToken;
+    let response = await sendRequest(path, options, requestToken);
     let payload = await parseEnvelope<T>(response);
-    const shouldRefresh = response.status === 401 && token && !path.startsWith("/auth/");
+    const shouldRefresh = response.status === 401 && requestToken && !path.startsWith("/auth/");
     if (shouldRefresh) {
       const refreshedToken = await refreshSession();
       if (refreshedToken) {
         response = await sendRequest(path, options, refreshedToken);
         payload = await parseEnvelope<T>(response);
-      } else {
-        clearStoredSession();
       }
     }
     if (!response.ok || !payload.success) {

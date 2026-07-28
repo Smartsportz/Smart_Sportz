@@ -59,14 +59,84 @@ type BackendRegistration = {
   prizes?: Array<{ position: number; label: string; amount: number }>;
 };
 
+type RegistrationDraft = {
+  activeStep: number;
+  teamDetails: {
+    teamName: string;
+    teamCode: string;
+    captainName: string;
+    subCaptainName: string;
+    coachName: string;
+    email: string;
+    phone: string;
+    category: string;
+    city: string;
+    districtState: string;
+    teamLogo: string;
+    primaryJerseyColor: string;
+    secondaryJerseyColor: string;
+    teamMotto: string;
+  };
+  members: string[];
+  documents: SavedDocument[];
+  tournamentAccepted: boolean;
+  categoryAccepted: boolean;
+};
+
+function registrationDraftKey(slug: string) {
+  return `registration-draft:${slug}`;
+}
+
+function registrationDataKey(slug: string) {
+  return `registration:${slug}`;
+}
+
+function paymentDataKey(slug: string) {
+  return `payment:${slug}`;
+}
+
+function readRegistrationDraft(slug: string) {
+  if (typeof localStorage === "undefined") return null;
+  const raw = localStorage.getItem(registrationDraftKey(slug));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as RegistrationDraft;
+  } catch {
+    localStorage.removeItem(registrationDraftKey(slug));
+    return null;
+  }
+}
+
 function readSavedRegistration(slug: string) {
-  const raw = sessionStorage.getItem(`registration:${slug}`);
+  const raw = localStorage.getItem(registrationDataKey(slug)) ?? sessionStorage.getItem(registrationDataKey(slug));
   if (!raw) return null;
   try {
     return JSON.parse(raw) as SavedRegistration;
   } catch {
     return null;
   }
+}
+
+function writeSavedRegistration(slug: string, payload: SavedRegistration) {
+  const encoded = JSON.stringify(payload);
+  localStorage.setItem(registrationDataKey(slug), encoded);
+  sessionStorage.setItem(registrationDataKey(slug), encoded);
+}
+
+function readSavedPayment(slug: string) {
+  const raw = localStorage.getItem(paymentDataKey(slug)) ?? sessionStorage.getItem(paymentDataKey(slug));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as SavedPayment;
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedPayment(slug: string, payload: SavedPayment) {
+  const encoded = JSON.stringify(payload);
+  localStorage.setItem(paymentDataKey(slug), encoded);
+  sessionStorage.setItem(paymentDataKey(slug), encoded);
 }
 
 function amountForTournament(slug: string) {
@@ -209,12 +279,13 @@ export function RegistrationPage() {
   const { token } = useAuth();
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
   const amount = amountForTournament(tournament.slug);
+  const savedDraft = useMemo(() => readRegistrationDraft(tournament.slug), [tournament.slug]);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
     if (index === 0) return "Captain";
     if (index === 1) return "Sub-captain";
     return `Player ${index + 1}`;
   });
-  const [teamDetails, setTeamDetails] = useState({
+  const [teamDetails, setTeamDetails] = useState(() => savedDraft?.teamDetails ?? {
     teamName: "",
     teamCode: "",
     captainName: "",
@@ -230,22 +301,37 @@ export function RegistrationPage() {
     secondaryJerseyColor: "#ffffff",
     teamMotto: "",
   });
-  const [members, setMembers] = useState(() => memberSlots.map(() => ""));
-  const [documents, setDocuments] = useState<SavedDocument[]>([
+  const [members, setMembers] = useState(() => {
+    const restored = savedDraft?.members ?? [];
+    return memberSlots.map((_, index) => restored[index] ?? "");
+  });
+  const [documents, setDocuments] = useState<SavedDocument[]>(() => savedDraft?.documents ?? [
     { documentType: "Team Authorization Letter", fileName: "", filePath: "", status: "required" },
     { documentType: "Captain ID Proof", fileName: "", filePath: "", status: "required" },
   ]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeStep, setActiveStep] = useState(0);
-  const [tournamentAccepted, setTournamentAccepted] = useState(false);
-  const [categoryAccepted, setCategoryAccepted] = useState(false);
+  const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 4));
+  const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
+  const [categoryAccepted, setCategoryAccepted] = useState(() => savedDraft?.categoryAccepted ?? false);
 
   useEffect(() => {
     if (getCompletedRegistration(tournament.slug)) {
       navigate(`/tournaments/${tournament.slug}/registration-pass`, { replace: true });
     }
   }, [navigate, tournament.slug]);
+
+  useEffect(() => {
+    const draft: RegistrationDraft = {
+      activeStep,
+      teamDetails,
+      members,
+      documents,
+      tournamentAccepted,
+      categoryAccepted,
+    };
+    localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify(draft));
+  }, [activeStep, teamDetails, members, documents, tournamentAccepted, categoryAccepted, tournament.slug]);
 
   function showMissing(message: string) {
     setError(message);
@@ -346,7 +432,15 @@ export function RegistrationPage() {
         members,
         documents,
       };
-      sessionStorage.setItem(`registration:${tournament.slug}`, JSON.stringify(payload));
+      writeSavedRegistration(tournament.slug, payload);
+      localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify({
+        activeStep: 4,
+        teamDetails: { ...teamDetails, teamCode: finalTeamCode },
+        members,
+        documents,
+        tournamentAccepted,
+        categoryAccepted,
+      } satisfies RegistrationDraft));
       navigate(`/tournaments/${tournament.slug}/register/roster`);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Registration could not be saved.";
@@ -673,7 +767,7 @@ export function RegistrationPaymentPage() {
         status: "paid",
         paidAt: new Date().toISOString(),
       };
-      sessionStorage.setItem(`payment:${tournament.slug}`, JSON.stringify(payment));
+      writeSavedPayment(tournament.slug, payment);
       navigate(`/tournaments/${tournament.slug}/register/review`);
     } catch (caught) {
       setStatus("idle");
@@ -761,15 +855,7 @@ export function RegistrationReviewPage() {
   const { slug } = useParams();
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
   const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
-  const payment = useMemo(() => {
-    const raw = sessionStorage.getItem(`payment:${tournament.slug}`);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as SavedPayment;
-    } catch {
-      return null;
-    }
-  }, [tournament.slug]);
+  const payment = useMemo(() => readSavedPayment(tournament.slug), [tournament.slug]);
   const [backendRegistration, setBackendRegistration] = useState<BackendRegistration | null>(null);
   const [loaded, setLoaded] = useState(false);
 
