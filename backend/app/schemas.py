@@ -8,6 +8,10 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=3)
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=10)
+
+
 class RegistrationMemberCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     role: str = Field(default="Player", max_length=40)

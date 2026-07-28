@@ -16,6 +16,10 @@ function resolveApiBaseUrl() {
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
+const USER_KEY = "smart-sportz-user";
+const TOKEN_KEY = "smart-sportz-token";
+const REFRESH_KEY = "smart-sportz-refresh-token";
+const SESSION_REFRESHED_EVENT = "smart-sportz-session-refreshed";
 
 export type ApiEnvelope<T> = {
   success: boolean;
@@ -51,18 +55,66 @@ function errorMessageFromPayload(payload: ApiEnvelope<unknown>) {
   return "Request failed";
 }
 
+async function parseEnvelope<T>(response: Response) {
+  return (await response.json()) as ApiEnvelope<T>;
+}
+
+async function refreshSession() {
+  if (typeof localStorage === "undefined") return null;
+  const refreshToken = localStorage.getItem(REFRESH_KEY);
+  if (!refreshToken) return null;
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  const payload = await parseEnvelope<{
+    accessToken: string;
+    refreshToken: string;
+    user: unknown;
+  }>(response);
+  if (!response.ok || !payload.success) return null;
+  localStorage.setItem(USER_KEY, JSON.stringify(payload.data.user));
+  localStorage.setItem(TOKEN_KEY, payload.data.accessToken);
+  localStorage.setItem(REFRESH_KEY, payload.data.refreshToken);
+  window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: payload.data }));
+  return payload.data.accessToken;
+}
+
+function clearStoredSession() {
+  if (typeof localStorage === "undefined") return;
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: null }));
+}
+
+async function sendRequest(path: string, options: RequestInit, token?: string | null) {
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
   beginGlobalLoading();
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-    });
-    const payload = (await response.json()) as ApiEnvelope<T>;
+    let response = await sendRequest(path, options, token);
+    let payload = await parseEnvelope<T>(response);
+    const shouldRefresh = response.status === 401 && token && !path.startsWith("/auth/");
+    if (shouldRefresh) {
+      const refreshedToken = await refreshSession();
+      if (refreshedToken) {
+        response = await sendRequest(path, options, refreshedToken);
+        payload = await parseEnvelope<T>(response);
+      } else {
+        clearStoredSession();
+      }
+    }
     if (!response.ok || !payload.success) {
       throw new Error(errorMessageFromPayload(payload as ApiEnvelope<unknown>));
     }

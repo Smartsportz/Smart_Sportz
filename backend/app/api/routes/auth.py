@@ -9,7 +9,7 @@ from app.core.rbac import ROLE_LABELS, ROLE_PERMISSIONS, ROLE_PROGRAMS, role_pro
 from app.core.responses import ok
 from app.core.security import create_token, decode_token, verify_password
 from app.db.database import row
-from app.schemas import LoginRequest
+from app.schemas import LoginRequest, RefreshTokenRequest
 from app.services.audit import log
 from app.services.runtime_state import runtime_state
 
@@ -45,6 +45,45 @@ def login(payload: LoginRequest):
             "homePath": role_profile(user["role"])["homePath"],
         },
     }, "Login successful")
+
+
+@router.post("/refresh")
+def refresh(payload: RefreshTokenRequest):
+    refresh_payload = decode_token(payload.refresh_token)
+    if not refresh_payload or not refresh_payload.get("jti"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+    if runtime_state.is_token_revoked(refresh_payload["jti"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token has been revoked")
+    session = runtime_state.get_session(refresh_payload["jti"])
+    if session and session.get("type") != "refresh":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh session")
+    user = row("SELECT * FROM users WHERE id = ?", (refresh_payload["sub"],))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    access_token = create_token(user["id"], user["role"], expires_in=60 * 60)
+    new_refresh_token = create_token(user["id"], user["role"], expires_in=60 * 60 * 24 * 7)
+    access_payload = decode_token(access_token)
+    new_refresh_payload = decode_token(new_refresh_token)
+    if access_payload:
+        runtime_state.mark_session(access_payload["jti"], {"userId": user["id"], "role": user["role"], "type": "access"}, 60 * 60)
+    if new_refresh_payload:
+        runtime_state.mark_session(new_refresh_payload["jti"], {"userId": user["id"], "role": user["role"], "type": "refresh"}, 60 * 60 * 24 * 7)
+    runtime_state.revoke_token(refresh_payload["jti"], 1)
+    log(user["email"], "token_refreshed", "auth", user["id"], "User session refreshed")
+    return ok({
+        "accessToken": access_token,
+        "refreshToken": new_refresh_token,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "roleLabel": ROLE_LABELS.get(user["role"], user["role"]),
+            "permissions": ROLE_PERMISSIONS.get(user["role"], []),
+            "programs": ROLE_PROGRAMS.get(user["role"], []),
+            "homePath": role_profile(user["role"])["homePath"],
+        },
+    }, "Session refreshed")
 
 
 @router.get("/me")

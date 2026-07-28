@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { apiRequest } from "../lib/api";
 
@@ -41,6 +41,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const USER_KEY = "smart-sportz-user";
 const TOKEN_KEY = "smart-sportz-token";
 const REFRESH_KEY = "smart-sportz-refresh-token";
+const SESSION_REFRESHED_EVENT = "smart-sportz-session-refreshed";
 
 function readStoredUser(): AuthUser | null {
   const stored = localStorage.getItem(USER_KEY);
@@ -56,6 +57,21 @@ function readStoredUser(): AuthUser | null {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => readStoredUser());
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+
+  useEffect(() => {
+    function handleSessionRefreshed(event: Event) {
+      const detail = (event as CustomEvent<LoginResponse | null>).detail;
+      if (!detail) {
+        setUser(null);
+        setToken(null);
+        return;
+      }
+      setUser(detail.user);
+      setToken(detail.accessToken);
+    }
+    window.addEventListener(SESSION_REFRESHED_EVENT, handleSessionRefreshed);
+    return () => window.removeEventListener(SESSION_REFRESHED_EVENT, handleSessionRefreshed);
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
     user,

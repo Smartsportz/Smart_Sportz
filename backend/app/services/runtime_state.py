@@ -71,6 +71,9 @@ class RuntimeState:
     def mark_session(self, jti: str, payload: dict[str, Any], ttl_seconds: int) -> None:
         self.set_json(f"session:{jti}", payload, ttl_seconds)
 
+    def get_session(self, jti: str) -> dict[str, Any] | None:
+        return self.get_json(f"session:{jti}")
+
     def revoke_token(self, jti: str, ttl_seconds: int) -> None:
         self.set_json(f"revoked:{jti}", {"revoked": True}, ttl_seconds)
         self.delete(f"session:{jti}")
