@@ -25,13 +25,13 @@ class RuntimeState:
         self._redis = self._connect()
 
     def _connect(self):
-        if Redis is None:
+        if Redis is None or not settings.redis_url:
             return None
         try:
             client = Redis.from_url(settings.redis_url, decode_responses=True, socket_connect_timeout=0.25)
             client.ping()
             return client
-        except RedisError:
+        except (RedisError, ValueError):
             return None
 
     def _purge_expired(self) -> None:
