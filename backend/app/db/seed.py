@@ -76,7 +76,14 @@ def seed_data() -> None:
     ]
 
     statements: list[tuple[str, tuple]] = []
-    statements += [("INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)", item) for item in users]
+    statements += [(
+        """
+        INSERT INTO users (
+          id, email, name, role, password_hash, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        item,
+    ) for item in users]
     statements += [("INSERT INTO sports VALUES (?, ?, ?, ?)", item) for item in sports]
     statements += [("INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in tournaments]
     statements += prize_rows("mumbai-premier-bash", 250000000)
