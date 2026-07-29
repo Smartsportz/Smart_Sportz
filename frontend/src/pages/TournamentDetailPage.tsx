@@ -1,17 +1,18 @@
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
-import { individualScores, liveMatches, tournaments } from "../data/platform";
+import { individualScores, liveMatches, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { getCompletedRegistration } from "../lib/registrationStatus";
 import { InfoPanel, Metric } from "./shared";
 
 export function TournamentDetailPage() {
   const params = useParams();
-  const item = tournaments.find((t) => t.slug === params.slug) ?? tournaments[0];
+  const item = withRuntimeTournamentStatus(tournaments.find((t) => t.slug === params.slug) ?? tournaments[0]);
   const isLive = item.phase === "live";
   const isExisting = item.phase === "existing";
   const canRegister = item.status === "Registration Open";
   const completedRegistration = getCompletedRegistration(item.slug);
   const isUpcomingOnly = item.status === "Upcoming";
+  const isRegistrationClosed = item.status === "Registration Closed";
   const liveMatch = liveMatches.find((match) => match.tournament === item.name) ?? liveMatches[0];
   const action = completedRegistration ? (
     <>
@@ -32,6 +33,11 @@ export function TournamentDetailPage() {
   ) : isUpcomingOnly ? (
     <>
       <span className="btn btn-secondary disabled-action">Registration opens {item.registrationStart}</span>
+      <Link className="btn btn-primary" to={`/tournaments/${item.slug}/rounds`}>Preview rounds</Link>
+    </>
+  ) : isRegistrationClosed ? (
+    <>
+      <span className="btn btn-secondary disabled-action">Registration closed {item.registrationEnd}</span>
       <Link className="btn btn-primary" to={`/tournaments/${item.slug}/rounds`}>Preview rounds</Link>
     </>
   ) : (

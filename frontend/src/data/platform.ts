@@ -153,6 +153,44 @@ export const tournaments = [
   },
 ];
 
+export type TournamentStatus = "Upcoming" | "Registration Open" | "Registration Closed" | "Live" | "Completed";
+
+function parseRegistrationDate(value: string) {
+  const parsed = new Date(`${value} 00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function getRuntimeTournamentStatus(item: { status: string; registrationStart?: string; registrationEnd?: string }) {
+  if (item.status === "Live" || item.status === "Completed") {
+    return item.status as TournamentStatus;
+  }
+  const start = parseRegistrationDate(item.registrationStart ?? "");
+  const end = parseRegistrationDate(item.registrationEnd ?? "");
+  if (!start || !end) {
+    return item.status as TournamentStatus;
+  }
+  const today = new Date();
+  if (today < start) {
+    return "Upcoming";
+  }
+  if (today > end) {
+    return "Registration Closed";
+  }
+  return "Registration Open";
+}
+
+export function getRuntimeTournamentAccent(status: string, fallback: string) {
+  if (status === "Registration Open") return "emerald";
+  if (status === "Upcoming") return "blue";
+  if (status === "Registration Closed") return "slate";
+  return fallback;
+}
+
+export function withRuntimeTournamentStatus<T extends { status: string; accent: string; registrationStart?: string; registrationEnd?: string }>(item: T) {
+  const status = getRuntimeTournamentStatus(item);
+  return { ...item, status, accent: getRuntimeTournamentAccent(status, item.accent) };
+}
+
 export type TournamentNotice = {
   id: string;
   tournamentSlug: string;
@@ -322,24 +360,24 @@ export const sidebar = [
 
 export const userSidebar = [
   { label: "Home", path: "/user/dashboard", icon: BarChart3 },
-  { label: "Tournament", path: "/user/registrations", icon: Trophy },
-  { label: "Gallery", path: "/gallery", icon: GalleryHorizontal },
-  { label: "Live", path: "/user/payments", icon: Activity },
+  { label: "My Tournaments", path: "/user/registrations", icon: Trophy },
+  { label: "Payments", path: "/user/payments", icon: CircleDollarSign },
   { label: "Certificates", path: "/user/certificates", icon: Medal },
-  { label: "News", path: "/user/schedules", icon: CalendarDays },
   { label: "Documents", path: "/user/documents", icon: FileText },
   { label: "Settings", path: "/user/settings", icon: ShieldCheck },
 ];
 
 export const managementSidebar = [
   { label: "Dashboard", path: "/management/dashboard", icon: BarChart3 },
-  { label: "Tournament", path: "/management/tournaments", icon: Trophy },
+  { label: "Tournaments", path: "/management/tournaments", icon: Trophy },
   { label: "Registrations", path: "/management/registrations", icon: FileText },
   { label: "Matches", path: "/management/matches", icon: Activity },
+  { label: "Bracket Workspace", path: "/management/tournaments/bangalore-corporate-t20/bracket", icon: Zap },
   { label: "Players", path: "/management/players", icon: Users },
   { label: "Announcements", path: "/management/announcements", icon: FileText },
   { label: "News", path: "/management/news", icon: GalleryHorizontal },
   { label: "Reports", path: "/management/reports", icon: BarChart3 },
+  { label: "Settings", path: "/settings", icon: Settings },
 ];
 
 export const timeline = [

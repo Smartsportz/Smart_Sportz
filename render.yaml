@@ -5,7 +5,7 @@ services:
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:$PORT --timeout 60
     healthCheckPath: /api/v1/health
     envVars:
       - key: APP_NAME
@@ -42,5 +42,15 @@ services:
         value: storage/uploads
       - key: REDIS_URL
         sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: INIT_DB_ON_STARTUP
+        value: "true"
+      - key: PUBLIC_CACHE_TTL_SECONDS
+        value: "45"
+      - key: DASHBOARD_CACHE_TTL_SECONDS
+        value: "20"
       - key: ALLOWED_ORIGINS
         value: https://smart-sportz-dun.vercel.app,https://smart-sportz.vercel.app,https://smartsportz.github.io,https://smartsportz.github.io/Smart_Sportz,http://127.0.0.1:5173,http://localhost:5173

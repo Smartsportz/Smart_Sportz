@@ -4,7 +4,7 @@ import { Page } from "../components/UI";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { tournaments } from "../data/platform";
+import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
 import { useAuth } from "../auth/AuthContext";
@@ -169,21 +169,6 @@ function prizeBreakdown(prize: string) {
   ];
 }
 
-function registrationCode(seed: string) {
-  return seed
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 12);
-}
-
-function uniqueRegistrationCode(seed: string) {
-  const base = registrationCode(seed) || "TEAM";
-  const suffix = Date.now().toString(36).slice(-4).toUpperCase();
-  return `${base.slice(0, Math.max(2, 12 - suffix.length - 1))}-${suffix}`;
-}
-
 function formatFileSize(size?: number) {
   if (!size) return "";
   if (size < 1024) return `${size} B`;
@@ -192,7 +177,7 @@ function formatFileSize(size?: number) {
 }
 
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
-  const wizard = ["Tournament", "Category", "Team Details", "Players", "Documents", "Payment", "Confirmation"];
+  const wizard = ["Tournament", "Category", "Team Details", "Players", "Team Group Image", "Payment", "Confirmation"];
   return (
     <div className="registration-stepper" aria-label="Registration progress">
       {wizard.map((step, index) => (
@@ -277,7 +262,7 @@ export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
   const amount = amountForTournament(tournament.slug);
   const savedDraft = useMemo(() => readRegistrationDraft(tournament.slug), [tournament.slug]);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
@@ -306,8 +291,7 @@ export function RegistrationPage() {
     return memberSlots.map((_, index) => restored[index] ?? "");
   });
   const [documents, setDocuments] = useState<SavedDocument[]>(() => savedDraft?.documents ?? [
-    { documentType: "Team Authorization Letter", fileName: "", filePath: "", status: "required" },
-    { documentType: "Captain ID Proof", fileName: "", filePath: "", status: "required" },
+    { documentType: "Team Group Image", fileName: "", filePath: "", status: "required" },
   ]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -342,9 +326,6 @@ export function RegistrationPage() {
   function updateTeamDetails(field: keyof typeof teamDetails, value: string) {
     setTeamDetails((current) => {
       const next = { ...current, [field]: value };
-      if (field === "teamName" && !current.teamCode.trim()) {
-        next.teamCode = registrationCode(value);
-      }
       if (field === "captainName") {
         setMembers((items) => items.map((name, index) => index === 0 ? value : name));
       }
@@ -361,13 +342,13 @@ export function RegistrationPage() {
       ...item,
       fileName,
       fileSize: file?.size,
-      filePath: fileName ? `/local-documents/${encodeURIComponent(fileName)}` : "",
+      filePath: fileName ? `/local-team-images/${encodeURIComponent(fileName)}` : "",
       status: fileName ? "uploaded" : "required",
     } : item));
   }
 
   async function continueToRoster() {
-    const requiredFields = ["teamName", "teamCode", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
+    const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
     const missingMemberLabels = members
       .map((name, index) => ({ name: name.trim(), label: memberSlots[index] }))
@@ -383,12 +364,11 @@ export function RegistrationPage() {
       return;
     }
     if (missingDocuments.length) {
-      showMissing(`Please upload required documents: ${missingDocuments.join(", ")}.`);
+      showMissing(`Please upload the required team group image: ${missingDocuments.join(", ")}.`);
       return;
     }
     setSaving(true);
     setError("");
-    const finalTeamCode = uniqueRegistrationCode(teamDetails.teamCode || teamDetails.teamName);
     try {
       const uploadedDocuments = documents.filter((item) => item.fileName.trim());
       const created = await apiRequest<BackendRegistration>("/registrations", {
@@ -396,7 +376,7 @@ export function RegistrationPage() {
         body: JSON.stringify({
           tournament_slug: tournament.slug,
           team_name: teamDetails.teamName,
-          team_code: finalTeamCode,
+          team_code: "",
           captain_name: teamDetails.captainName,
           sub_captain_name: teamDetails.subCaptainName,
           coach_name: teamDetails.coachName,
@@ -428,14 +408,14 @@ export function RegistrationPage() {
         tournament: tournament.name,
         tournamentSlug: tournament.slug,
         ...teamDetails,
-        teamCode: finalTeamCode,
+        teamCode: "",
         members,
         documents,
       };
       writeSavedRegistration(tournament.slug, payload);
       localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify({
         activeStep: 4,
-        teamDetails: { ...teamDetails, teamCode: finalTeamCode },
+        teamDetails: { ...teamDetails, teamCode: "" },
         members,
         documents,
         tournamentAccepted,
@@ -472,7 +452,7 @@ export function RegistrationPage() {
       return;
     }
     if (activeStep === 2) {
-      const requiredFields = ["teamName", "teamCode", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
+      const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
       const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
       if (missingTeamFields.length) {
         showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
@@ -512,7 +492,7 @@ export function RegistrationPage() {
           <p className="eyebrow">SmartSportz</p>
           <h1>Tournament Registration</h1>
           <h2>Compete. Perform. Become a Champion.</h2>
-          <p>Complete accurate team, player, document, and payment details to secure your tournament spot and avoid verification delays.</p>
+          <p>Complete accurate team, player, team image, and payment details to secure your tournament spot and avoid verification delays.</p>
         </section>
         <RegistrationStepper activeIndex={activeStep} />
         <div className="registration-reference-layout">
@@ -578,7 +558,10 @@ export function RegistrationPage() {
                   </div>
                   <div className="form-grid">
                     <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
-                    <label>Team code<input value={teamDetails.teamCode} onChange={(event) => updateTeamDetails("teamCode", registrationCode(event.target.value))} placeholder="e.g. MAV-2026" /></label>
+                    <div className="generated-code-note">
+                      <b>Team code</b>
+                      <span>Generated automatically after successful payment.</span>
+                    </div>
                   </div>
                   <div className="team-logo-row">
                     <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
@@ -630,9 +613,9 @@ export function RegistrationPage() {
 
             {activeStep === 4 && (
               <section className="registration-form-section">
-                <h2>Required Documentation</h2>
-                <p>Upload all required documents before continuing to roster review and payment.</p>
-                <div className="document-template-card">
+                <h2>Team Group Image</h2>
+                <p>Upload one clear team group photo. This image is used for manager verification and team records.</p>
+                <div className="document-template-card legacy-document-step" aria-hidden="true">
                   <FileText />
                   <div>
                     <h3>Team Authorization Letter Format</h3>
@@ -645,17 +628,17 @@ export function RegistrationPage() {
                 <div className="document-list">
               {documents.map((document, index) => (
                 <label className="document-row" key={document.documentType}>
-                  <FileText />
+                  <ImagePlus />
                       <span>
                         <b>{document.documentType}</b>
-                        <small>{document.fileName ? `${document.fileName}${document.fileSize ? ` - ${formatFileSize(document.fileSize)}` : ""}` : "PDF, JPG, or PNG document required"}</small>
+                        <small>{document.fileName ? `${document.fileName}${document.fileSize ? ` - ${formatFileSize(document.fileSize)}` : ""}` : "Upload one JPG or PNG team group image"}</small>
                       </span>
                   <strong>{document.status === "uploaded" ? "Uploaded" : "Upload"}</strong>
-                      <input type="file" accept=".pdf,image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0])} />
+                      <input type="file" accept="image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0])} />
                 </label>
               ))}
                 </div>
-                <p className="secure-note">Maximum file size: 10MB per document. Supported formats: PDF, JPG, PNG. Documents are stored as metadata in local demo mode.</p>
+                <p className="secure-note">Maximum file size: 10MB. Supported formats: JPG and PNG. The old document step remains hidden in code for future use.</p>
               </section>
             )}
 
@@ -673,7 +656,7 @@ export function RegistrationPage() {
 
 export function RegistrationRosterPage() {
   const { slug } = useParams();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
   const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
 
   return (
@@ -682,7 +665,7 @@ export function RegistrationRosterPage() {
       <section className="registration-hero-copy compact">
         <p className="eyebrow">Roster Review</p>
         <h1>{tournament.name}</h1>
-        <p>Confirm player names, documents, and captain details before payment.</p>
+        <p>Confirm player names, team image, and captain details before payment.</p>
       </section>
       <RegistrationStepper activeIndex={4} />
       {!saved ? (
@@ -697,12 +680,12 @@ export function RegistrationRosterPage() {
             <span className="status emerald">Team verified</span>
             <h2>{saved.teamName}</h2>
             <div className="review-list">
-              <p><b>Team Code</b><span>{saved.teamCode}</span></p>
+              <p><b>Team Code</b><span>{saved.teamCode || "Generated after payment"}</span></p>
               <p><b>Captain</b><span>{saved.captainName}</span></p>
               <p><b>Sub-captain</b><span>{saved.subCaptainName}</span></p>
               <p><b>Coach</b><span>{saved.coachName || "Not assigned"}</span></p>
               <p><b>City</b><span>{saved.city}</span></p>
-              <p><b>Documents</b><span>{saved.documents.filter((item) => item.status === "uploaded").length}/{saved.documents.length} uploaded</span></p>
+              <p><b>Team Image</b><span>{saved.documents.filter((item) => item.status === "uploaded").length}/{saved.documents.length} uploaded</span></p>
             </div>
             <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register/payment`}>Continue to payment</Link>
           </section>
@@ -724,7 +707,7 @@ export function RegistrationRosterPage() {
 export function RegistrationPaymentPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
   const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
   const amount = amountForTournament(tournament.slug);
   const totalPayable = totalPayableForAmount(amount);
@@ -758,6 +741,11 @@ export function RegistrationPaymentPage() {
       const registrationPayment = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi" }>(`/registrations/${saved.registrationId}/local-payment`, {
         method: "POST",
         body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable }),
+      });
+      const updatedRegistration = await apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`);
+      writeSavedRegistration(tournament.slug, {
+        ...saved,
+        teamCode: updatedRegistration.team_code || saved.teamCode || "",
       });
       const payment: SavedPayment = {
         id: registrationPayment.id,
@@ -814,7 +802,7 @@ export function RegistrationPaymentPage() {
             <div className="selected-tournament-label">
               <span className={`status ${tournament.accent}`}>Selected tournament</span>
               <strong>{saved.teamName}</strong>
-              <small>{tournament.name} - {saved.city} - {saved.members.length} members - Code {saved.teamCode}</small>
+              <small>{tournament.name} - {saved.city} - {saved.members.length} members - Code generated after payment</small>
             </div>
             {error && <div className="form-alert">{error}</div>}
             <label>Pay number / UPI contact<input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+91 98765 43210 or team@upi" /></label>
@@ -825,7 +813,7 @@ export function RegistrationPaymentPage() {
             {method === "upi" ? (
               <div className="upi-payment-box">
                 <div className="qr-shell">
-                  <QRCodeSVG value={`upi://pay?pa=smartsportz@local&pn=SmartSportz&am=${(totalPayable / 100).toFixed(2)}&tn=${saved.teamCode}`} size={154} />
+                  <QRCodeSVG value={`upi://pay?pa=smartsportz@local&pn=SmartSportz&am=${(totalPayable / 100).toFixed(2)}&tn=${saved.registrationId}`} size={154} />
                   <p>{qrGenerated ? "QR generated. Checking payment receipt..." : "Generate QR to scan and pay with any UPI app."}</p>
                 </div>
                 <button className="btn btn-primary" type="button" onClick={startUpiFlow} disabled={status === "checking"}>{status === "checking" ? "Checking payment..." : "Generate QR and check payment"}</button>
@@ -853,7 +841,7 @@ export function RegistrationPaymentPage() {
 
 export function RegistrationReviewPage() {
   const { slug } = useParams();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
   const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
   const payment = useMemo(() => readSavedPayment(tournament.slug), [tournament.slug]);
   const [backendRegistration, setBackendRegistration] = useState<BackendRegistration | null>(null);
@@ -867,12 +855,13 @@ export function RegistrationReviewPage() {
       .catch(() => setBackendRegistration(null));
   }, [saved, loaded]);
 
-  const confirmationCode = backendRegistration?.confirmation_code || (saved ? `SS-${saved.teamCode}` : "");
+  const finalTeamCode = backendRegistration?.team_code || saved?.teamCode || "";
+  const confirmationCode = backendRegistration?.confirmation_code || (finalTeamCode ? `SS-${finalTeamCode}` : "");
   const qrPayload = backendRegistration?.confirmation_qr_payload || JSON.stringify({
     type: "SmartSportzTeamVerification",
     registrationId: saved?.registrationId,
     confirmationCode,
-    teamCode: saved?.teamCode,
+    teamCode: finalTeamCode,
     teamName: saved?.teamName,
     tournamentSlug: tournament.slug,
     tournamentName: tournament.name,
@@ -892,7 +881,7 @@ export function RegistrationReviewPage() {
       confirmationCode,
       qrPayload,
       teamName: saved.teamName,
-      teamCode: saved.teamCode,
+      teamCode: finalTeamCode,
       captainName: saved.captainName,
       subCaptainName: saved.subCaptainName,
       coachName: saved.coachName,
@@ -905,7 +894,7 @@ export function RegistrationReviewPage() {
       payment,
       completedAt: new Date().toISOString(),
     });
-  }, [saved, payment, tournament.slug, tournament.name, confirmationCode, qrPayload]);
+  }, [saved, payment, tournament.slug, tournament.name, confirmationCode, qrPayload, finalTeamCode]);
 
   return (
     <RegistrationShell>
@@ -942,7 +931,7 @@ export function RegistrationReviewPage() {
             <h2>{saved.teamName}</h2>
             <div className="review-list">
               <p><b>Registration ID</b><span>{saved.registrationId}</span></p>
-              <p><b>Team Code</b><span>{saved.teamCode}</span></p>
+              <p><b>Team Code</b><span>{finalTeamCode}</span></p>
               <p><b>Tournament</b><span>{tournament.name}</span></p>
               <p><b>Captain</b><span>{saved.captainName}</span></p>
               <p><b>Sub-captain</b><span>{saved.subCaptainName}</span></p>
@@ -965,7 +954,7 @@ export function RegistrationReviewPage() {
 
 export function RegistrationPassPage() {
   const { slug } = useParams();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
   const completed = getCompletedRegistration(tournament.slug);
 
   return (
@@ -1021,12 +1010,12 @@ export function RegistrationPassPage() {
               </div>
             </section>
             <section className="panel registration-pass-wide">
-              <h2>Uploaded Documents</h2>
+              <h2>Team Group Image</h2>
               <div className="document-list">
                 {completed.documents.map((document) => (
                   <div className="document-row readonly-document" key={document.documentType}>
                     <FileText />
-                    <span><b>{document.documentType}</b><small>{document.fileName || "Uploaded document"}</small></span>
+                    <span><b>{document.documentType}</b><small>{document.fileName || "Uploaded team image"}</small></span>
                     <strong>{document.status}</strong>
                   </div>
                 ))}

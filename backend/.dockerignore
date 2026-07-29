@@ -1,0 +1,8 @@
+__pycache__
+*.pyc
+*.log
+.env
+storage/*.db
+storage/*.db-*
+storage/backups
+storage/uploads

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+import secrets
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,12 +12,25 @@ from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.schemas import LocalPaymentCreate, RegistrationCreate
 from app.services.audit import log
+from app.services.notifications import send_registration_payment_success
+from app.services.tournament_status import apply_registration_window_statuses, registration_is_open
 
 router = APIRouter(prefix="/registrations", tags=["registrations"])
 
 
 def _confirmation_code(registration_id: str) -> str:
     return f"SS-{registration_id.replace('reg_', '').upper()[:8]}"
+
+
+def _random_team_code(tournament_slug: str) -> str:
+    while True:
+        code = f"SST-{secrets.token_hex(4).upper()}"
+        existing = row(
+            "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(team_code) = lower(?)",
+            (tournament_slug, code),
+        )
+        if not existing:
+            return code
 
 
 def _prizes_for_tournament(tournament_slug: str) -> list[dict]:
@@ -28,9 +42,12 @@ def _prizes_for_tournament(tournament_slug: str) -> list[dict]:
 
 @router.post("")
 def create_registration(payload: RegistrationCreate, user: dict = Depends(current_user)):
+    apply_registration_window_statuses()
     tournament = row("SELECT * FROM tournaments WHERE slug = ?", (payload.tournament_slug,))
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
+    if not registration_is_open(tournament):
+        raise HTTPException(status_code=409, detail="Registration is not open for this tournament")
     paid_existing = row(
         "SELECT id FROM registrations WHERE tournament_slug = ? AND user_id = ? AND payment_status = 'paid' ORDER BY created_at DESC LIMIT 1",
         (payload.tournament_slug, user["id"]),
@@ -48,12 +65,13 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
     )
     if not city_allowed:
         raise HTTPException(status_code=422, detail="Selected city is not configured for this tournament")
-    existing_code = row(
-        "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(team_code) = lower(?)",
-        (payload.tournament_slug, payload.team_code),
-    )
-    if existing_code:
-        raise HTTPException(status_code=409, detail="Team code already exists for this tournament")
+    if payload.team_code:
+        existing_code = row(
+            "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(team_code) = lower(?)",
+            (payload.tournament_slug, payload.team_code),
+        )
+        if existing_code:
+            raise HTTPException(status_code=409, detail="Team code already exists for this tournament")
 
     registration_id = f"reg_{uuid4().hex[:12]}"
     amount = 250000
@@ -69,7 +87,7 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
             user["id"],
             payload.tournament_slug,
             payload.team_name,
-            payload.team_code,
+            payload.team_code or "",
             payload.captain_name,
             payload.sub_captain_name,
             payload.coach_name,
@@ -139,12 +157,13 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate):
     payment_id = f"pay_{uuid4().hex[:12]}"
     receipt_number = f"SS-RCPT-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:5].upper()}"
     confirmation_code = _confirmation_code(registration_id)
+    team_code = item.get("team_code") or _random_team_code(item["tournament_slug"])
     tournament = row("SELECT name, slug FROM tournaments WHERE slug = ?", (item["tournament_slug"],))
     qr_payload = {
         "type": "SmartSportzTeamVerification",
         "registrationId": registration_id,
         "confirmationCode": confirmation_code,
-        "teamCode": item.get("team_code", ""),
+        "teamCode": team_code,
         "teamName": item["team_name"],
         "tournamentSlug": item["tournament_slug"],
         "tournamentName": tournament["name"] if tournament else item["tournament_slug"],
@@ -160,8 +179,25 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate):
         (payment_id, registration_id, "paid", paid_amount, payload.method, receipt_number, datetime.now(timezone.utc).isoformat()),
     )
     execute(
-        "UPDATE registrations SET status = ?, payment_status = ?, confirmation_code = ?, confirmation_qr_payload = ? WHERE id = ?",
-        ("pending_approval", "paid", confirmation_code, json.dumps(qr_payload, separators=(",", ":")), registration_id),
+        "UPDATE registrations SET status = ?, payment_status = ?, team_code = ?, confirmation_code = ?, confirmation_qr_payload = ? WHERE id = ?",
+        ("pending_approval", "paid", team_code, confirmation_code, json.dumps(qr_payload, separators=(",", ":")), registration_id),
     )
+    members = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (registration_id,))
+    delivery_results = send_registration_payment_success(
+        item["email"],
+        item["phone"],
+        {
+            "tournamentName": qr_payload["tournamentName"],
+            "teamName": item["team_name"],
+            "teamCode": team_code,
+            "captainName": item["captain_name"],
+            "receiptNumber": receipt_number,
+            "confirmationCode": confirmation_code,
+            "qrPayload": json.dumps(qr_payload, separators=(",", ":")),
+            "members": members,
+        },
+    )
+    for result in delivery_results:
+        log(item["email"], "registration_notification", result.provider, registration_id, result.message)
     log(item["email"], "local_payment_paid", "payment", payment_id, "Local simulated payment completed")
     return ok(row("SELECT * FROM payments WHERE id = ?", (payment_id,)), "Local payment completed")

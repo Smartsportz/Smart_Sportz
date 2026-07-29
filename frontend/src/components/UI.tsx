@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { navItems } from "../data/platform";
+import { navItems, withRuntimeTournamentStatus } from "../data/platform";
 import { getCompletedRegistration } from "../lib/registrationStatus";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -34,6 +34,9 @@ export function PublicHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const visibleNavItems = navItems.slice(0, 7).filter((item) => item.label !== "Teams");
+  const showSearch = false;
+  const showRegisterAction = false;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -44,23 +47,25 @@ export function PublicHeader() {
       <div className="header-row">
         <BrandLogo />
         <nav className="site-nav">
-          {navItems.slice(0, 7).map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink key={item.path} to={item.path}>
               {item.label}
             </NavLink>
           ))}
         </nav>
         <div className="header-actions">
-          <div className="search-pill">
-            <Search size={16} />
-            <span>Search events...</span>
-          </div>
+          {showSearch && (
+            <div className="search-pill">
+              <Search size={16} />
+              <span>Search events...</span>
+            </div>
+          )}
           {user ? (
             <Link to={user.homePath} className="btn btn-secondary desktop-action">{user.roleLabel}</Link>
           ) : (
             <Link to="/login" className="btn btn-secondary desktop-action">Login</Link>
           )}
-          <Link to="/tournaments" className="btn btn-primary desktop-action">Register</Link>
+          {showRegisterAction && <Link to="/tournaments" className="btn btn-primary desktop-action">Register</Link>}
           <button
             className="icon-btn mobile-menu-btn"
             type="button"
@@ -77,11 +82,13 @@ export function PublicHeader() {
         </div>
       </div>
       <nav className="mobile-menu" aria-label="Mobile navigation">
-        <div className="mobile-search">
-          <Search size={16} />
-          <span>Search events...</span>
-        </div>
-        {navItems.slice(0, 7).map((item) => (
+        {showSearch && (
+          <div className="mobile-search">
+            <Search size={16} />
+            <span>Search events...</span>
+          </div>
+        )}
+        {visibleNavItems.map((item) => (
           <NavLink key={item.path} to={item.path}>
             {item.label}
           </NavLink>
@@ -95,7 +102,7 @@ export function PublicHeader() {
           ) : (
             <Link to="/login" className="btn btn-secondary">Login</Link>
           )}
-          <Link to="/tournaments" className="btn btn-primary">Register</Link>
+          {showRegisterAction && <Link to="/tournaments" className="btn btn-primary">Register</Link>}
         </div>
       </nav>
     </header>
@@ -132,6 +139,15 @@ export function PortalShell({
   action?: React.ReactNode;
 }) {
   const { user, logout } = useAuth();
+  const [portalMenuOpen, setPortalMenuOpen] = useState(false);
+  const isUserPortal = user?.role === "user";
+  const initials = user?.name
+    ?.split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "U";
   const primaryAction = user?.role === "super_admin"
     ? { label: "Create Tournament", path: "/admin/tournaments" }
     : user?.role === "management"
@@ -139,7 +155,19 @@ export function PortalShell({
       : { label: "Register Team", path: "/tournaments/mumbai-premier-bash/register" };
 
   return (
-    <div className="portal-shell">
+    <div className={`portal-shell ${isUserPortal ? "user-portal-shell" : ""} ${portalMenuOpen ? "portal-menu-open" : ""}`}>
+      {isUserPortal && (
+        <header className="user-portal-mobile-header">
+          <BrandLogo compact />
+          <button className="icon-btn" type="button" aria-label={portalMenuOpen ? "Close dashboard menu" : "Open dashboard menu"} onClick={() => setPortalMenuOpen((value) => !value)}>
+            <span className={`menu-glyph ${portalMenuOpen ? "is-open" : ""}`} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
+        </header>
+      )}
       <aside className="portal-sidebar">
         <BrandLogo />
         <nav>
@@ -154,7 +182,7 @@ export function PortalShell({
           })}
         </nav>
         <Link className="btn btn-primary wide" to={primaryAction.path}>{primaryAction.label}</Link>
-        <Link className="sidebar-link" to="/settings"><Settings size={16} /> Settings</Link>
+        {!isUserPortal && <Link className="sidebar-link" to="/settings"><Settings size={16} /> Settings</Link>}
         <button className="sidebar-link sidebar-button" type="button" onClick={logout}><ArrowRight size={16} /> Logout</button>
       </aside>
       <section className="portal-main">
@@ -165,7 +193,11 @@ export function PortalShell({
             <p>{subtitle}</p>
           </div>
           <div className="portal-actions">
-            {user && <span className="status blue">{user.roleLabel}</span>}
+            {user && (isUserPortal ? (
+              <Link className="user-profile-avatar" to="/user/settings" aria-label="Open profile settings">
+                <span>{initials}</span>
+              </Link>
+            ) : <span className="status blue">{user.roleLabel}</span>)}
             {action}
           </div>
         </div>
@@ -212,33 +244,34 @@ export function MetricCard({
 }
 
 export function TournamentCard({ item }: { item: any }) {
+  const tournament = withRuntimeTournamentStatus(item);
   const completedRegistration = getCompletedRegistration(item.slug);
-  const canRegister = item.status === "Registration Open";
-  const isUpcoming = item.status === "Upcoming";
+  const canRegister = tournament.status === "Registration Open";
+  const isUpcoming = tournament.status === "Upcoming";
   const statusText = completedRegistration
     ? "Already registered - payment complete"
     : canRegister
-    ? `Register: ${item.registrationStart} - ${item.registrationEnd}`
+    ? `Register: ${tournament.registrationStart} - ${tournament.registrationEnd}`
     : isUpcoming
-      ? `Registration opens ${item.registrationStart}`
-      : item.status === "Live"
+      ? `Registration opens ${tournament.registrationStart}`
+      : tournament.status === "Live"
         ? "Live tournament in progress"
-        : `Registration closed ${item.registrationEnd}`;
+        : `Registration closed ${tournament.registrationEnd}`;
   const destination = completedRegistration ? `/tournaments/${item.slug}/registration-pass` : `/tournaments/${item.slug}`;
   const actionLabel = completedRegistration ? "View your register" : "View details";
 
   return (
     <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
-      <img src={item.image} alt={`${item.name} visual`} />
+      <img src={tournament.image} alt={`${tournament.name} visual`} />
       <div className="card-body">
-        <span className={`status ${completedRegistration ? "emerald" : item.accent}`}>{completedRegistration ? "Already registered" : item.status}</span>
-        <h3>{item.name}</h3>
+        <span className={`status ${completedRegistration ? "emerald" : tournament.accent}`}>{completedRegistration ? "Already registered" : tournament.status}</span>
+        <h3>{tournament.name}</h3>
         <p className="registration-window">{statusText}</p>
         <p>{item.sport} • {item.location} • {item.date}</p>
         <div className="card-meta">
-          <span>{item.teams}/{item.capacity} teams</span>
-          <span>{item.prize}</span>
+          <span>{tournament.teams}/{tournament.capacity} teams</span>
+          <span>{tournament.prize}</span>
         </div>
         <span className="inline-link">{actionLabel} <ChevronRight size={16} /></span>
       </div>

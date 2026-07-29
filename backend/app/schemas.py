@@ -8,6 +8,24 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=3)
 
 
+class LoginOtpVerifyRequest(BaseModel):
+    challenge_id: str = Field(min_length=8, max_length=120)
+    code: str = Field(min_length=4, max_length=8)
+
+
+class SignupStartRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    phone: str = Field(min_length=7, max_length=20)
+    password: str = Field(min_length=6, max_length=80)
+    channel: str = Field(pattern="^(email|sms)$")
+
+
+class SignupVerifyRequest(BaseModel):
+    challenge_id: str = Field(min_length=8, max_length=120)
+    code: str = Field(min_length=4, max_length=8)
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(min_length=10)
 
@@ -29,7 +47,7 @@ class RegistrationDocumentCreate(BaseModel):
 class RegistrationCreate(BaseModel):
     tournament_slug: str
     team_name: str = Field(min_length=2, max_length=120)
-    team_code: str = Field(min_length=2, max_length=40)
+    team_code: str = Field(default="", max_length=40)
     captain_name: str = Field(min_length=2, max_length=120)
     sub_captain_name: str = Field(min_length=2, max_length=120)
     coach_name: str = Field(default="", max_length=120)
@@ -86,7 +104,7 @@ class TournamentTeamSizePayload(BaseModel):
 
 
 class TournamentRegistrationWindowPayload(BaseModel):
-    status: str = Field(pattern="^(Upcoming|Registration Open|Live|Completed)$")
+    status: str = Field(pattern="^(Upcoming|Registration Open|Registration Closed|Live|Completed)$")
     registration_start: str = Field(min_length=3, max_length=40)
     registration_end: str = Field(min_length=3, max_length=40)
 

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
-import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments } from "../data/platform";
+import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
 
 const fade = {
@@ -52,7 +52,8 @@ export function HomePage() {
   const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [organizerIndex, setOrganizerIndex] = useState(0);
   const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
-  const featured = [...tournaments].sort((a, b) => {
+  const runtimeTournaments = tournaments.map((item) => withRuntimeTournamentStatus(item));
+  const featured = [...runtimeTournaments].sort((a, b) => {
     const priority = { Upcoming: 0, "Registration Open": 1, Live: 2, Completed: 3 } as Record<string, number>;
     return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
   });
@@ -62,9 +63,9 @@ export function HomePage() {
     .map((visibility) => sports.find((sport) => sport.slug === visibility.sportSlug))
     .filter(Boolean) as typeof sports;
   const sportCounts = (name: string) => ({
-    upcoming: tournaments.filter((item) => item.sport === name && ["Upcoming", "Registration Open"].includes(item.status)).length,
-    live: tournaments.filter((item) => item.sport === name && item.status === "Live").length,
-    old: tournaments.filter((item) => item.sport === name && item.status === "Completed").length,
+    upcoming: runtimeTournaments.filter((item) => item.sport === name && ["Upcoming", "Registration Open", "Registration Closed"].includes(item.status)).length,
+    live: runtimeTournaments.filter((item) => item.sport === name && item.status === "Live").length,
+    old: runtimeTournaments.filter((item) => item.sport === name && item.status === "Completed").length,
   });
   const oldMatchNews = newsPosts.filter((item) => item.category === "Winner Teams").slice(0, 3);
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
@@ -103,6 +104,7 @@ export function HomePage() {
   }, [organizerTools.length]);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("screenshot") === "1") return;
     const allNotices = [...readStoredNotices(), ...tournamentNotices]
       .filter((notice) => notice.published)
       .filter((notice, index, list) => list.findIndex((item) => item.id === notice.id) === index);
@@ -164,15 +166,15 @@ export function HomePage() {
             <Link className="btn btn-primary" to="/tournaments">Register Tournament</Link>
             <Link className="btn btn-secondary glass-btn" to="/sports">Explore Sports</Link>
           </motion.div>
+          <motion.div className="match-chip-row hero-copy-chips" variants={heroLine}>
+            {[
+              "Mumbai Live Matches",
+              "Book a Facility",
+              "Live Scoring",
+              "News Updates",
+            ].map((item) => <span key={item}>{item}</span>)}
+          </motion.div>
         </motion.div>
-        <div className="match-chip-row hero-quick-links">
-          {[
-            "Mumbai Live Matches",
-            "Book a Facility",
-            "Live Scoring",
-            "News Updates",
-          ].map((item) => <span key={item}>{item}</span>)}
-        </div>
       </section>
       <section className="hero-below-panel" aria-label="Live tournament scores">
         <div className="hero-score-strip">

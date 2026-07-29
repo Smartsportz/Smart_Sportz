@@ -8,6 +8,21 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 
+def _load_local_env() -> None:
+    env_path = BASE_DIR / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        cleaned = line.strip()
+        if not cleaned or cleaned.startswith("#") or "=" not in cleaned:
+            continue
+        key, value = cleaned.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_local_env()
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Smart Sportz Backend")
@@ -25,6 +40,11 @@ class Settings:
     postgres_audit_schema: str = os.getenv("POSTGRES_AUDIT_SCHEMA", "audit_event")
     backup_dir: Path = BASE_DIR / os.getenv("BACKUP_DIR", "storage/backups")
     redis_url: str = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    upstash_redis_rest_url: str = os.getenv("UPSTASH_REDIS_REST_URL", "")
+    upstash_redis_rest_token: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
+    init_db_on_startup: bool = os.getenv("INIT_DB_ON_STARTUP", "true").lower() in {"1", "true", "yes", "on"}
+    public_cache_ttl_seconds: int = int(os.getenv("PUBLIC_CACHE_TTL_SECONDS", "45"))
+    dashboard_cache_ttl_seconds: int = int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "20"))
     upload_dir: Path = BASE_DIR / os.getenv("UPLOAD_DIR", "storage/uploads")
     allowed_origins: tuple[str, ...] = tuple(
         origin.strip()
@@ -34,6 +54,16 @@ class Settings:
         ).split(",")
         if origin.strip()
     )
+    twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    twilio_api_key_sid: str = os.getenv("TWILIO_API_KEY_SID", "")
+    twilio_api_key_secret: str = os.getenv("TWILIO_API_KEY_SECRET", "")
+    twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    twilio_verify_service_sid: str = os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
+    twilio_from_number: str = os.getenv("TWILIO_FROM_NUMBER", "")
+    twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
+    twilio_default_to: str = os.getenv("TWILIO_DEFAULT_TO", "+916374409006")
+    resend_api_key: str = os.getenv("RESEND_API_KEY", "")
+    resend_from_email: str = os.getenv("RESEND_FROM_EMAIL", "Smart Sportz <onboarding@resend.dev>")
 
 
 settings = Settings()

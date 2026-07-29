@@ -27,11 +27,31 @@ type LoginResponse = {
   user: AuthUser;
 };
 
+export type OtpChallenge = {
+  otpRequired: true;
+  challengeId: string;
+  channel: "email" | "sms";
+  target: string;
+  deliveryMessage: string;
+  devOtp?: string;
+};
+
+export type SignupPayload = {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  channel: "email" | "sms";
+};
+
 type AuthContextValue = {
   user: AuthUser | null;
   token: string | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string) => Promise<AuthUser | OtpChallenge>;
+  verifyLoginOtp: (challengeId: string, code: string) => Promise<AuthUser>;
+  startSignup: (payload: SignupPayload) => Promise<OtpChallenge>;
+  verifySignup: (challengeId: string, code: string) => Promise<AuthUser>;
   logout: () => void;
   canAccessRole: (roles: Role[]) => boolean;
 };
@@ -52,6 +72,10 @@ function readStoredUser(): AuthUser | null {
     localStorage.removeItem(USER_KEY);
     return null;
   }
+}
+
+function isOtpChallenge(value: LoginResponse | OtpChallenge): value is OtpChallenge {
+  return "otpRequired" in value && value.otpRequired;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -78,9 +102,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     token,
     isAuthenticated: Boolean(user && token),
     async login(email: string, password: string) {
-      const data = await apiRequest<LoginResponse>("/auth/login", {
+      const data = await apiRequest<LoginResponse | OtpChallenge>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
+      });
+      if (isOtpChallenge(data)) return data;
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      localStorage.setItem(TOKEN_KEY, data.accessToken);
+      localStorage.setItem(REFRESH_KEY, data.refreshToken);
+      setUser(data.user);
+      setToken(data.accessToken);
+      return data.user;
+    },
+    async verifyLoginOtp(challengeId: string, code: string) {
+      const data = await apiRequest<LoginResponse>("/auth/login/verify", {
+        method: "POST",
+        body: JSON.stringify({ challenge_id: challengeId, code }),
+      });
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      localStorage.setItem(TOKEN_KEY, data.accessToken);
+      localStorage.setItem(REFRESH_KEY, data.refreshToken);
+      setUser(data.user);
+      setToken(data.accessToken);
+      return data.user;
+    },
+    async startSignup(payload: SignupPayload) {
+      return apiRequest<OtpChallenge>("/auth/signup/start", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    async verifySignup(challengeId: string, code: string) {
+      const data = await apiRequest<LoginResponse>("/auth/signup/verify", {
+        method: "POST",
+        body: JSON.stringify({ challenge_id: challengeId, code }),
       });
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       localStorage.setItem(TOKEN_KEY, data.accessToken);

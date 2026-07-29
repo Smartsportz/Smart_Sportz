@@ -16,11 +16,12 @@ def _utc_stamp() -> str:
 
 
 def _safe_redis_url() -> dict[str, Any]:
-    configured = bool(settings.redis_url)
+    upstash_configured = bool(settings.upstash_redis_rest_url and settings.upstash_redis_rest_token)
+    redis_url_configured = bool(settings.redis_url)
     return {
-        "configured": configured,
+        "configured": upstash_configured or redis_url_configured,
         "purpose": "sessions, cache, rate limits, OTP/temp state, and live-score fast state",
-        "mode": "configured" if configured else "not configured",
+        "mode": "upstash_rest" if upstash_configured else "redis_url" if redis_url_configured else "memory_fallback",
     }
 
 

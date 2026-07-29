@@ -8,10 +8,13 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import require_roles
+from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
 from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, WinnerAdvancePayload
 from app.services.audit import log
+from app.services.cache import cache_key, get_or_set_json
+from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
 
@@ -39,43 +42,52 @@ def slugify(title: str) -> str:
 
 @router.get("/dashboard")
 def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
-    cities = manager_cities(user)
-    if user["role"] != "super_admin" and not cities:
-        return ok({"assignedCities": [], "assignedTournaments": [], "pendingRegistrations": [], "liveMatches": []})
-    tournament_filter = "" if user["role"] == "super_admin" else f" AND location IN ({','.join(['?'] * len(cities))})"
-    registration_filter = "" if user["role"] == "super_admin" else f" AND city IN ({','.join(['?'] * len(cities))})"
-    return ok({
-        "assignedCities": cities,
-        "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE status IN ('Registration Open', 'Live'){tournament_filter}", cities),
-        "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval'){registration_filter}", cities),
-        "liveMatches": rows("SELECT * FROM live_matches"),
-    })
+    def build():
+        cities = manager_cities(user)
+        if user["role"] != "super_admin" and not cities:
+            return {"assignedCities": [], "assignedTournaments": [], "pendingRegistrations": [], "liveMatches": []}
+        tournament_filter = "" if user["role"] == "super_admin" else f" AND location IN ({','.join(['?'] * len(cities))})"
+        registration_filter = "" if user["role"] == "super_admin" else f" AND city IN ({','.join(['?'] * len(cities))})"
+        return {
+            "assignedCities": cities,
+            "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE status IN ('Registration Open', 'Live'){tournament_filter}", cities),
+            "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval'){registration_filter}", cities),
+            "liveMatches": rows("SELECT * FROM live_matches"),
+        }
+
+    return ok(get_or_set_json(cache_key("management:dashboard", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
 
 
 @router.get("/tournaments")
 def tournaments(user: dict = Depends(require_roles("super_admin", "management"))):
-    cities = manager_cities(user)
-    if user["role"] == "super_admin" or not cities:
-        return ok(rows("SELECT * FROM tournaments ORDER BY name"))
-    return ok(rows(f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(cities))}) ORDER BY name", cities))
+    def build():
+        cities = manager_cities(user)
+        if user["role"] == "super_admin" or not cities:
+            return rows("SELECT * FROM tournaments ORDER BY name")
+        return rows(f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(cities))}) ORDER BY name", cities)
+
+    return ok(get_or_set_json(cache_key("management:tournaments", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
 
 
 @router.get("/news")
 def manager_news(user: dict = Depends(require_roles("super_admin", "management"))):
-    cities = manager_cities(user)
-    if user["role"] != "super_admin" and not cities:
-        return ok({"assignedCities": [], "posts": []})
-    params = [] if user["role"] == "super_admin" else cities
-    where = "" if user["role"] == "super_admin" else f"WHERE city IN ({','.join(['?'] * len(cities))})"
-    return ok({
-        "assignedCities": cities,
-        "posts": rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC", params),
-        "sports": rows(
-            """SELECT s.slug, s.name, s.color, COALESCE(v.show_on_home, 0) AS show_on_home, COALESCE(v.sort_order, 99) AS sort_order
-               FROM sports s LEFT JOIN sport_home_visibility v ON v.sport_slug = s.slug
-               ORDER BY COALESCE(v.sort_order, 99), s.name"""
-        ),
-    })
+    def build():
+        cities = manager_cities(user)
+        if user["role"] != "super_admin" and not cities:
+            return {"assignedCities": [], "posts": [], "sports": []}
+        params = [] if user["role"] == "super_admin" else cities
+        where = "" if user["role"] == "super_admin" else f"WHERE city IN ({','.join(['?'] * len(cities))})"
+        return {
+            "assignedCities": cities,
+            "posts": rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC", params),
+            "sports": rows(
+                """SELECT s.slug, s.name, s.color, COALESCE(v.show_on_home, 0) AS show_on_home, COALESCE(v.sort_order, 99) AS sort_order
+                   FROM sports s LEFT JOIN sport_home_visibility v ON v.sport_slug = s.slug
+                   ORDER BY COALESCE(v.sort_order, 99), s.name"""
+            ),
+        }
+
+    return ok(get_or_set_json(cache_key("management:news", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
 
 
 @router.post("/news")
@@ -166,10 +178,14 @@ def update_registration_window(tournament_slug: str, payload: TournamentRegistra
     item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
     if not item:
         return ok({"updated": False, "reason": "Tournament not found"}, "Tournament not found")
+    draft = {**item, "status": payload.status, "registration_start": payload.registration_start, "registration_end": payload.registration_end}
+    computed_status = runtime_status(draft)
+    computed_accent = accent_for_status(computed_status, item.get("accent", "blue"))
     execute(
-        "UPDATE tournaments SET status = ?, registration_start = ?, registration_end = ? WHERE slug = ?",
-        (payload.status, payload.registration_start, payload.registration_end, tournament_slug),
+        "UPDATE tournaments SET status = ?, accent = ?, registration_start = ?, registration_end = ? WHERE slug = ?",
+        (computed_status, computed_accent, payload.registration_start, payload.registration_end, tournament_slug),
     )
+    apply_registration_window_statuses()
     log(user["email"], "tournament_registration_window_updated", "tournament", tournament_slug, f"{payload.status}: {payload.registration_start} to {payload.registration_end}")
     return ok(row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,)), "Tournament registration window updated")
 
@@ -284,7 +300,7 @@ def notify_bracket(tournament_slug: str, payload: NotificationSendPayload, user:
 
 @router.get("/matches")
 def matches(_: dict = Depends(require_roles("super_admin", "management"))):
-    return ok(rows("SELECT * FROM live_matches ORDER BY id"))
+    return ok(get_or_set_json(cache_key("management:matches"), lambda: rows("SELECT * FROM live_matches ORDER BY id"), 10))
 
 
 @router.get("/players")

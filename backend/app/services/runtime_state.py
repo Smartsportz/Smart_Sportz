@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import time
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 from typing import Any
 
 from app.core.config import settings
@@ -19,6 +21,7 @@ except Exception:  # pragma: no cover - local dev can run without redis installe
 class RuntimeState:
     def __init__(self) -> None:
         self._fallback: dict[str, tuple[float, str]] = {}
+        self._upstash = UpstashRestClient(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
         self._redis = self._connect()
 
     def _connect(self):
@@ -39,6 +42,12 @@ class RuntimeState:
 
     def set_json(self, key: str, value: dict[str, Any], ttl_seconds: int) -> None:
         encoded = json.dumps(value, separators=(",", ":"))
+        if self._upstash.enabled:
+            try:
+                self._upstash.setex(key, encoded, ttl_seconds)
+                return
+            except UpstashRestError:
+                self._upstash.disable()
         if self._redis is not None:
             try:
                 self._redis.setex(key, ttl_seconds, encoded)
@@ -49,6 +58,12 @@ class RuntimeState:
         self._fallback[key] = (time.time() + ttl_seconds, encoded)
 
     def get_json(self, key: str) -> dict[str, Any] | None:
+        if self._upstash.enabled:
+            try:
+                value = self._upstash.get(key)
+                return json.loads(value) if value else None
+            except UpstashRestError:
+                self._upstash.disable()
         if self._redis is not None:
             try:
                 value = self._redis.get(key)
@@ -60,6 +75,12 @@ class RuntimeState:
         return json.loads(item[1]) if item else None
 
     def delete(self, key: str) -> None:
+        if self._upstash.enabled:
+            try:
+                self._upstash.delete(key)
+                return
+            except UpstashRestError:
+                self._upstash.disable()
         if self._redis is not None:
             try:
                 self._redis.delete(key)
@@ -80,6 +101,51 @@ class RuntimeState:
 
     def is_token_revoked(self, jti: str) -> bool:
         return self.get_json(f"revoked:{jti}") is not None
+
+
+class UpstashRestError(Exception):
+    pass
+
+
+class UpstashRestClient:
+    def __init__(self, rest_url: str, token: str) -> None:
+        self._rest_url = rest_url.rstrip("/")
+        self._token = token
+        self.enabled = bool(self._rest_url and self._token)
+
+    def disable(self) -> None:
+        self.enabled = False
+
+    def _command(self, command: list[Any]) -> Any:
+        if not self.enabled:
+            raise UpstashRestError("Upstash Redis REST is not configured")
+        request = Request(
+            self._rest_url,
+            data=json.dumps(command).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=1.5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (OSError, URLError, json.JSONDecodeError) as exc:
+            raise UpstashRestError(str(exc)) from exc
+        if "error" in payload and payload["error"]:
+            raise UpstashRestError(str(payload["error"]))
+        return payload.get("result")
+
+    def setex(self, key: str, value: str, ttl_seconds: int) -> None:
+        self._command(["SET", key, value, "EX", ttl_seconds])
+
+    def get(self, key: str) -> str | None:
+        value = self._command(["GET", key])
+        return str(value) if value is not None else None
+
+    def delete(self, key: str) -> None:
+        self._command(["DEL", key])
 
 
 runtime_state = RuntimeState()
