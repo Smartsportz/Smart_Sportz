@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { managementSidebar, newsPosts, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
@@ -41,6 +41,99 @@ type ManagerNewsData = {
   posts: Array<Record<string, any>>;
   sports: Array<Record<string, any>>;
 };
+
+type MoneyLine = { label: string; value: number };
+type PrizeLine = { position: number; label: string; amount: number };
+type TournamentFormState = {
+  slug?: string;
+  name: string;
+  sport: string;
+  newSportName: string;
+  status: string;
+  location: string;
+  newCity: string;
+  date: string;
+  registrationStart: string;
+  registrationEnd: string;
+  teams: number;
+  capacity: number;
+  minTeamSize: number;
+  maxTeamSize: number;
+  image: string;
+  accent: string;
+  address: string;
+  sportDescription: string;
+  tournamentDescription: string;
+  showOnHome: boolean;
+  feeBreakdown: MoneyLine[];
+  prizes: PrizeLine[];
+  cities: string[];
+};
+
+const emptyTournamentForm: TournamentFormState = {
+  name: "",
+  sport: "Cricket",
+  newSportName: "",
+  status: "Upcoming",
+  location: "Mumbai",
+  newCity: "",
+  date: "",
+  registrationStart: "",
+  registrationEnd: "",
+  teams: 0,
+  capacity: 32,
+  minTeamSize: 2,
+  maxTeamSize: 16,
+  image: "/assets/cricket-stadium.png",
+  accent: "emerald",
+  address: "",
+  sportDescription: "",
+  tournamentDescription: "",
+  showOnHome: true,
+  feeBreakdown: [{ label: "Entry Fee", value: 5000 }],
+  prizes: [
+    { position: 1, label: "1st Prize", amount: 0 },
+    { position: 2, label: "2nd Prize", amount: 0 },
+    { position: 3, label: "3rd Prize", amount: 0 },
+  ],
+  cities: ["Mumbai"],
+};
+
+function formFromTournament(item?: Record<string, any>): TournamentFormState {
+  if (!item) return emptyTournamentForm;
+  const feeBreakdown = Array.isArray(item.fee_breakdown) && item.fee_breakdown.length
+    ? item.fee_breakdown.map((line: any) => ({ label: line.label ?? "Fee", value: Number(line.value ?? 0) }))
+    : [{ label: "Entry Fee", value: Number(String(item.prize ?? "0").replace(/\D/g, "")) || 0 }];
+  const prizes = Array.isArray(item.prizes) && item.prizes.length
+    ? item.prizes.map((line: any) => ({ position: Number(line.position), label: line.label, amount: Number(line.amount) }))
+    : emptyTournamentForm.prizes;
+  const cities = Array.isArray(item.cities) && item.cities.length ? item.cities : [item.location ?? "Mumbai"];
+  return {
+    slug: item.slug,
+    name: item.name ?? "",
+    sport: item.sport ?? "Cricket",
+    newSportName: "",
+    status: item.status ?? "Upcoming",
+    location: item.location ?? cities[0] ?? "Mumbai",
+    newCity: "",
+    date: item.date ?? "",
+    registrationStart: item.registration_start ?? item.registrationStart ?? "",
+    registrationEnd: item.registration_end ?? item.registrationEnd ?? "",
+    teams: Number(item.teams ?? 0),
+    capacity: Number(item.capacity ?? 32),
+    minTeamSize: Number(item.min_team_size ?? item.minTeamSize ?? 2),
+    maxTeamSize: Number(item.max_team_size ?? item.maxTeamSize ?? item.team_size ?? 16),
+    image: item.image ?? "/assets/cricket-stadium.png",
+    accent: item.accent ?? "emerald",
+    address: item.address ?? "",
+    sportDescription: item.sport_description ?? item.sportDescription ?? "",
+    tournamentDescription: item.tournament_description ?? item.tournamentDescription ?? "",
+    showOnHome: Boolean(item.show_on_home ?? item.showOnHome ?? true),
+    feeBreakdown,
+    prizes,
+    cities,
+  };
+}
 
 export function UserSectionPage({ section }: { section: keyof typeof userContent }) {
   const { token } = useAuth();
@@ -139,6 +232,11 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
   const [registrationEnd, setRegistrationEnd] = useState(selectedWindowTournament?.registrationEnd ?? "");
   const [windowMessage, setWindowMessage] = useState("");
   const [managerMessage, setManagerMessage] = useState("");
+  const [tournamentForm, setTournamentForm] = useState<TournamentFormState>(emptyTournamentForm);
+  const [editingTournament, setEditingTournament] = useState<Record<string, any> | null>(null);
+  const [showTournamentForm, setShowTournamentForm] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<Record<string, any> | null>(null);
+  const [confirmNextStep, setConfirmNextStep] = useState<"news" | "announcements" | null>(null);
 
   useEffect(() => {
     setRegistrationEnd(selectedWindowTournament?.registrationEnd ?? "");
@@ -208,6 +306,89 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       setWindowMessage(error instanceof Error ? error.message : "Unable to update registration window.");
     }
   }
+
+  function openTournamentForm(item?: Record<string, any>) {
+    const nextForm = formFromTournament(item);
+    setEditingTournament(item ?? null);
+    setTournamentForm(nextForm);
+    setShowTournamentForm(true);
+    setManagerMessage("");
+  }
+
+  function patchTournamentForm(patch: Partial<TournamentFormState>) {
+    setTournamentForm((current) => ({ ...current, ...patch }));
+  }
+
+  function setMoneyLine(index: number, patch: Partial<MoneyLine>) {
+    patchTournamentForm({
+      feeBreakdown: tournamentForm.feeBreakdown.map((line, i) => i === index ? { ...line, ...patch } : line),
+    });
+  }
+
+  function setPrizeLine(index: number, patch: Partial<PrizeLine>) {
+    patchTournamentForm({
+      prizes: tournamentForm.prizes.map((line, i) => i === index ? { ...line, ...patch } : line),
+    });
+  }
+
+  async function saveTournamentForm() {
+    setManagerMessage("");
+    const selectedCities = Array.from(new Set([tournamentForm.location, ...tournamentForm.cities].filter(Boolean)));
+    const prizeTotal = tournamentForm.prizes.reduce((total, line) => total + Number(line.amount || 0), 0);
+    const payload = {
+      slug: tournamentForm.slug,
+      name: tournamentForm.name,
+      sport: tournamentForm.sport === "__new__" ? tournamentForm.newSportName : tournamentForm.sport,
+      new_sport_name: tournamentForm.sport === "__new__" ? tournamentForm.newSportName : undefined,
+      status: tournamentForm.status,
+      location: tournamentForm.location,
+      date: tournamentForm.date,
+      registration_start: tournamentForm.registrationStart,
+      registration_end: tournamentForm.registrationEnd,
+      teams: tournamentForm.teams,
+      capacity: tournamentForm.capacity,
+      team_size: tournamentForm.maxTeamSize,
+      min_team_size: tournamentForm.minTeamSize,
+      max_team_size: tournamentForm.maxTeamSize,
+      prize: `INR ${prizeTotal.toLocaleString("en-IN")}`,
+      image: tournamentForm.image,
+      accent: tournamentForm.accent,
+      address: tournamentForm.address,
+      sport_description: tournamentForm.sportDescription,
+      tournament_description: tournamentForm.tournamentDescription,
+      fee_breakdown: tournamentForm.feeBreakdown.filter((line) => line.label.trim()),
+      prizes: tournamentForm.prizes,
+      cities: selectedCities,
+      show_on_home: tournamentForm.showOnHome,
+    };
+    try {
+      const saved = await apiRequest<Record<string, any>>(
+        editingTournament ? `/management/tournaments/${editingTournament.slug}` : "/management/tournaments",
+        { method: editingTournament ? "PATCH" : "POST", body: JSON.stringify(payload) },
+        token,
+      );
+      const refreshed = await apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token);
+      setSectionRecords(refreshed);
+      setEditingTournament(saved);
+      setTournamentForm(formFromTournament(saved));
+      setManagerMessage(`${saved.name} saved. You can continue editing or confirm the next publishing step.`);
+      setConfirmNextStep("news");
+    } catch (error) {
+      setManagerMessage(error instanceof Error ? error.message : "Unable to save tournament.");
+    }
+  }
+
+  async function deleteTournament() {
+    if (!deleteCandidate) return;
+    try {
+      await apiRequest(`/management/tournaments/${deleteCandidate.slug}`, { method: "DELETE" }, token);
+      setSectionRecords((current) => current.filter((item) => item.slug !== deleteCandidate.slug));
+      setManagerMessage(`${deleteCandidate.name} deleted.`);
+      setDeleteCandidate(null);
+    } catch (error) {
+      setManagerMessage(error instanceof Error ? error.message : "Unable to delete tournament.");
+    }
+  }
   const pendingRegistrations = managerDashboard?.pendingRegistrations ?? [];
   const assignedTournaments = sectionRecords.length ? sectionRecords : (managerDashboard?.assignedTournaments ?? []);
   const assignedCities = managerDashboard?.assignedCities ?? [];
@@ -217,6 +398,27 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     const sport = sports.find((entry) => entry.slug === item.sportSlug);
     return { slug: item.sportSlug, name: sport?.name, show_on_home: item.showOnHome, sort_order: item.sortOrder };
   });
+  const managedTournamentGroups = useMemo(() => {
+    const groups: Record<string, Array<Record<string, any>>> = {
+      Upcoming: [],
+      "Registration Open": [],
+      Live: [],
+      "Old / Completed": [],
+    };
+    assignedTournaments.forEach((entry) => {
+      const status = String(entry.status ?? "");
+      if (status === "Upcoming") groups.Upcoming.push(entry);
+      else if (status === "Registration Open") groups["Registration Open"].push(entry);
+      else if (status === "Live") groups.Live.push(entry);
+      else groups["Old / Completed"].push(entry);
+    });
+    return groups;
+  }, [assignedTournaments]);
+  const sportOptions = Array.from(new Set([...sports.map((sport) => sport.name), ...assignedTournaments.map((item) => item.sport).filter(Boolean)]));
+  const cityOptions = Array.from(new Set([...(assignedCities.length ? assignedCities : ["Mumbai", "Bengaluru", "Mysuru", "Delhi", "Chennai"]), ...tournamentForm.cities]));
+  const imageOptions = ["/assets/cricket-stadium.png", "/assets/football-match.png", "/assets/basketball-match.png", "/assets/volleyball-match.png"];
+  const feeTotal = tournamentForm.feeBreakdown.reduce((total, line) => total + Number(line.value || 0), 0);
+  const prizeTotal = tournamentForm.prizes.reduce((total, line) => total + Number(line.amount || 0), 0);
 
   const primaryContent = managerLoading ? (
     <section className="panel user-empty-state"><h2>Loading {title}</h2><p>Fetching manager records from the backend database.</p></section>
@@ -258,23 +460,49 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     )
   ) : section === "tournaments" ? (
     assignedTournaments.length === 0 ? (
-      <section className="panel user-empty-state"><h2>No assigned tournaments</h2><p>Super admin must assign this manager to a city before tournaments appear.</p></section>
+      <section className="panel user-empty-state">
+        <h2>No assigned tournaments</h2>
+        <p>Use the add button to create a tournament for an assigned city.</p>
+        <button className="btn btn-primary" type="button" onClick={() => openTournamentForm()}>Add New Tournament</button>
+      </section>
     ) : (
-      <DataTable
-        columns={["Tournament", "Status", "City", "Registration Window", "Team Size", "Action"]}
-        rows={assignedTournaments.map((entry) => {
-          const local = tournaments.find((item) => item.slug === entry.slug);
-          const item = (local ? withRuntimeTournamentStatus(local) : entry) as Record<string, any>;
-          return [
-          item.name,
-          <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>,
-          item.location ?? item.city ?? item.cities?.join(", ") ?? "Assigned city",
-          `${item.registration_start ?? item.registrationStart ?? "-"} - ${item.registration_end ?? item.registrationEnd ?? "-"}`,
-          `${item.team_size ?? item.teamSize ?? "-"} members`,
-          <span className="table-actions"><Link to={`/tournaments/${item.slug}`}>Open</Link><Link to={`/management/tournaments/${item.slug}/bracket`}>Bracket</Link></span>,
-          ];
-        })}
-      />
+      <div className="manager-tournament-board">
+        <div className="manager-board-head">
+          <div>
+            <h2>Assigned tournaments</h2>
+            <p>Grouped by runtime status: upcoming, open registration, live, then old/completed.</p>
+          </div>
+          <button className="btn btn-primary" type="button" onClick={() => openTournamentForm()}>Add New Tournament</button>
+        </div>
+        {Object.entries(managedTournamentGroups).map(([group, items]) => (
+          <section className="manager-tournament-group" key={group}>
+            <div className="group-title-row"><h3>{group}</h3><span>{items.length} tournaments</span></div>
+            {items.length ? (
+              <div className="manager-tournament-row">
+                {items.map((item) => (
+                  <article className="manager-tournament-card" key={item.slug}>
+                    <div className="manager-tournament-image">
+                      <img src={item.image || "/assets/cricket-stadium.png"} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
+                    </div>
+                    <div>
+                      <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>
+                      <h4>{item.name}</h4>
+                      <p>{item.sport} - {item.location}</p>
+                      <small>{item.registration_start || "-"} to {item.registration_end || "-"} - {item.min_team_size ?? 2}/{item.max_team_size ?? item.team_size ?? 16} players</small>
+                    </div>
+                    <div className="manager-card-actions">
+                      <Link to={`/tournaments/${item.slug}`}>Open</Link>
+                      <Link to={`/management/tournaments/${item.slug}/bracket`}>Rounds</Link>
+                      <button type="button" onClick={() => openTournamentForm(item)}>Edit</button>
+                      <button className="danger-link" type="button" onClick={() => setDeleteCandidate(item)}>Delete</button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : <p className="empty-line">No {group.toLowerCase()} tournaments.</p>}
+          </section>
+        ))}
+      </div>
     )
   ) : section === "news" ? (
     <div className="manager-news-layout">
@@ -348,44 +576,112 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       <PortalShell title={title} subtitle="Management portal section for tournament-specific operations." sidebar={managementSidebar} action={<Link className="btn btn-primary" to="/management/dashboard">Dashboard</Link>}>
         {managerError && <div className="form-alert">{managerError}</div>}
         {managerMessage && <p className="form-note">{managerMessage}</p>}
-        {section === "tournaments" && (
-          <section className="panel tournament-create-panel">
-            <div>
-              <span className="status emerald">Tournament City Setup</span>
-              <h2>Allowed registration cities</h2>
-              <p>Set one or more cities per assigned tournament. Registration city dropdowns use only the selected tournament city list.</p>
-            </div>
-            <div className="form-grid">
-              <label>Tournament<select>{activeTournamentOptions.map((item) => <option key={item.slug}>{item.name}</option>)}</select></label>
-              <label>Cities<input placeholder="Bengaluru, Mysuru" /></label>
-            </div>
-            <div className="window-extension-card">
-              <span className="status blue">Registration Close Date</span>
-              <h3>Extend registration access</h3>
-              <p>Managers can extend the close date when extra teams need access. The tournament card status updates from the registration window automatically.</p>
-              <div className="form-grid">
-                <label>Tournament
-                  <select value={windowTournamentSlug} onChange={(event) => setWindowTournamentSlug(event.target.value)}>
-                    {activeTournamentOptions.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}
-                  </select>
-                </label>
-                <label>Registration closes
-                  <input value={registrationEnd} onChange={(event) => setRegistrationEnd(event.target.value)} placeholder="Aug 10, 2026" />
-                </label>
-              </div>
-              <div className="hero-actions">
-                <button className="btn btn-primary" type="button" onClick={extendRegistrationWindow}>Update close date</button>
-                <span className="status slate">{selectedWindowTournament ? withRuntimeTournamentStatus(selectedWindowTournament).status : "No tournament"}</span>
-              </div>
-              {windowMessage && <p className="form-note">{windowMessage}</p>}
-            </div>
-          </section>
-        )}
         {primaryContent}
-        <div className="detail-grid">
+        {section !== "tournaments" && <div className="detail-grid">
           <InfoPanel title={`${title} Controls`} items={managementContent[section]} highlight />
           <InfoPanel title="Operational Links" items={["Tournament detail", "Live match center", "Bracket allocation", "Audit trail"]} to={section === "registrations" ? "/management/tournaments/bangalore-corporate-t20/bracket" : "/admin/logs"} />
-        </div>
+        </div>}
+        {section === "tournaments" && showTournamentForm && (
+          <div className="modal-backdrop">
+            <section className="manager-tournament-modal">
+              <div className="modal-head">
+                <div>
+                  <p className="eyebrow">{editingTournament ? "Edit Tournament" : "New Tournament"}</p>
+                  <h2>{editingTournament ? tournamentForm.name : "Create tournament"}</h2>
+                </div>
+                <button className="icon-btn" type="button" onClick={() => setShowTournamentForm(false)}>x</button>
+              </div>
+              <div className="form-grid">
+                <label>Tournament name<input value={tournamentForm.name} onChange={(event) => patchTournamentForm({ name: event.target.value })} /></label>
+                <label>Sport
+                  <select value={tournamentForm.sport} onChange={(event) => patchTournamentForm({ sport: event.target.value })}>
+                    {sportOptions.map((sport) => <option key={sport}>{sport}</option>)}
+                    <option value="__new__">Add new sport</option>
+                  </select>
+                </label>
+                {tournamentForm.sport === "__new__" && <label>New sport name<input value={tournamentForm.newSportName} onChange={(event) => patchTournamentForm({ newSportName: event.target.value })} placeholder="e.g. Hockey" /></label>}
+                <label>Status<select value={tournamentForm.status} onChange={(event) => patchTournamentForm({ status: event.target.value })}><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
+                <label>Primary place
+                  <select value={tournamentForm.location} onChange={(event) => patchTournamentForm({ location: event.target.value, cities: Array.from(new Set([...tournamentForm.cities, event.target.value])) })}>
+                    {cityOptions.map((city) => <option key={city}>{city}</option>)}
+                    <option value="__new_city__">Add new place</option>
+                  </select>
+                </label>
+                {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={() => tournamentForm.newCity && patchTournamentForm({ location: tournamentForm.newCity, cities: Array.from(new Set([...tournamentForm.cities, tournamentForm.newCity])) })} /></label>}
+                <label>Tournament date<input value={tournamentForm.date} onChange={(event) => patchTournamentForm({ date: event.target.value })} placeholder="Aug 14 - Sep 02" /></label>
+                <label>Registration opens<input value={tournamentForm.registrationStart} onChange={(event) => patchTournamentForm({ registrationStart: event.target.value })} placeholder="Aug 01, 2026" /></label>
+                <label>Registration closes<input value={tournamentForm.registrationEnd} onChange={(event) => patchTournamentForm({ registrationEnd: event.target.value })} placeholder="Aug 10, 2026" /></label>
+                <label>Capacity<input type="number" value={tournamentForm.capacity} onChange={(event) => patchTournamentForm({ capacity: Number(event.target.value) })} /></label>
+                <label>Min members<input type="number" value={tournamentForm.minTeamSize} onChange={(event) => patchTournamentForm({ minTeamSize: Number(event.target.value) })} /></label>
+                <label>Max members<input type="number" value={tournamentForm.maxTeamSize} onChange={(event) => patchTournamentForm({ maxTeamSize: Number(event.target.value) })} /></label>
+                <label>Image
+                  <select value={imageOptions.includes(tournamentForm.image) ? tournamentForm.image : "__custom__"} onChange={(event) => patchTournamentForm({ image: event.target.value === "__custom__" ? "" : event.target.value })}>
+                    {imageOptions.map((image) => <option key={image} value={image}>{image.replace("/assets/", "")}</option>)}
+                    <option value="__custom__">Custom text path</option>
+                  </select>
+                </label>
+                <label>Image text path<input type="text" value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/cricket-stadium.png" /></label>
+              </div>
+              <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
+              <div className="manager-form-split">
+                <section className="mini-table-card">
+                  <div className="section-head-inline"><h3>Payment lines</h3><button type="button" onClick={() => patchTournamentForm({ feeBreakdown: [...tournamentForm.feeBreakdown, { label: "Fee", value: 0 }] })}>Add</button></div>
+                  {tournamentForm.feeBreakdown.map((line, index) => (
+                    <div className="money-row" key={index}>
+                      <input value={line.label} onChange={(event) => setMoneyLine(index, { label: event.target.value })} />
+                      <input type="number" value={line.value} onChange={(event) => setMoneyLine(index, { value: Number(event.target.value) })} />
+                    </div>
+                  ))}
+                  <b>Total - {feeTotal.toLocaleString("en-IN")}</b>
+                </section>
+                <section className="mini-table-card">
+                  <div className="section-head-inline"><h3>Prize money</h3><button type="button" onClick={() => patchTournamentForm({ prizes: [...tournamentForm.prizes, { position: tournamentForm.prizes.length + 1, label: `${tournamentForm.prizes.length + 1}th Prize`, amount: 0 }] })}>Add</button></div>
+                  {tournamentForm.prizes.map((line, index) => (
+                    <div className="money-row" key={index}>
+                      <input type="number" value={line.position} onChange={(event) => setPrizeLine(index, { position: Number(event.target.value) })} />
+                      <input value={line.label} onChange={(event) => setPrizeLine(index, { label: event.target.value })} />
+                      <input type="number" value={line.amount} onChange={(event) => setPrizeLine(index, { amount: Number(event.target.value) })} />
+                    </div>
+                  ))}
+                  <b>Total prize - {prizeTotal.toLocaleString("en-IN")}</b>
+                </section>
+              </div>
+              <div className="form-grid">
+                <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
+                <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
+              </div>
+              <label className="visibility-row"><span><b>Display on user page</b><small>Show this tournament on user dashboard featured areas.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
+              <div className="registration-actions compact-actions">
+                <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save</button>
+                <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>
+              </div>
+            </section>
+          </div>
+        )}
+        {deleteCandidate && (
+          <div className="modal-backdrop">
+            <section className="confirm-modal panel">
+              <h2>Delete tournament?</h2>
+              <p>{deleteCandidate.name} will be removed only if it has no registrations.</p>
+              <div className="registration-actions compact-actions">
+                <button className="btn btn-primary" type="button" onClick={deleteTournament}>Confirm delete</button>
+                <button className="btn btn-secondary" type="button" onClick={() => setDeleteCandidate(null)}>Cancel</button>
+              </div>
+            </section>
+          </div>
+        )}
+        {confirmNextStep && (
+          <div className="modal-backdrop">
+            <section className="confirm-modal panel">
+              <h2>{confirmNextStep === "news" ? "Add this to news?" : "Add announcement?"}</h2>
+              <p>{confirmNextStep === "news" ? "Open the news editor with this tournament detail as a starting point. It will not auto-save." : "Open announcements and draft a user-facing message."}</p>
+              <div className="registration-actions compact-actions">
+                <Link className="btn btn-primary" to={confirmNextStep === "news" ? "/management/news" : "/management/announcements"}>{confirmNextStep === "news" ? "Yes, open news" : "Yes, open announcements"}</Link>
+                <button className="btn btn-secondary" type="button" onClick={() => setConfirmNextStep(confirmNextStep === "news" ? "announcements" : null)}>{confirmNextStep === "news" ? "No, ask announcement" : "No, dashboard"}</button>
+              </div>
+            </section>
+          </div>
+        )}
       </PortalShell>
     </Page>
   );

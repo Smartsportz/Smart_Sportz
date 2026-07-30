@@ -62,6 +62,7 @@ class Settings:
     twilio_from_number: str = os.getenv("TWILIO_FROM_NUMBER", "")
     twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
     twilio_default_to: str = os.getenv("TWILIO_DEFAULT_TO", "+916374409006")
+    otp_delivery_mode: str = os.getenv("OTP_DELIVERY_MODE", "local").lower()
     email_provider: str = os.getenv("EMAIL_PROVIDER", "brevo" if os.getenv("BREVO_API_KEY") else "resend").lower()
     brevo_api_key: str = os.getenv("BREVO_API_KEY", "")
     brevo_sender_email: str = os.getenv("BREVO_SENDER_EMAIL", "smartsportz.in@gmail.com")

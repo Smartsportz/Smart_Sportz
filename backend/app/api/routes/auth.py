@@ -97,6 +97,21 @@ def _challenge_response(challenge_id: str, channel: str, target: str, delivery_m
     return ok(payload, "OTP verification required")
 
 
+def _deliver_otp(channel: str, target: str, code: str):
+    if settings.otp_delivery_mode == "local":
+        return "local", f"Local OTP: {code}"
+    if channel == "sms":
+        delivery = send_sms_otp(target, code)
+        provider = "twilio_verify" if delivery.ok else "local"
+        return provider, delivery.message
+    delivery = send_email_otp(target, code)
+    return "local", delivery.message
+
+
+def _deliver_privileged_otp(code: str):
+    return "local", f"Local OTP: {code}"
+
+
 @router.post("/login")
 def login(payload: LoginRequest):
     user = row("SELECT * FROM users WHERE email = ?", (payload.email,))
@@ -105,11 +120,11 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if user["role"] in {"super_admin", "management"}:
         code = generate_otp(4)
-        target = settings.privileged_otp_email
-        delivery = send_email_otp(target, code)
-        challenge_id = _store_otp_challenge("privileged_login", {"userId": user["id"]}, "email", target, code, "local")
-        log(user["email"], "login_otp_sent", "auth", user["id"], delivery.message)
-        return _challenge_response(challenge_id, "email", target, delivery.message)
+        target = "this login screen"
+        provider, message = _deliver_privileged_otp(code)
+        challenge_id = _store_otp_challenge("privileged_login", {"userId": user["id"]}, "email", target, code, provider)
+        log(user["email"], "login_otp_displayed", "auth", user["id"], "Privileged OTP displayed locally")
+        return _challenge_response(challenge_id, "email", target, message)
     log(user["email"], "login_success", "auth", user["id"], "User logged in")
     return _issue_session(user, "Login successful")
 
@@ -132,8 +147,8 @@ def signup_start(payload: SignupStartRequest):
     if existing:
         raise HTTPException(status_code=409, detail="An account already exists for this email")
     code = generate_otp(4)
-    delivery = send_email_otp(payload.email, code) if payload.channel == "email" else send_sms_otp(payload.phone, code)
-    provider = "twilio_verify" if payload.channel == "sms" and delivery.ok else "local"
+    target = str(payload.email) if payload.channel == "email" else payload.phone
+    provider, message = _deliver_otp(payload.channel, target, code)
     challenge_id = _store_otp_challenge(
         "signup",
         {
@@ -143,12 +158,12 @@ def signup_start(payload: SignupStartRequest):
             "passwordHash": hash_password(payload.password),
         },
         payload.channel,
-        str(payload.email) if payload.channel == "email" else payload.phone,
+        target,
         code,
         provider,
     )
-    log(str(payload.email), "signup_otp_sent", "auth", challenge_id, delivery.message)
-    return _challenge_response(challenge_id, payload.channel, str(payload.email) if payload.channel == "email" else payload.phone, delivery.message)
+    log(str(payload.email), "signup_otp_sent", "auth", challenge_id, message)
+    return _challenge_response(challenge_id, payload.channel, target, message)
 
 
 @router.post("/signup/verify")

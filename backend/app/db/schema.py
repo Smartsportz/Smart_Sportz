@@ -36,9 +36,16 @@ CREATE TABLE IF NOT EXISTS tournaments (
   teams INTEGER NOT NULL,
   capacity INTEGER NOT NULL,
   team_size INTEGER NOT NULL DEFAULT 16,
+  min_team_size INTEGER NOT NULL DEFAULT 2,
+  max_team_size INTEGER NOT NULL DEFAULT 16,
   prize TEXT NOT NULL,
   image TEXT NOT NULL,
-  accent TEXT NOT NULL
+  accent TEXT NOT NULL,
+  address TEXT NOT NULL DEFAULT '',
+  sport_description TEXT NOT NULL DEFAULT '',
+  tournament_description TEXT NOT NULL DEFAULT '',
+  fee_breakdown_json TEXT NOT NULL DEFAULT '[]',
+  show_on_home INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS tournament_prizes (
@@ -421,6 +428,17 @@ def _apply_operational_schema(path=None) -> None:
         }
         for column, definition in registration_columns.items():
             _add_column(conn, "registrations", column, definition)
+        tournament_columns = {
+            "min_team_size": "INTEGER NOT NULL DEFAULT 2",
+            "max_team_size": "INTEGER NOT NULL DEFAULT 16",
+            "address": "TEXT NOT NULL DEFAULT ''",
+            "sport_description": "TEXT NOT NULL DEFAULT ''",
+            "tournament_description": "TEXT NOT NULL DEFAULT ''",
+            "fee_breakdown_json": "TEXT NOT NULL DEFAULT '[]'",
+            "show_on_home": "INTEGER NOT NULL DEFAULT 1",
+        }
+        for column, definition in tournament_columns.items():
+            _add_column(conn, "tournaments", column, definition)
         user_columns = {
             "phone": "TEXT NOT NULL DEFAULT ''",
             "email_verified": "INTEGER NOT NULL DEFAULT 1",

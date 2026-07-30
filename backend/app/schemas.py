@@ -113,6 +113,44 @@ class TournamentCitiesPayload(BaseModel):
     cities: list[str] = Field(min_length=1, max_length=12)
 
 
+class TournamentFeeLinePayload(BaseModel):
+    label: str = Field(min_length=2, max_length=80)
+    value: int = Field(ge=0, le=100000000)
+
+
+class TournamentPrizePayload(BaseModel):
+    position: int = Field(ge=1, le=20)
+    label: str = Field(min_length=2, max_length=80)
+    amount: int = Field(ge=0, le=100000000)
+
+
+class TournamentUpsertPayload(BaseModel):
+    slug: str | None = Field(default=None, max_length=120)
+    name: str = Field(min_length=3, max_length=160)
+    sport: str = Field(min_length=2, max_length=80)
+    new_sport_name: str | None = Field(default=None, max_length=80)
+    status: str = Field(default="Upcoming", pattern="^(Upcoming|Registration Open|Registration Closed|Live|Completed)$")
+    location: str = Field(min_length=2, max_length=80)
+    date: str = Field(min_length=3, max_length=80)
+    registration_start: str = Field(min_length=3, max_length=40)
+    registration_end: str = Field(min_length=3, max_length=40)
+    teams: int = Field(default=0, ge=0, le=10000)
+    capacity: int = Field(default=32, ge=2, le=10000)
+    team_size: int = Field(default=16, ge=2, le=60)
+    min_team_size: int = Field(default=2, ge=2, le=60)
+    max_team_size: int = Field(default=16, ge=2, le=60)
+    prize: str = Field(default="INR 0", max_length=80)
+    image: str = Field(default="/assets/cricket-stadium.png", max_length=500)
+    accent: str = Field(default="emerald", max_length=40)
+    address: str = Field(default="", max_length=500)
+    sport_description: str = Field(default="", max_length=1000)
+    tournament_description: str = Field(default="", max_length=1400)
+    fee_breakdown: list[TournamentFeeLinePayload] = Field(default_factory=list, max_length=20)
+    prizes: list[TournamentPrizePayload] = Field(default_factory=list, max_length=20)
+    cities: list[str] = Field(default_factory=list, max_length=12)
+    show_on_home: bool = True
+
+
 class NewsBlockPayload(BaseModel):
     block_type: str = Field(pattern="^(heading|paragraph|bold|italic|list|quote|image)$")
     content: str = Field(min_length=1, max_length=1200)

@@ -1,8 +1,11 @@
 import { Bell, CheckCircle2, ImagePlus, FileText } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { cmsSections, logRows, managerUsers, paymentRows, reports, sidebar, teams, tournaments } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { AdminOverview, AthleteProfile, CatalogPage, DashboardGrid, ListPanel, TeamCard } from "./shared";
 
 const noticeStorageKey = "smart-sportz-tournament-notices";
@@ -66,6 +69,108 @@ export function NoticeBuilder({ role = "admin" }: { role?: "admin" | "manager" }
   );
 }
 
+type ManagerRow = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  cities: string[];
+  created_at?: string;
+};
+
+function ManagerManagementPanel() {
+  const { token } = useAuth();
+  const [managers, setManagers] = useState<ManagerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "manager123",
+    cities: "",
+  });
+
+  async function loadManagers() {
+    setLoading(true);
+    setError("");
+    try {
+      const rows = await apiRequest<ManagerRow[]>("/admin/managers", {}, token);
+      setManagers(rows);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load manager records.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadManagers();
+  }, [token]);
+
+  async function createManager(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    const cities = form.cities.split(",").map((city) => city.trim()).filter(Boolean);
+    if (!form.name.trim() || !form.email.trim() || !form.password.trim() || cities.length === 0) {
+      setError("Please fill manager name, email, password, and at least one city.");
+      return;
+    }
+    try {
+      const created = await apiRequest<ManagerRow>("/admin/managers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          cities,
+        }),
+      }, token);
+      setManagers((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setForm({ name: "", email: "", password: "manager123", cities: "" });
+      setMessage(`${created.name} created with ${created.cities.length} city assignment${created.cities.length === 1 ? "" : "s"}.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to create manager.");
+    }
+  }
+
+  const tableRows = managers.length
+    ? managers.map((manager) => [
+        manager.name,
+        manager.email,
+        manager.cities.join(", ") || "No city assigned",
+        manager.created_at ? new Date(manager.created_at).toLocaleDateString() : "Created",
+      ])
+    : managerUsers.map((manager) => [manager.name, manager.email, manager.cities.join(", "), manager.status]);
+
+  return (
+    <div className="admin-manager-grid">
+      <section className="panel tournament-create-panel">
+        <div>
+          <span className="status emerald">Manager Management</span>
+          <h2>Create city-scoped managers</h2>
+          <p>Managers can access only the cities allocated here. Admin keeps full platform access.</p>
+        </div>
+        {message && <div className="form-alert success-alert">{message}</div>}
+        {error && <div className="form-alert">{error}</div>}
+        <form className="form-grid" onSubmit={createManager}>
+          <label>Manager name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="North Zone Manager" /></label>
+          <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="north.manager@smartsportz.in" /></label>
+          <label>Temporary password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder="manager123" /></label>
+          <label>Allocated cities<input value={form.cities} onChange={(event) => setForm((current) => ({ ...current, cities: event.target.value }))} placeholder="Delhi, Noida, Gurugram" /></label>
+          <button className="btn btn-primary" type="submit">Create manager</button>
+          <button className="btn btn-secondary" type="button" onClick={loadManagers}>Refresh from DB</button>
+        </form>
+      </section>
+      <DataTable
+        columns={["Manager", "Email", "Allocated Cities", "Created"]}
+        rows={loading ? [["Loading managers...", "", "", ""]] : tableRows}
+      />
+    </div>
+  );
+}
+
 export function AdminPage({ section = "dashboard" }: { section?: string }) {
   const title = section === "dashboard" ? "Executive Dashboard" : section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -123,6 +228,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
             />
           </>
         )}
+        {section === "managers" && <ManagerManagementPanel />}
         {section === "roles" && (
           <DataTable
             columns={["Role", "Programs", "Core Permissions", "Security Rule"]}

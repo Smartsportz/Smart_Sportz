@@ -73,7 +73,9 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
           <h1>{recovery ? "Forgot Password?" : mode === "signup" ? "Create Account" : "Welcome Back"}</h1>
           <p>
             {challenge
-              ? `Enter the OTP sent by ${challenge.channel.toUpperCase()} to ${challenge.target}.`
+              ? challenge.deliveryMessage?.startsWith("Local OTP:")
+                ? "Enter the OTP shown below. Admin and manager login uses local on-screen verification in this build."
+                : `Enter the OTP sent by ${challenge.channel.toUpperCase()} to ${challenge.target}.`
               : recovery
                 ? "Enter your email and we will send an OTP for password recovery."
                 : mode === "signup"
@@ -91,6 +93,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
             </div>
           )}
           {challenge && <label>OTP code<input placeholder="4 digit code" value={otp} onChange={(event) => setOtp(event.target.value)} maxLength={8} /></label>}
+          {challenge?.deliveryMessage?.startsWith("Local OTP:") && <div className="otp-local-box">{challenge.deliveryMessage}</div>}
           {error && <div className="form-alert">{error}</div>}
           <button type="submit" className="btn btn-primary wide" disabled={loading}>
             {loading ? "Please wait..." : challenge ? "Verify OTP" : recovery ? "Send OTP" : mode === "signup" ? "Create and verify account" : "Sign in"}

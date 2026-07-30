@@ -40,13 +40,12 @@ export function ManagementPage() {
 
   return (
     <Page>
-      <PortalShell title="Tournament Management" subtitle="Operate assigned tournaments, registrations, matches, players, announcements, and reports." sidebar={managementSidebar}>
+      <PortalShell title="" subtitle="" sidebar={managementSidebar}>
         {error && <div className="form-alert">{error}</div>}
-        <NoticeBuilder role="manager" />
         {loading ? (
           <section className="panel user-empty-state"><h2>Loading manager dashboard</h2><p>Fetching assigned city records from the backend database.</p></section>
         ) : (
-          <>
+          <div className="manager-dashboard-compact">
             <div className="user-metrics-grid">
               <article className="user-metric-card"><span>Scope</span><p>Assigned Cities</p><strong>{data?.assignedCities.length ?? 0}</strong></article>
               <article className="user-metric-card"><span>Active</span><p>Tournaments</p><strong>{data?.assignedTournaments.length ?? 0}</strong></article>
@@ -74,7 +73,10 @@ export function ManagementPage() {
                 <span className="table-actions"><Link to={`/tournaments/${item.slug}`}>Open</Link><Link to={`/management/tournaments/${item.slug}/bracket`}>Bracket</Link></span>,
               ])}
             />
-          </>
+            <div className="manager-notice-down">
+              <NoticeBuilder role="manager" />
+            </div>
+          </div>
         )}
       </PortalShell>
     </Page>

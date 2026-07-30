@@ -558,10 +558,6 @@ export function RegistrationPage() {
                   </div>
                   <div className="form-grid">
                     <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
-                    <div className="generated-code-note">
-                      <b>Team code</b>
-                      <span>Generated automatically after successful payment.</span>
-                    </div>
                   </div>
                   <div className="team-logo-row">
                     <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
@@ -680,7 +676,6 @@ export function RegistrationRosterPage() {
             <span className="status emerald">Team verified</span>
             <h2>{saved.teamName}</h2>
             <div className="review-list">
-              <p><b>Team Code</b><span>{saved.teamCode || "Generated after payment"}</span></p>
               <p><b>Captain</b><span>{saved.captainName}</span></p>
               <p><b>Sub-captain</b><span>{saved.subCaptainName}</span></p>
               <p><b>Coach</b><span>{saved.coachName || "Not assigned"}</span></p>

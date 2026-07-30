@@ -348,6 +348,7 @@ export const sidebar = [
   { label: "Dashboard", path: "/admin/dashboard", icon: BarChart3 },
   { label: "Tournaments", path: "/admin/tournaments", icon: Trophy },
   { label: "Users", path: "/admin/users", icon: Users },
+  { label: "Managers", path: "/admin/managers", icon: ShieldCheck },
   { label: "Roles", path: "/admin/roles", icon: ShieldCheck },
   { label: "Teams", path: "/admin/teams", icon: Users },
   { label: "Players", path: "/admin/players", icon: Medal },

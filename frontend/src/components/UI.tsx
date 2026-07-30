@@ -186,21 +186,25 @@ export function PortalShell({
         <button className="sidebar-link sidebar-button" type="button" onClick={logout}><ArrowRight size={16} /> Logout</button>
       </aside>
       <section className="portal-main">
-        <div className="portal-topbar">
-          <div>
-            <p className="eyebrow">Smart Sportz Enterprise</p>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
+        {(title || subtitle || action) && (
+          <div className="portal-topbar">
+            {(title || subtitle) && (
+              <div>
+                <p className="eyebrow">Smart Sportz Enterprise</p>
+                {title && <h1>{title}</h1>}
+                {subtitle && <p>{subtitle}</p>}
+              </div>
+            )}
+            <div className="portal-actions">
+              {user && (isUserPortal ? (
+                <Link className="user-profile-avatar" to="/user/settings" aria-label="Open profile settings">
+                  <span>{initials}</span>
+                </Link>
+              ) : <span className="status blue">{user.roleLabel}</span>)}
+              {action}
+            </div>
           </div>
-          <div className="portal-actions">
-            {user && (isUserPortal ? (
-              <Link className="user-profile-avatar" to="/user/settings" aria-label="Open profile settings">
-                <span>{initials}</span>
-              </Link>
-            ) : <span className="status blue">{user.roleLabel}</span>)}
-            {action}
-          </div>
-        </div>
+        )}
         {children}
       </section>
     </div>

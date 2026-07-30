@@ -11,7 +11,7 @@ from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
@@ -40,6 +40,59 @@ def slugify(title: str) -> str:
     return value or f"news-{uuid4().hex[:8]}"
 
 
+def tournament_slugify(title: str) -> str:
+    value = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return value or f"tournament-{uuid4().hex[:8]}"
+
+
+def _clean_unique(values: list[str]) -> list[str]:
+    clean: list[str] = []
+    for item in values:
+        value = " ".join(str(item).strip().split())
+        if value and value.lower() not in [existing.lower() for existing in clean]:
+            clean.append(value)
+    return clean
+
+
+def _save_tournament_children(slug: str, payload: TournamentUpsertPayload) -> None:
+    clean_cities = _clean_unique(payload.cities or [payload.location])
+    execute("DELETE FROM tournament_cities WHERE tournament_slug = ?", (slug,))
+    execute("DELETE FROM tournament_prizes WHERE tournament_slug = ?", (slug,))
+    statements: list[tuple[str, tuple]] = []
+    statements.extend(
+        (
+            "INSERT INTO tournament_cities(id, tournament_slug, city, sort_order) VALUES (?, ?, ?, ?)",
+            (f"city_{uuid4().hex[:10]}", slug, city, index),
+        )
+        for index, city in enumerate(clean_cities, start=1)
+    )
+    statements.extend(
+        (
+            "INSERT INTO tournament_prizes(id, tournament_slug, position, label, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+            (f"prize_{uuid4().hex[:10]}", slug, prize.position, prize.label, prize.amount, index),
+        )
+        for index, prize in enumerate(payload.prizes, start=1)
+    )
+    if statements:
+        execute_many(statements)
+
+
+def _tournament_detail(slug: str) -> dict | None:
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (slug,))
+    if not item:
+        return None
+    detail = dict(item)
+    detail["cities"] = [entry["city"] for entry in rows("SELECT city FROM tournament_cities WHERE tournament_slug = ? ORDER BY sort_order", (slug,))]
+    detail["prizes"] = rows("SELECT position, label, amount, sort_order FROM tournament_prizes WHERE tournament_slug = ? ORDER BY sort_order, position", (slug,))
+    try:
+        detail["fee_breakdown"] = json.loads(detail.get("fee_breakdown_json") or "[]")
+    except Exception:
+        detail["fee_breakdown"] = []
+    detail["status"] = runtime_status(detail)
+    detail["accent"] = accent_for_status(detail["status"], detail.get("accent", "emerald"))
+    return detail
+
+
 @router.get("/dashboard")
 def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
     def build():
@@ -50,7 +103,7 @@ def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
         registration_filter = "" if user["role"] == "super_admin" else f" AND city IN ({','.join(['?'] * len(cities))})"
         return {
             "assignedCities": cities,
-            "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE status IN ('Registration Open', 'Live'){tournament_filter}", cities),
+            "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", cities),
             "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval'){registration_filter}", cities),
             "liveMatches": rows("SELECT * FROM live_matches"),
         }
@@ -63,10 +116,131 @@ def tournaments(user: dict = Depends(require_roles("super_admin", "management"))
     def build():
         cities = manager_cities(user)
         if user["role"] == "super_admin" or not cities:
-            return rows("SELECT * FROM tournaments ORDER BY name")
-        return rows(f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(cities))}) ORDER BY name", cities)
+            records = rows("SELECT * FROM tournaments ORDER BY name")
+        else:
+            records = rows(f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(cities))}) ORDER BY name", cities)
+        order = {"Upcoming": 0, "Registration Open": 1, "Live": 2, "Registration Closed": 3, "Completed": 4}
+        details = [_tournament_detail(item["slug"]) for item in records]
+        return sorted([item for item in details if item], key=lambda item: (order.get(item["status"], 9), item["name"]))
 
     return ok(get_or_set_json(cache_key("management:tournaments", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
+
+
+@router.post("/tournaments")
+def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_city_access(user, payload.location)
+    sport_name = payload.new_sport_name.strip() if payload.new_sport_name else payload.sport
+    sport_slug = tournament_slugify(sport_name)
+    if payload.new_sport_name and not row("SELECT slug FROM sports WHERE slug = ?", (sport_slug,)):
+        execute("INSERT INTO sports(slug, name, active, color) VALUES (?, ?, ?, ?)", (sport_slug, sport_name, 1, payload.accent or "emerald"))
+        execute(
+            """INSERT INTO sport_home_visibility(sport_slug, show_on_home, sort_order, updated_by)
+               VALUES (?, ?, ?, ?) ON CONFLICT(sport_slug) DO UPDATE SET show_on_home = excluded.show_on_home""",
+            (sport_slug, int(payload.show_on_home), 99, user["id"]),
+        )
+    tournament_slug = tournament_slugify(payload.slug or payload.name)
+    base_slug = tournament_slug
+    counter = 2
+    while row("SELECT slug FROM tournaments WHERE slug = ?", (tournament_slug,)):
+        tournament_slug = f"{base_slug}-{counter}"
+        counter += 1
+    draft = payload.model_dump()
+    computed_status = runtime_status(draft)
+    computed_accent = accent_for_status(computed_status, payload.accent)
+    execute(
+        """INSERT INTO tournaments(slug, name, sport, status, location, date, registration_start, registration_end, teams, capacity, team_size,
+          min_team_size, max_team_size, prize, image, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            tournament_slug,
+            payload.name,
+            sport_name,
+            computed_status,
+            payload.location,
+            payload.date,
+            payload.registration_start,
+            payload.registration_end,
+            payload.teams,
+            payload.capacity,
+            payload.team_size,
+            payload.min_team_size,
+            payload.max_team_size,
+            payload.prize,
+            payload.image,
+            computed_accent,
+            payload.address,
+            payload.sport_description,
+            payload.tournament_description,
+            json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
+            int(payload.show_on_home),
+        ),
+    )
+    _save_tournament_children(tournament_slug, payload)
+    log(user["email"], "tournament_created", "tournament", tournament_slug, f"Created {payload.name}")
+    return ok(_tournament_detail(tournament_slug), "Tournament created")
+
+
+@router.patch("/tournaments/{tournament_slug}")
+def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_city_access(user, item["location"])
+    ensure_city_access(user, payload.location)
+    sport_name = payload.new_sport_name.strip() if payload.new_sport_name else payload.sport
+    sport_slug = tournament_slugify(sport_name)
+    if payload.new_sport_name and not row("SELECT slug FROM sports WHERE slug = ?", (sport_slug,)):
+        execute("INSERT INTO sports(slug, name, active, color) VALUES (?, ?, ?, ?)", (sport_slug, sport_name, 1, payload.accent or "emerald"))
+    draft = payload.model_dump()
+    computed_status = runtime_status(draft)
+    computed_accent = accent_for_status(computed_status, payload.accent)
+    execute(
+        """UPDATE tournaments SET name = ?, sport = ?, status = ?, location = ?, date = ?, registration_start = ?, registration_end = ?,
+          teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, prize = ?, image = ?, accent = ?, address = ?,
+          sport_description = ?, tournament_description = ?, fee_breakdown_json = ?, show_on_home = ? WHERE slug = ?""",
+        (
+            payload.name,
+            sport_name,
+            computed_status,
+            payload.location,
+            payload.date,
+            payload.registration_start,
+            payload.registration_end,
+            payload.teams,
+            payload.capacity,
+            payload.team_size,
+            payload.min_team_size,
+            payload.max_team_size,
+            payload.prize,
+            payload.image,
+            computed_accent,
+            payload.address,
+            payload.sport_description,
+            payload.tournament_description,
+            json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
+            int(payload.show_on_home),
+            tournament_slug,
+        ),
+    )
+    _save_tournament_children(tournament_slug, payload)
+    log(user["email"], "tournament_updated", "tournament", tournament_slug, f"Updated {payload.name}")
+    return ok(_tournament_detail(tournament_slug), "Tournament updated")
+
+
+@router.delete("/tournaments/{tournament_slug}")
+def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_city_access(user, item["location"])
+    blockers = row("SELECT COUNT(*) AS count FROM registrations WHERE tournament_slug = ?", (tournament_slug,))
+    if blockers and blockers["count"]:
+        raise HTTPException(status_code=409, detail="Tournament has registrations. Archive or complete it instead of deleting.")
+    for table in ["tournament_prizes", "tournament_cities", "bracket_connections", "bracket_nodes", "notification_events"]:
+        execute(f"DELETE FROM {table} WHERE tournament_slug = ?", (tournament_slug,))
+    execute("DELETE FROM tournaments WHERE slug = ?", (tournament_slug,))
+    log(user["email"], "tournament_deleted", "tournament", tournament_slug, f"Deleted {item['name']}")
+    return ok({"deleted": True, "slug": tournament_slug}, "Tournament deleted")
 
 
 @router.get("/news")
