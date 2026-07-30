@@ -405,6 +405,7 @@ export const newsPosts = [
     tournamentSlug: "mumbai-premier-bash",
     city: "Mumbai",
     status: "Published",
+    highlight: true,
     date: "Jul 25, 2026",
     blocks: [
       { type: "heading", content: "Championship final recap" },
@@ -422,6 +423,7 @@ export const newsPosts = [
     tournamentSlug: "bangalore-corporate-t20",
     city: "Bengaluru",
     status: "Published",
+    highlight: true,
     date: "Jul 25, 2026",
     blocks: [
       { type: "heading", content: "Live match intelligence" },
@@ -439,6 +441,7 @@ export const newsPosts = [
     tournamentSlug: "national-youth-football",
     city: "Delhi",
     status: "Published",
+    highlight: false,
     date: "Jul 24, 2026",
     blocks: [
       { type: "heading", content: "Registration guidance" },
@@ -456,6 +459,7 @@ export const newsPosts = [
     tournamentSlug: "kerala-volleyball-classic",
     city: "Kochi",
     status: "Published",
+    highlight: false,
     date: "Dec 14, 2025",
     blocks: [
       { type: "heading", content: "Completed tournament archive" },

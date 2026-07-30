@@ -35,10 +35,10 @@ def dashboard(user: dict = Depends(current_user)):
               t.image
             FROM registrations r
             LEFT JOIN tournaments t ON t.slug = r.tournament_slug
-            WHERE r.user_id = ? OR lower(r.email) = lower(?)
+            WHERE r.user_id = ?
             ORDER BY r.created_at DESC
             """,
-            (user["id"], user["email"]),
+            (user["id"],),
         )
         registration_ids = [item["id"] for item in registrations]
         payments = []

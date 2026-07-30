@@ -62,8 +62,18 @@ class Settings:
     twilio_from_number: str = os.getenv("TWILIO_FROM_NUMBER", "")
     twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
     twilio_default_to: str = os.getenv("TWILIO_DEFAULT_TO", "+916374409006")
+    email_provider: str = os.getenv("EMAIL_PROVIDER", "brevo" if os.getenv("BREVO_API_KEY") else "resend").lower()
+    brevo_api_key: str = os.getenv("BREVO_API_KEY", "")
+    brevo_sender_email: str = os.getenv("BREVO_SENDER_EMAIL", "smartsportz.in@gmail.com")
+    brevo_sender_name: str = os.getenv("BREVO_SENDER_NAME", "Smart Sportz")
+    brevo_force_test_recipient: bool = os.getenv("BREVO_FORCE_TEST_RECIPIENT", "false").lower() == "true"
+    brevo_test_to_email: str = os.getenv("BREVO_TEST_TO_EMAIL", "smartsportz.in@gmail.com")
     resend_api_key: str = os.getenv("RESEND_API_KEY", "")
-    resend_from_email: str = os.getenv("RESEND_FROM_EMAIL", "Smart Sportz <onboarding@resend.dev>")
+    resend_from_email: str = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+    resend_force_test_recipient: bool = os.getenv("RESEND_FORCE_TEST_RECIPIENT", "false").lower() == "true"
+    resend_account_email: str = os.getenv("RESEND_ACCOUNT_EMAIL", "smartsportz.in@gmail.com")
+    resend_test_to_email: str = os.getenv("RESEND_TEST_TO_EMAIL", os.getenv("RESEND_ACCOUNT_EMAIL", "smartsportz.in@gmail.com"))
+    privileged_otp_email: str = os.getenv("PRIVILEGED_OTP_EMAIL", "smartsportz.in@gmail.com")
 
 
 settings = Settings()

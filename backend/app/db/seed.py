@@ -27,6 +27,101 @@ def prize_rows(tournament_slug: str, total_amount: int) -> list[tuple[str, tuple
     ]
 
 
+def live_detail_update_rows() -> list[tuple[str, tuple]]:
+    return [
+        (
+            "UPDATE live_matches SET youtube_url = ?, venue = ?, match_clock = ?, current_players_json = ?, substitutes_json = ?, player_scores_json = ?, team_stats_json = ? WHERE id = ?",
+            (
+                "https://www.youtube.com/embed/ThqHtJOfCK0",
+                "M. Chinnaswamy Stadium, Bengaluru",
+                "18.4 overs",
+                json.dumps([
+                    {"team": "India Forge", "name": "Rohan Sharma", "role": "Striker", "status": "Batting", "score": "74 (42)"},
+                    {"team": "India Forge", "name": "Nikhil Rao", "role": "Non-striker", "status": "Batting", "score": "39 (24)"},
+                    {"team": "England XI", "name": "James Carter", "role": "Bowler", "status": "Bowling", "score": "2/28"},
+                    {"team": "England XI", "name": "Owen Smith", "role": "Keeper", "status": "Fielding", "score": "1 catch"},
+                ]),
+                json.dumps([
+                    {"team": "India Forge", "name": "Amit Verma", "role": "Impact batter"},
+                    {"team": "India Forge", "name": "Karan Bedi", "role": "Seam option"},
+                    {"team": "England XI", "name": "Liam Brooks", "role": "Death overs"},
+                    {"team": "England XI", "name": "Noah Ellis", "role": "All-rounder"},
+                ]),
+                json.dumps([
+                    {"team": "India Forge", "player": "Rohan Sharma", "score": "74 runs", "detail": "6 fours, 3 sixes", "impact": 94},
+                    {"team": "India Forge", "player": "Nikhil Rao", "score": "39 runs", "detail": "Strike rate 162", "impact": 81},
+                    {"team": "England XI", "player": "James Carter", "score": "2 wickets", "detail": "Economy 6.2", "impact": 88},
+                    {"team": "England XI", "player": "Owen Smith", "score": "1 catch", "detail": "Deep square leg", "impact": 72},
+                ]),
+                json.dumps({
+                    "home": {"possession": 62, "shots": "18 boundaries", "accuracy": "8.36 RR", "momentum": "High"},
+                    "away": {"possession": 38, "shots": "4 wickets", "accuracy": "6.20 economy", "momentum": "Holding"},
+                }),
+                "match-48",
+            ),
+        ),
+        (
+            "UPDATE live_matches SET youtube_url = ?, venue = ?, match_clock = ?, current_players_json = ?, substitutes_json = ?, player_scores_json = ?, team_stats_json = ? WHERE id = ?",
+            (
+                "https://www.youtube.com/embed/ThqHtJOfCK0",
+                "Jawaharlal Nehru Indoor Arena, Chennai",
+                "Q3 08:39",
+                json.dumps([
+                    {"team": "Titans United", "name": "Marcus Lee", "role": "Point Guard", "status": "On court", "score": "18 pts"},
+                    {"team": "Titans United", "name": "Dev Arora", "role": "Forward", "status": "On court", "score": "12 pts"},
+                    {"team": "Phoenix Fire", "name": "Ryan Cole", "role": "Shooting Guard", "status": "On court", "score": "21 pts"},
+                    {"team": "Phoenix Fire", "name": "Arun Das", "role": "Center", "status": "On court", "score": "9 reb"},
+                ]),
+                json.dumps([
+                    {"team": "Titans United", "name": "Harish Menon", "role": "Guard rotation"},
+                    {"team": "Phoenix Fire", "name": "Neil Thomas", "role": "Defensive wing"},
+                ]),
+                json.dumps([
+                    {"team": "Titans United", "player": "Marcus Lee", "score": "18 pts", "detail": "5 ast, 2 stl", "impact": 86},
+                    {"team": "Phoenix Fire", "player": "Ryan Cole", "score": "21 pts", "detail": "4/7 from three", "impact": 91},
+                ]),
+                json.dumps({
+                    "home": {"possession": 48, "shots": "41 FG attempts", "accuracy": "47% FG", "momentum": "Chasing"},
+                    "away": {"possession": 52, "shots": "39 FG attempts", "accuracy": "51% FG", "momentum": "Control"},
+                }),
+                "match-72",
+            ),
+        ),
+        (
+            "UPDATE live_matches SET youtube_url = ?, venue = ?, match_clock = ?, current_players_json = ?, substitutes_json = ?, player_scores_json = ?, team_stats_json = ? WHERE id = ?",
+            (
+                "https://www.youtube.com/embed/ThqHtJOfCK0",
+                "Delhi Youth Sports Complex",
+                "78 min",
+                json.dumps([
+                    {"team": "Bengaluru Bulls", "name": "Aditya Rao", "role": "Forward", "status": "Attacking", "score": "1 goal"},
+                    {"team": "Bengaluru Bulls", "name": "Manu Iyer", "role": "Midfield", "status": "On pitch", "score": "1 assist"},
+                    {"team": "Mumbai Mavericks", "name": "Kabir Shah", "role": "Forward", "status": "Pressing", "score": "1 goal"},
+                    {"team": "Mumbai Mavericks", "name": "Rohit Sen", "role": "Goalkeeper", "status": "On pitch", "score": "4 saves"},
+                ]),
+                json.dumps([
+                    {"team": "Bengaluru Bulls", "name": "Sahil Khan", "role": "Fresh legs"},
+                    {"team": "Mumbai Mavericks", "name": "Vivaan Mehta", "role": "Late attack"},
+                ]),
+                json.dumps([
+                    {"team": "Bengaluru Bulls", "player": "Aditya Rao", "score": "1 goal", "detail": "3 shots on target", "impact": 84},
+                    {"team": "Mumbai Mavericks", "player": "Rohit Sen", "score": "4 saves", "detail": "Penalty stop", "impact": 89},
+                ]),
+                json.dumps({
+                    "home": {"possession": 54, "shots": "12 shots", "accuracy": "6 on target", "momentum": "Pressing"},
+                    "away": {"possession": 46, "shots": "9 shots", "accuracy": "4 on target", "momentum": "Counter"},
+                }),
+                "match-21",
+            ),
+        ),
+    ]
+
+
+def seed_live_match_details() -> None:
+    if row("SELECT id FROM live_matches LIMIT 1"):
+        execute_many(live_detail_update_rows())
+
+
 def seed_data() -> None:
     if row("SELECT id FROM users LIMIT 1"):
         return
@@ -91,7 +186,14 @@ def seed_data() -> None:
     statements += prize_rows("national-youth-football", 85000000)
     statements += prize_rows("pro-elite-basketball", 100000000)
     statements += [("INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in teams]
-    statements += [("INSERT INTO live_matches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in matches]
+    statements += [(
+        """
+        INSERT INTO live_matches (
+          id, tournament, sport, home, away, score, away_score, stage, status, image
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        item,
+    ) for item in matches]
     statements += [("INSERT INTO timeline_events(match_id, time, type, text, score, created_at) VALUES (?, ?, ?, ?, ?, ?)", item) for item in timeline]
     statements += [("INSERT INTO cms_content VALUES (?, ?, ?, ?, ?, ?)", item) for item in cms]
     execute_many(statements)
@@ -108,6 +210,7 @@ def seed_operational_data() -> None:
         and row("SELECT id FROM leaderboard_records LIMIT 1")
         and row("SELECT id FROM tournament_prizes LIMIT 1")
     )
+    seed_live_match_details()
     if operational_ready:
         return
     statements: list[tuple[str, tuple]] = []
@@ -118,6 +221,7 @@ def seed_operational_data() -> None:
     execute("UPDATE tournaments SET registration_start = 'Jul 01, 2026', registration_end = 'Jul 20, 2026' WHERE slug = 'bangalore-corporate-t20'")
     execute("UPDATE tournaments SET registration_start = 'Aug 01, 2026', registration_end = 'Sep 05, 2026' WHERE slug = 'national-youth-football'")
     execute("UPDATE tournaments SET registration_start = 'Jul 24, 2026', registration_end = 'Sep 25, 2026' WHERE slug = 'pro-elite-basketball'")
+    statements += live_detail_update_rows()
     execute("UPDATE registrations SET city = 'Bengaluru' WHERE id IN ('reg-101', 'reg-103') AND city = ''")
     execute("UPDATE registrations SET city = 'Mysuru' WHERE id = 'reg-102' AND city = ''")
     if not row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",)):
@@ -245,12 +349,20 @@ def seed_operational_data() -> None:
     if not row("SELECT slug FROM news_posts LIMIT 1"):
         published = now()
         news_posts = [
-            ("mumbai-mavericks-lift-premier-bash", "Mumbai Mavericks Lift Premier Bash Trophy", "Winner team ceremony, MVP moments, and final over highlights from Mumbai Premier Bash.", "/assets/cricket-stadium.png", "Winner Teams", "Cricket", "mumbai-premier-bash", "Mumbai", "published", manager["id"] if manager else None, published, published, published),
-            ("corporate-t20-live-score-surge", "Corporate T20 Live Score Surge", "India Forge take control with a late batting burst and updated live match records.", "/assets/cricket-stadium.png", "Match Updates", "Cricket", "bangalore-corporate-t20", "Bengaluru", "published", manager["id"] if manager else None, published, published, published),
-            ("football-cup-registration-opens-delhi", "Youth Football Cup Registration Window Opens", "Delhi, Noida, and Gurugram teams can prepare rosters before the official deadline.", "/assets/football-match.png", "Tournament Updates", "Football", "national-youth-football", "Delhi", "published", manager["id"] if manager else None, published, published, published),
-            ("kerala-volleyball-classic-archive", "Kerala Volleyball Classic Archived Records", "Completed match reports, player scorecards, and winner records are now available.", "/assets/volleyball-match.png", "Winner Teams", "Volleyball", "kerala-volleyball-classic", "Kochi", "published", manager["id"] if manager else None, published, published, published),
+            ("mumbai-mavericks-lift-premier-bash", "Mumbai Mavericks Lift Premier Bash Trophy", "Winner team ceremony, MVP moments, and final over highlights from Mumbai Premier Bash.", "/assets/cricket-stadium.png", "Winner Teams", "Cricket", "mumbai-premier-bash", "Mumbai", "published", 1, manager["id"] if manager else None, published, published, published),
+            ("corporate-t20-live-score-surge", "Corporate T20 Live Score Surge", "India Forge take control with a late batting burst and updated live match records.", "/assets/cricket-stadium.png", "Match Updates", "Cricket", "bangalore-corporate-t20", "Bengaluru", "published", 1, manager["id"] if manager else None, published, published, published),
+            ("football-cup-registration-opens-delhi", "Youth Football Cup Registration Window Opens", "Delhi, Noida, and Gurugram teams can prepare rosters before the official deadline.", "/assets/football-match.png", "Tournament Updates", "Football", "national-youth-football", "Delhi", "published", 0, manager["id"] if manager else None, published, published, published),
+            ("kerala-volleyball-classic-archive", "Kerala Volleyball Classic Archived Records", "Completed match reports, player scorecards, and winner records are now available.", "/assets/volleyball-match.png", "Winner Teams", "Volleyball", "kerala-volleyball-classic", "Kochi", "published", 0, manager["id"] if manager else None, published, published, published),
         ]
-        statements += [("INSERT INTO news_posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in news_posts]
+        statements += [(
+            """
+            INSERT INTO news_posts (
+              slug, title, short_description, image, category, sport, tournament_slug,
+              city, status, is_highlight, author_id, published_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            item,
+        ) for item in news_posts]
         news_blocks = {
             "mumbai-mavericks-lift-premier-bash": [
                 ("heading", "Championship final recap"),

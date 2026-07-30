@@ -291,6 +291,13 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
           <label>Sport<select>{sports.map((sport) => <option key={sport.slug}>{sport.name}</option>)}</select></label>
           <label>Tournament<select>{assignedTournaments.map((item) => <option key={item.slug}>{item.name}</option>)}</select></label>
         </div>
+        <label className="visibility-row news-highlight-toggle">
+          <span>
+            <b>Display on highlight news</b>
+            <small>Show this story in the top sliding news banner.</small>
+          </span>
+          <input type="checkbox" />
+        </label>
         <label>Short description<textarea placeholder="Summary shown on news cards" /></label>
         <label>Article section<textarea placeholder="Add heading, paragraph, quote, list, or image block content" /></label>
         <div className="hero-actions"><button className="btn btn-primary">Save Draft</button><button className="btn btn-secondary">Publish</button></div>

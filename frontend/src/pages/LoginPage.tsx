@@ -42,13 +42,13 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
       if (mode === "signup") {
         const otpChallenge = await startSignup({ name, email, phone, password, channel });
         setChallenge(otpChallenge);
-        setOtp(otpChallenge.devOtp ?? "");
+        setOtp("");
         return;
       }
       const result = await login(email, password);
       if ("otpRequired" in result) {
         setChallenge(result);
-        setOtp(result.devOtp ?? "");
+        setOtp("");
         return;
       }
       const user = result;
@@ -91,7 +91,6 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
             </div>
           )}
           {challenge && <label>OTP code<input placeholder="4 digit code" value={otp} onChange={(event) => setOtp(event.target.value)} maxLength={8} /></label>}
-          {challenge?.devOtp && <div className="form-hint">Development OTP: <b>{challenge.devOtp}</b></div>}
           {error && <div className="form-alert">{error}</div>}
           <button type="submit" className="btn btn-primary wide" disabled={loading}>
             {loading ? "Please wait..." : challenge ? "Verify OTP" : recovery ? "Send OTP" : mode === "signup" ? "Create and verify account" : "Sign in"}

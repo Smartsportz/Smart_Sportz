@@ -82,7 +82,14 @@ CREATE TABLE IF NOT EXISTS live_matches (
   away_score TEXT NOT NULL,
   stage TEXT NOT NULL,
   status TEXT NOT NULL,
-  image TEXT NOT NULL
+  image TEXT NOT NULL,
+  youtube_url TEXT NOT NULL DEFAULT '',
+  venue TEXT NOT NULL DEFAULT '',
+  match_clock TEXT NOT NULL DEFAULT '',
+  current_players_json TEXT NOT NULL DEFAULT '[]',
+  substitutes_json TEXT NOT NULL DEFAULT '[]',
+  player_scores_json TEXT NOT NULL DEFAULT '[]',
+  team_stats_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS timeline_events (
@@ -220,6 +227,7 @@ CREATE TABLE IF NOT EXISTS news_posts (
   tournament_slug TEXT,
   city TEXT NOT NULL,
   status TEXT NOT NULL,
+  is_highlight INTEGER NOT NULL DEFAULT 0,
   author_id TEXT,
   published_at TEXT,
   created_at TEXT NOT NULL,
@@ -420,6 +428,18 @@ def _apply_operational_schema(path=None) -> None:
         }
         for column, definition in user_columns.items():
             _add_column(conn, "users", column, definition)
+        _add_column(conn, "news_posts", "is_highlight", "INTEGER NOT NULL DEFAULT 0")
+        live_match_columns = {
+            "youtube_url": "TEXT NOT NULL DEFAULT ''",
+            "venue": "TEXT NOT NULL DEFAULT ''",
+            "match_clock": "TEXT NOT NULL DEFAULT ''",
+            "current_players_json": "TEXT NOT NULL DEFAULT '[]'",
+            "substitutes_json": "TEXT NOT NULL DEFAULT '[]'",
+            "player_scores_json": "TEXT NOT NULL DEFAULT '[]'",
+            "team_stats_json": "TEXT NOT NULL DEFAULT '{}'",
+        }
+        for column, definition in live_match_columns.items():
+            _add_column(conn, "live_matches", column, definition)
         if using_postgres():
             conn.commit()
             return

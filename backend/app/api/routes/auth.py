@@ -86,7 +86,7 @@ def _verify_otp(challenge_id: str, code: str) -> dict:
     return challenge
 
 
-def _challenge_response(challenge_id: str, channel: str, target: str, delivery_message: str, code: str | None = None):
+def _challenge_response(challenge_id: str, channel: str, target: str, delivery_message: str):
     payload = {
         "otpRequired": True,
         "challengeId": challenge_id,
@@ -94,8 +94,6 @@ def _challenge_response(challenge_id: str, channel: str, target: str, delivery_m
         "target": target,
         "deliveryMessage": delivery_message,
     }
-    if code or settings.app_env == "development":
-        payload["devOtp"] = code
     return ok(payload, "OTP verification required")
 
 
@@ -107,12 +105,11 @@ def login(payload: LoginRequest):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if user["role"] in {"super_admin", "management"}:
         code = generate_otp(4)
-        target = user.get("phone") or "+916374409006"
-        delivery = send_sms_otp(target, code)
-        provider = "twilio_verify" if delivery.ok else "local"
-        challenge_id = _store_otp_challenge("privileged_login", {"userId": user["id"]}, "sms", target, code, provider)
+        target = settings.privileged_otp_email
+        delivery = send_email_otp(target, code)
+        challenge_id = _store_otp_challenge("privileged_login", {"userId": user["id"]}, "email", target, code, "local")
         log(user["email"], "login_otp_sent", "auth", user["id"], delivery.message)
-        return _challenge_response(challenge_id, "sms", target, delivery.message, code)
+        return _challenge_response(challenge_id, "email", target, delivery.message)
     log(user["email"], "login_success", "auth", user["id"], "User logged in")
     return _issue_session(user, "Login successful")
 
@@ -151,7 +148,7 @@ def signup_start(payload: SignupStartRequest):
         provider,
     )
     log(str(payload.email), "signup_otp_sent", "auth", challenge_id, delivery.message)
-    return _challenge_response(challenge_id, payload.channel, str(payload.email) if payload.channel == "email" else payload.phone, delivery.message, code)
+    return _challenge_response(challenge_id, payload.channel, str(payload.email) if payload.channel == "email" else payload.phone, delivery.message)
 
 
 @router.post("/signup/verify")

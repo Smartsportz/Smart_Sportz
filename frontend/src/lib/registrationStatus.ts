@@ -20,12 +20,28 @@ export type CompletedRegistrationRecord = {
 };
 
 const completedRegistrationsKey = "smart-sportz-completed-registrations";
+const currentUserKey = "smart-sportz-user";
+
+function currentUserEmail() {
+  if (typeof localStorage === "undefined") return "";
+  try {
+    const raw = localStorage.getItem(currentUserKey);
+    if (!raw) return "";
+    const user = JSON.parse(raw) as { email?: string };
+    return user.email?.toLowerCase() ?? "";
+  } catch {
+    return "";
+  }
+}
 
 export function readCompletedRegistrations() {
   if (typeof localStorage === "undefined") return [] as CompletedRegistrationRecord[];
   try {
     const raw = localStorage.getItem(completedRegistrationsKey);
-    return raw ? JSON.parse(raw) as CompletedRegistrationRecord[] : [];
+    const records = raw ? JSON.parse(raw) as CompletedRegistrationRecord[] : [];
+    const email = currentUserEmail();
+    if (!email) return [];
+    return records.filter((item) => item.email.toLowerCase() === email);
   } catch {
     return [];
   }
@@ -37,6 +53,8 @@ export function getCompletedRegistration(tournamentSlug: string) {
 
 export function saveCompletedRegistration(record: CompletedRegistrationRecord) {
   if (typeof localStorage === "undefined") return;
-  const current = readCompletedRegistrations().filter((item) => item.tournamentSlug !== record.tournamentSlug);
+  const raw = localStorage.getItem(completedRegistrationsKey);
+  const allRecords = raw ? JSON.parse(raw) as CompletedRegistrationRecord[] : [];
+  const current = allRecords.filter((item) => !(item.tournamentSlug === record.tournamentSlug && item.email.toLowerCase() === record.email.toLowerCase()));
   localStorage.setItem(completedRegistrationsKey, JSON.stringify([record, ...current]));
 }

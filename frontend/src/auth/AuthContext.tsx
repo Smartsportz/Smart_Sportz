@@ -33,7 +33,6 @@ export type OtpChallenge = {
   channel: "email" | "sms";
   target: string;
   deliveryMessage: string;
-  devOtp?: string;
 };
 
 export type SignupPayload = {

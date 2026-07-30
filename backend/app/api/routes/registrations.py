@@ -40,6 +40,14 @@ def _prizes_for_tournament(tournament_slug: str) -> list[dict]:
     )
 
 
+def _ensure_registration_access(item: dict, user: dict) -> None:
+    if user["role"] in {"super_admin", "management"}:
+        return
+    if item.get("user_id") == user["id"]:
+        return
+    raise HTTPException(status_code=403, detail="You do not have access to this registration")
+
+
 @router.post("")
 def create_registration(payload: RegistrationCreate, user: dict = Depends(current_user)):
     apply_registration_window_statuses()
@@ -136,10 +144,11 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
 
 
 @router.get("/{registration_id}")
-def registration_detail(registration_id: str):
+def registration_detail(registration_id: str, user: dict = Depends(current_user)):
     item = row("SELECT * FROM registrations WHERE id = ?", (registration_id,))
     if not item:
         raise HTTPException(status_code=404, detail="Registration not found")
+    _ensure_registration_access(item, user)
     item["payments"] = rows("SELECT * FROM payments WHERE registration_id = ?", (registration_id,))
     item["members"] = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (registration_id,))
     item["documents"] = rows("SELECT document_type, file_name, file_path, status, uploaded_at FROM registration_documents WHERE registration_id = ?", (registration_id,))
@@ -148,12 +157,13 @@ def registration_detail(registration_id: str):
 
 
 @router.post("/{registration_id}/local-payment")
-def local_payment(registration_id: str, payload: LocalPaymentCreate):
+def local_payment(registration_id: str, payload: LocalPaymentCreate, user: dict = Depends(current_user)):
     if payload.registration_id != registration_id:
         raise HTTPException(status_code=400, detail="Registration ID mismatch")
     item = row("SELECT * FROM registrations WHERE id = ?", (registration_id,))
     if not item:
         raise HTTPException(status_code=404, detail="Registration not found")
+    _ensure_registration_access(item, user)
     payment_id = f"pay_{uuid4().hex[:12]}"
     receipt_number = f"SS-RCPT-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:5].upper()}"
     confirmation_code = _confirmation_code(registration_id)

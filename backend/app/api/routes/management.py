@@ -102,9 +102,9 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
     now = datetime.now(timezone.utc).isoformat()
     published_at = now if payload.status == "published" else None
     execute(
-        """INSERT INTO news_posts(slug, title, short_description, image, category, sport, tournament_slug, city, status, author_id, published_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, user["id"], published_at, now, now),
+        """INSERT INTO news_posts(slug, title, short_description, image, category, sport, tournament_slug, city, status, is_highlight, author_id, published_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, int(payload.is_highlight), user["id"], published_at, now, now),
     )
     statements = [
         (
@@ -130,9 +130,9 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
     published_at = item["published_at"] or (now if payload.status == "published" else None)
     execute(
         """UPDATE news_posts
-           SET title = ?, short_description = ?, image = ?, category = ?, sport = ?, tournament_slug = ?, city = ?, status = ?, published_at = ?, updated_at = ?
+           SET title = ?, short_description = ?, image = ?, category = ?, sport = ?, tournament_slug = ?, city = ?, status = ?, is_highlight = ?, published_at = ?, updated_at = ?
            WHERE slug = ?""",
-        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, published_at, now, slug),
+        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, int(payload.is_highlight), published_at, now, slug),
     )
     execute("DELETE FROM news_blocks WHERE post_slug = ?", (slug,))
     statements = [

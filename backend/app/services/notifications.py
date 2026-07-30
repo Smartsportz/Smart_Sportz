@@ -116,13 +116,17 @@ def send_sms_message(phone: str, message: str) -> DeliveryResult:
 
 
 def send_email(to_email: str, subject: str, html: str, text: str | None = None) -> DeliveryResult:
+    if settings.email_provider == "brevo":
+        return send_brevo_email(to_email, subject, html, text)
     if not settings.resend_api_key:
         return DeliveryResult(False, "resend", "RESEND_API_KEY is not configured")
+    delivery_to = settings.resend_test_to_email if settings.resend_force_test_recipient else to_email
+    redirect_note = f" redirected to test inbox {delivery_to}" if delivery_to != to_email else ""
     if resend is not None:
         resend.api_key = settings.resend_api_key
         params: resend.Emails.SendParams = {
             "from": settings.resend_from_email,
-            "to": [to_email],
+            "to": [delivery_to],
             "subject": subject,
             "html": html,
         }
@@ -130,12 +134,15 @@ def send_email(to_email: str, subject: str, html: str, text: str | None = None) 
             params["text"] = text
         try:
             email = resend.Emails.send(params)
-            return DeliveryResult(True, "resend", f"Email queued {email.get('id', '')}".strip() if isinstance(email, dict) else "Email queued")
+            message = f"Email queued{redirect_note}"
+            if isinstance(email, dict) and email.get("id"):
+                message = f"{message} {email['id']}"
+            return DeliveryResult(True, "resend", message.strip())
         except Exception as exc:
             return DeliveryResult(False, "resend", str(exc))
     body: dict[str, Any] = {
         "from": settings.resend_from_email,
-        "to": [to_email],
+        "to": [delivery_to],
         "subject": subject,
         "html": html,
     }
@@ -153,6 +160,42 @@ def send_email(to_email: str, subject: str, html: str, text: str | None = None) 
         return DeliveryResult(True, "resend", f"Email queued {payload.get('id', '')}".strip())
     except Exception as exc:
         return DeliveryResult(False, "resend", str(exc))
+
+
+def send_brevo_email(to_email: str, subject: str, html: str, text: str | None = None) -> DeliveryResult:
+    if not settings.brevo_api_key:
+        return DeliveryResult(False, "brevo", "BREVO_API_KEY is not configured")
+    delivery_to = settings.brevo_test_to_email if settings.brevo_force_test_recipient else to_email
+    redirect_note = f" redirected to test inbox {delivery_to}" if delivery_to != to_email else ""
+    payload: dict[str, Any] = {
+        "sender": {"name": settings.brevo_sender_name, "email": settings.brevo_sender_email},
+        "to": [{"email": delivery_to}],
+        "subject": subject,
+        "htmlContent": html,
+    }
+    if text:
+        payload["textContent"] = text
+    request = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "api-key": settings.brevo_api_key,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8") or "{}"
+            response_payload = json.loads(body)
+        message_id = response_payload.get("messageId", "")
+        return DeliveryResult(True, "brevo", f"Email queued{redirect_note} {message_id}".strip())
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        return DeliveryResult(False, "brevo", f"HTTP {exc.code}: {error_body}")
+    except Exception as exc:
+        return DeliveryResult(False, "brevo", str(exc))
 
 
 def send_resend_sdk_test_email() -> dict[str, Any]:

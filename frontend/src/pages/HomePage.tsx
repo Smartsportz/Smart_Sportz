@@ -46,17 +46,38 @@ function readStoredNotices() {
 export function HomePage() {
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
   const leaderboardFilterRef = useRef<HTMLDivElement>(null);
-  const featuredRef = useRef<HTMLDivElement>(null);
+  const upcomingTournamentsRef = useRef<HTMLDivElement>(null);
+  const registrationOpenRef = useRef<HTMLDivElement>(null);
+  const oldTournamentsRef = useRef<HTMLDivElement>(null);
   const newsRef = useRef<HTMLDivElement>(null);
   const organizerRef = useRef<HTMLDivElement>(null);
   const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [organizerIndex, setOrganizerIndex] = useState(0);
   const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
   const runtimeTournaments = tournaments.map((item) => withRuntimeTournamentStatus(item));
-  const featured = [...runtimeTournaments].sort((a, b) => {
-    const priority = { Upcoming: 0, "Registration Open": 1, Live: 2, Completed: 3 } as Record<string, number>;
-    return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
-  });
+  const featuredGroups = [
+    {
+      key: "upcoming",
+      title: "Upcoming tournaments",
+      text: "Tournaments announced for future play. Registration opens on the published date.",
+      ref: upcomingTournamentsRef,
+      items: runtimeTournaments.filter((item) => item.status === "Upcoming"),
+    },
+    {
+      key: "registration-open",
+      title: "Open registration",
+      text: "Active registration windows where teams can enter before the closing date.",
+      ref: registrationOpenRef,
+      items: runtimeTournaments.filter((item) => item.status === "Registration Open"),
+    },
+    {
+      key: "old",
+      title: "Old tournaments",
+      text: "Completed tournament records and previous season archives.",
+      ref: oldTournamentsRef,
+      items: runtimeTournaments.filter((item) => item.status === "Completed"),
+    },
+  ].filter((group) => group.items.length > 0);
   const homeSports = sportHomeVisibility
     .filter((item) => item.showOnHome)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -253,12 +274,29 @@ export function HomePage() {
           <div>
             <p className="eyebrow">Tournament Discovery</p>
             <h2>Featured tournaments</h2>
-            <p>Premium light theme by default, designed from the Remix UI references.</p>
-          </div>        </div>
-        <div className="carousel-shell">
-          <button className="carousel-edge carousel-edge-left" type="button" aria-label="Previous featured tournaments" onClick={() => scrollCarousel(featuredRef, "left")}>&lt;</button>
-          <div className="card-grid carousel-row featured-carousel" ref={featuredRef}>{featured.map((item) => <TournamentCard key={item.slug} item={item} />)}</div>
-          <button className="carousel-edge carousel-edge-right" type="button" aria-label="Next featured tournaments" onClick={() => scrollCarousel(featuredRef, "right")}>&gt;</button>
+            <p>Grouped by status so teams can quickly find upcoming, open, and previous tournaments.</p>
+          </div>
+        </div>
+        <div className="featured-status-stack">
+          {featuredGroups.map((group) => (
+            <section className="featured-status-row" key={group.key}>
+              <div className="featured-status-head">
+                <div>
+                  <h3>{group.title}</h3>
+                  <p>{group.text}</p>
+                </div>
+                <div className="carousel-controls top-carousel-controls">
+                  <button type="button" aria-label={`Previous ${group.title}`} onClick={() => scrollCarousel(group.ref, "left")}>&lt;</button>
+                  <button type="button" aria-label={`Next ${group.title}`} onClick={() => scrollCarousel(group.ref, "right")}>&gt;</button>
+                </div>
+              </div>
+              <div className="carousel-shell">
+                <div className="card-grid carousel-row featured-carousel featured-status-carousel" ref={group.ref}>
+                  {group.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
+                </div>
+              </div>
+            </section>
+          ))}
         </div>
       </section>
       <section className="section lifecycle-section">
@@ -323,21 +361,30 @@ export function HomePage() {
             <p className="eyebrow">Old Match News</p>
             <h2>Completed match records and winner stories</h2>
             <p>Open a card to read the full news article and match archive details.</p>
-          </div>          <Link className="inline-link" to="/news">View More News</Link>
+          </div>
+          <div className="section-actions news-section-actions">
+            <Link className="inline-link" to="/news">View More News</Link>
+            <div className="carousel-controls top-carousel-controls">
+              <button type="button" aria-label="Previous completed match records" onClick={() => scrollCarousel(newsRef, "left")}>&lt;</button>
+              <button type="button" aria-label="Next completed match records" onClick={() => scrollCarousel(newsRef, "right")}>&gt;</button>
+            </div>
+          </div>
         </div>
         <div className="carousel-shell">
-          <button className="carousel-edge carousel-edge-left" type="button" aria-label="Previous completed match records" onClick={() => scrollCarousel(newsRef, "left")}>&lt;</button>
           <div className="content-grid carousel-row news-carousel" ref={newsRef}>
           {oldMatchNews.map((post) => (
-            <Link className="panel news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
-              <img src={post.image} alt="" />
-              <span className="status emerald">{post.category}</span>
-              <h3>{post.title}</h3>
-              <p>{post.shortDescription}</p>
+            <Link className="panel news-card home-news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
+              <div className="news-card-media">
+                <img src={post.image} alt="" />
+              </div>
+              <div className="news-card-copy">
+                <span className="status emerald">{post.category}</span>
+                <h3>{post.title}</h3>
+                <p>{post.shortDescription}</p>
+              </div>
             </Link>
           ))}
         </div>
-          <button className="carousel-edge carousel-edge-right" type="button" aria-label="Next completed match records" onClick={() => scrollCarousel(newsRef, "right")}>&gt;</button>
         </div>
       </section>
       <section className="section" id="home-leaderboards">

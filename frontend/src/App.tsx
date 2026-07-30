@@ -9,6 +9,8 @@ import {
   AdminPage,
   CmsSectionPage,
   ContentPage,
+  GalleryAlbumPage,
+  GalleryPage,
   HomePage,
   LeaderboardsPage,
   LiveHubPage,
@@ -110,7 +112,8 @@ export default function App() {
           <Route path="/teams" element={<TeamsPage />} />
           <Route path="/teams/:slug" element={<TeamDetailPage />} />
           <Route path="/athletes/:slug" element={<AdminPage section="players" />} />
-          <Route path="/gallery" element={<ContentPage type="gallery" />} />
+          <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/gallery/:slug" element={<GalleryAlbumPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/news/:slug" element={<NewsDetailPage />} />
           <Route path="/blog" element={<Navigate to="/news" replace />} />

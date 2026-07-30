@@ -1,4 +1,5 @@
 import { CalendarDays } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { newsPosts, tournaments } from "../data/platform";
@@ -18,40 +19,87 @@ function renderBlock(block: { type: string; content: string }, index: number) {
 
 export function NewsPage() {
   const categories = ["Winner Teams", "Match Updates", "Tournament Updates", "Announcements"];
+  const highlightedPosts = newsPosts.filter((post) => post.highlight);
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const activeHighlight = highlightedPosts[highlightIndex] ?? newsPosts[0];
+  const moveHighlight = (direction: "left" | "right") => {
+    setHighlightIndex((current) => {
+      if (!highlightedPosts.length) return 0;
+      return direction === "left"
+        ? (current - 1 + highlightedPosts.length) % highlightedPosts.length
+        : (current + 1) % highlightedPosts.length;
+    });
+  };
+
+  useEffect(() => {
+    if (highlightedPosts.length <= 1) return;
+    const timer = window.setInterval(() => moveHighlight("right"), 5200);
+    return () => window.clearInterval(timer);
+  }, [highlightedPosts.length]);
+
+  const scrollCategory = (category: string, direction: "left" | "right") => {
+    categoryRefs.current[category]?.scrollBy({ left: direction === "left" ? -360 : 360, behavior: "smooth" });
+  };
 
   return (
-    <Page>
-      <PageHero title="Sports News" text="Winner teams, tournament updates, live match stories, and old match records from Smart Sportz managers." />
-      <section className="news-feature-grid">
-        {newsPosts.slice(0, 2).map((post) => (
-          <Link className="news-feature-card click-card" to={`/news/${post.slug}`} key={post.slug}>
-            <img src={post.image} alt="" />
-            <div>
-              <span className="status emerald">{post.category}</span>
-              <h2>{post.title}</h2>
-              <p>{post.shortDescription}</p>
-              <small><CalendarDays size={14} /> {post.date} - {post.city}</small>
+    <Page className="news-page">
+      <section className="news-highlight-section">
+        <Link className="news-highlight-card click-card" to={`/news/${activeHighlight.slug}`} key={activeHighlight.slug}>
+          <img src={activeHighlight.image} alt="" />
+          <div className="news-highlight-overlay">
+            <div className="news-highlight-copy" key={`${activeHighlight.slug}-copy`}>
+              <span className="status emerald">{activeHighlight.category}</span>
+              <h2>{activeHighlight.title}</h2>
+              <p>{activeHighlight.shortDescription}</p>
+              <small><CalendarDays size={14} /> {activeHighlight.date} - {activeHighlight.city}</small>
             </div>
-          </Link>
-        ))}
+          </div>
+          <div className="news-highlight-controls carousel-controls" onClick={(event) => event.preventDefault()}>
+            <button type="button" aria-label="Previous highlight news" onClick={() => moveHighlight("left")}>&lt;</button>
+            <button type="button" aria-label="Next highlight news" onClick={() => moveHighlight("right")}>&gt;</button>
+          </div>
+        </Link>
       </section>
-      <section className="section">
-        <div className="news-category-row">
-          {categories.map((category) => <span key={category}>{category}</span>)}
-        </div>
-        <div className="content-grid">
-          {newsPosts.map((post) => (
-            <Link className="click-card" to={`/news/${post.slug}`} key={post.slug}>
-              <article className="news-card panel">
-                <img src={post.image} alt="" />
-                <span className="status blue">{post.category}</span>
-                <h3>{post.title}</h3>
-                <p>{post.shortDescription}</p>
-                <small>{post.sport} - {post.city} - {post.date}</small>
-              </article>
-            </Link>
-          ))}
-        </div>
+      <section className="section news-category-sections">
+        {categories.map((category) => {
+          const categoryPosts = newsPosts.filter((post) => post.category === category);
+          return (
+            <div className="news-category-block" key={category}>
+              <div className="news-category-heading">
+                <h2>{category}</h2>
+                <div className="news-category-heading-mobile-buttons">
+                  <button type="button" aria-label={`Previous ${category}`} onClick={() => scrollCategory(category, "left")}>&lt;</button>
+                  <button type="button" aria-label={`Next ${category}`} onClick={() => scrollCategory(category, "right")}>&gt;</button>
+                </div>
+                <div className="news-category-actions">
+                  <span>{categoryPosts.length} updates</span>
+                  <div className="carousel-controls">
+                    <button type="button" aria-label={`Previous ${category}`} onClick={() => scrollCategory(category, "left")}>&lt;</button>
+                    <button type="button" aria-label={`Next ${category}`} onClick={() => scrollCategory(category, "right")}>&gt;</button>
+                  </div>
+                </div>
+              </div>
+              <div className="news-list-grid news-category-carousel" ref={(element) => { categoryRefs.current[category] = element; }}>
+                {categoryPosts.map((post) => (
+                  <Link className="click-card" to={`/news/${post.slug}`} key={post.slug}>
+                    <article className="news-card panel">
+                      <div className="news-card-media">
+                        <img src={post.image} alt="" />
+                      </div>
+                      <div className="news-card-copy">
+                        <span className="status blue">{post.category}</span>
+                        <h3>{post.title}</h3>
+                        <p>{post.shortDescription}</p>
+                        <small>{post.sport} - {post.city} - {post.date}</small>
+                      </div>
+                    </article>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </section>
     </Page>
   );
@@ -82,14 +130,16 @@ export function NewsDetailPage() {
       <section className="article-body panel">
         {post.blocks.map(renderBlock)}
       </section>
-      <section className="section">
+      <section className="section" id="latest">
         <PageHero title="Latest Updates" text="Related tournament and city stories." />
-        <div className="content-grid">
+        <div className="content-grid news-list-grid related-news-grid">
           {related.map((item) => (
             <Link className="panel click-card news-card" to={`/news/${item.slug}`} key={item.slug}>
-              <img src={item.image} alt="" />
-              <h3>{item.title}</h3>
-              <p>{item.shortDescription}</p>
+              <div className="news-card-media"><img src={item.image} alt="" /></div>
+              <div className="news-card-copy">
+                <h3>{item.title}</h3>
+                <p>{item.shortDescription}</p>
+              </div>
             </Link>
           ))}
         </div>

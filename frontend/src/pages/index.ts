@@ -2,6 +2,7 @@ export { AdminPage } from "./AdminPage";
 export { AccessDeniedPage } from "./AccessDeniedPage";
 export { ArticleDetailPage } from "./ArticleDetailPage";
 export { ContentPage } from "./ContentPage";
+export { GalleryAlbumPage, GalleryPage } from "./GalleryPage";
 export { CmsSectionPage } from "./CmsSectionPage";
 export { HomePage } from "./HomePage";
 export { LiveHubPage } from "./LiveHubPage";

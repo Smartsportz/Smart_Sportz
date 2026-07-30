@@ -127,6 +127,7 @@ class NewsPostPayload(BaseModel):
     tournament_slug: str | None = Field(default=None, max_length=120)
     city: str = Field(min_length=2, max_length=80)
     status: str = Field(default="draft", pattern="^(draft|published)$")
+    is_highlight: bool = False
     blocks: list[NewsBlockPayload] = Field(default_factory=list)
 
 
