@@ -127,9 +127,9 @@ def seed_data() -> None:
         return
 
     users = [
-        (str(uuid4()), "admin@smartsportz.in", "Smart Sportz Admin", "super_admin", hash_password("admin123"), now()),
-        (str(uuid4()), "manager@smartsportz.in", "Tournament Manager", "management", hash_password("manager123"), now()),
-        (str(uuid4()), "user@smartsportz.in", "Aryan Player", "user", hash_password("user123"), now()),
+        (str(uuid4()), "admin@smartsportz.in", "Smart Sportz Admin", "super_admin", hash_password("admin123"), "", 1, 1, now()),
+        (str(uuid4()), "manager@smartsportz.in", "Tournament Manager", "management", hash_password("manager123"), "", 1, 1, now()),
+        (str(uuid4()), "user@smartsportz.in", "Aryan Player", "user", hash_password("user123"), "+916374409006", 1, 1, now()),
     ]
     sports = [
         ("cricket", "Cricket", 42, "emerald"),
@@ -174,13 +174,21 @@ def seed_data() -> None:
     statements += [(
         """
         INSERT INTO users (
-          id, email, name, role, password_hash, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          id, email, name, role, password_hash, phone, email_verified, phone_verified, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         item,
     ) for item in users]
     statements += [("INSERT INTO sports VALUES (?, ?, ?, ?)", item) for item in sports]
-    statements += [("INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", item) for item in tournaments]
+    statements += [(
+        """
+        INSERT INTO tournaments (
+          slug, name, sport, status, location, date, registration_start, registration_end,
+          teams, capacity, team_size, prize, image, accent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        item,
+    ) for item in tournaments]
     statements += prize_rows("mumbai-premier-bash", 250000000)
     statements += prize_rows("bangalore-corporate-t20", 120000000)
     statements += prize_rows("national-youth-football", 85000000)
@@ -226,13 +234,23 @@ def seed_operational_data() -> None:
     execute("UPDATE registrations SET city = 'Mysuru' WHERE id = 'reg-102' AND city = ''")
     if not row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",)):
         statements.append((
-            "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT INTO tournaments (
+              slug, name, sport, status, location, date, registration_start, registration_end,
+              teams, capacity, team_size, prize, image, accent
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             ("kerala-volleyball-classic", "Kerala Volleyball Classic 2025", "Volleyball", "Completed", "Kochi", "Dec 02 - Dec 12", "Oct 15, 2025", "Nov 25, 2025", 20, 20, 12, "INR 6,00,000", "/assets/volleyball-match.png", "pink"),
         ))
         statements += prize_rows("kerala-volleyball-classic", 60000000)
     if not row("SELECT slug FROM tournaments WHERE slug = ?", ("delhi-cricket-champions",)):
         statements.append((
-            "INSERT INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT INTO tournaments (
+              slug, name, sport, status, location, date, registration_start, registration_end,
+              teams, capacity, team_size, prize, image, accent
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             ("delhi-cricket-champions", "Delhi Cricket Champions 2025", "Cricket", "Completed", "Delhi", "Nov 05 - Nov 24", "Sep 20, 2025", "Oct 25, 2025", 20, 20, 16, "INR 15,00,000", "/assets/cricket-stadium.png", "blue"),
         ))
         statements += prize_rows("delhi-cricket-champions", 150000000)
