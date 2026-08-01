@@ -737,6 +737,7 @@ export function RegistrationPaymentPage() {
   const [contact, setContact] = useState(saved?.phone ?? "");
   const [card, setCard] = useState({ name: "", number: "", expiry: "", cvv: "" });
   const [qrGenerated, setQrGenerated] = useState(false);
+  const [upiChooserOpen, setUpiChooserOpen] = useState(false);
   const [status, setStatus] = useState<"idle" | "checking">("idle");
   const [error, setError] = useState("");
   const upiIntent = saved
@@ -805,8 +806,17 @@ export function RegistrationPaymentPage() {
     }
     if (!upiIntent || status === "checking") return;
     setQrGenerated(true);
-    window.location.href = upiIntent;
-    void completePayment("upi");
+    setUpiChooserOpen(true);
+  }
+
+  function launchUpiApp(href: string) {
+    if (status === "checking") return;
+    setQrGenerated(true);
+    setUpiChooserOpen(false);
+    window.location.href = href;
+    window.setTimeout(() => {
+      void completePayment("upi");
+    }, 1200);
   }
 
   function startCardFlow() {
@@ -867,16 +877,36 @@ export function RegistrationPaymentPage() {
                 <button className="btn btn-primary upi-open-button" type="button" onClick={openUpiApps} disabled={status === "checking"}>
                   <Smartphone size={17} />{status === "checking" ? "Checking payment..." : "Open UPI Apps"}
                 </button>
-                <div className="upi-app-grid" aria-label="UPI app choices">
-                  {upiAppLinks.map((app) => (
-                    <a href={app.href} key={app.label} onClick={() => setQrGenerated(true)}>{app.label}<ExternalLink size={13} /></a>
-                  ))}
-                </div>
                 <div className="upi-fallback-row">
                   <span>Desktop users can scan the QR from a phone UPI app.</span>
                   <button type="button" onClick={copyUpiLink}><Copy size={14} />Copy UPI link</button>
                 </div>
                 <button className="btn btn-secondary" type="button" onClick={startUpiFlow} disabled={status === "checking"}>{status === "checking" ? "Checking payment..." : "I have paid, check payment"}</button>
+                {upiChooserOpen && (
+                  <div className="upi-app-sheet" role="dialog" aria-modal="true" aria-label="Choose UPI app">
+                    <div className="upi-app-sheet-card">
+                      <div className="upi-sheet-head">
+                        <div>
+                          <span>Payable amount</span>
+                          <strong>{formatInr(totalPayable)}</strong>
+                        </div>
+                        <button type="button" onClick={() => setUpiChooserOpen(false)} aria-label="Close UPI app chooser">×</button>
+                      </div>
+                      <p>Select a UPI app. On mobile, your device will show installed payment apps. On PC, use the QR fallback if no app opens.</p>
+                      <div className="upi-app-grid" aria-label="UPI app choices">
+                        {upiAppLinks.map((app) => (
+                          <button type="button" onClick={() => launchUpiApp(app.href)} key={app.label}>
+                            <span>{app.label}</span>
+                            <ExternalLink size={13} />
+                          </button>
+                        ))}
+                      </div>
+                      <button className="btn btn-secondary wide" type="button" onClick={() => launchUpiApp(upiIntent)}>
+                        Use device app chooser
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="form-grid single">
