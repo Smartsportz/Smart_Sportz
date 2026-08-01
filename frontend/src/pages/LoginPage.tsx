@@ -14,11 +14,12 @@ declare global {
     google?: {
       accounts?: {
         id?: {
-          initialize: (options: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
+          initialize: (options: { client_id: string; callback: (response: { credential?: string }) => void; ux_mode?: "popup" | "redirect"; use_fedcm_for_prompt?: boolean }) => void;
           renderButton: (element: HTMLElement, options: Record<string, string | number | boolean>) => void;
         };
       };
     };
+    smartSportzGoogleClientId?: string;
   }
 }
 
@@ -27,6 +28,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleCallbackRef = useRef<(response: { credential?: string }) => void>(() => undefined);
   const from = (location.state as { from?: string } | null)?.from;
   const registerFlow = Boolean(from?.includes("/register"));
   const [email, setEmail] = useState(registerFlow ? "user@smartsportz.in" : "admin@smartsportz.in");
@@ -43,29 +45,38 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
 
   useEffect(() => {
+    googleCallbackRef.current = async (response) => {
+      if (!response.credential) {
+        setError("Google did not return a login credential.");
+        return;
+      }
+      setLoading(true);
+      setError("");
+      try {
+        const user = await loginWithGoogle(response.credential);
+        navigate(from || user.homePath, { replace: true });
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Google login failed");
+      } finally {
+        setLoading(false);
+      }
+    };
+  }, [from, loginWithGoogle, navigate]);
+
+  useEffect(() => {
     if (recovery || challenge || !googleClientId || !googleButtonRef.current) return;
     const scriptId = "google-identity-script";
     function renderGoogleButton() {
       if (!window.google?.accounts?.id || !googleButtonRef.current) return;
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async (response) => {
-          if (!response.credential) {
-            setError("Google did not return a login credential.");
-            return;
-          }
-          setLoading(true);
-          setError("");
-          try {
-            const user = await loginWithGoogle(response.credential);
-            navigate(from || user.homePath, { replace: true });
-          } catch (caught) {
-            setError(caught instanceof Error ? caught.message : "Google login failed");
-          } finally {
-            setLoading(false);
-          }
-        },
-      });
+      if (window.smartSportzGoogleClientId !== googleClientId) {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: (response) => googleCallbackRef.current(response),
+          ux_mode: "popup",
+          use_fedcm_for_prompt: false,
+        });
+        window.smartSportzGoogleClientId = googleClientId;
+      }
       googleButtonRef.current.innerHTML = "";
       window.google.accounts.id.renderButton(googleButtonRef.current, {
         theme: "outline",
@@ -86,7 +97,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
     } else {
       renderGoogleButton();
     }
-  }, [challenge, from, googleClientId, loginWithGoogle, navigate, recovery]);
+  }, [challenge, googleClientId, recovery]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

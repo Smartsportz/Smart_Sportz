@@ -63,22 +63,30 @@ async function refreshSession() {
   if (typeof localStorage === "undefined") return null;
   const refreshToken = localStorage.getItem(REFRESH_KEY);
   if (!refreshToken) return null;
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  const payload = await parseEnvelope<{
-    accessToken: string;
-    refreshToken: string;
-    user: unknown;
-  }>(response);
-  if (!response.ok || !payload.success) return null;
-  localStorage.setItem(USER_KEY, JSON.stringify(payload.data.user));
-  localStorage.setItem(TOKEN_KEY, payload.data.accessToken);
-  localStorage.setItem(REFRESH_KEY, payload.data.refreshToken);
-  window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: payload.data }));
-  return payload.data.accessToken;
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const payload = await parseEnvelope<{
+      accessToken: string;
+      refreshToken: string;
+      user: unknown;
+    }>(response);
+    if (!response.ok || !payload.success) {
+      clearStoredSession();
+      return null;
+    }
+    localStorage.setItem(USER_KEY, JSON.stringify(payload.data.user));
+    localStorage.setItem(TOKEN_KEY, payload.data.accessToken);
+    localStorage.setItem(REFRESH_KEY, payload.data.refreshToken);
+    window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: payload.data }));
+    return payload.data.accessToken;
+  } catch {
+    clearStoredSession();
+    return null;
+  }
 }
 
 function clearStoredSession() {
@@ -113,6 +121,8 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
       if (refreshedToken) {
         response = await sendRequest(path, options, refreshedToken);
         payload = await parseEnvelope<T>(response);
+      } else {
+        throw new Error("Session expired. Please login again.");
       }
     }
     if (!response.ok || !payload.success) {
