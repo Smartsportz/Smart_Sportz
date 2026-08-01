@@ -52,5 +52,7 @@ services:
         value: "45"
       - key: DASHBOARD_CACHE_TTL_SECONDS
         value: "20"
+      - key: GOOGLE_CLIENT_ID
+        value: 1052442707513-ht85fnn4ag34pvna47vv6cnorv4bto7c.apps.googleusercontent.com
       - key: ALLOWED_ORIGINS
         value: https://smart-sportz-dun.vercel.app,https://smart-sportz.vercel.app,https://smartsportz.github.io,https://smartsportz.github.io/Smart_Sportz,http://127.0.0.1:5173,http://localhost:5173

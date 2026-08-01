@@ -75,7 +75,7 @@ class Settings:
     resend_account_email: str = os.getenv("RESEND_ACCOUNT_EMAIL", "smartsportz.in@gmail.com")
     resend_test_to_email: str = os.getenv("RESEND_TEST_TO_EMAIL", os.getenv("RESEND_ACCOUNT_EMAIL", "smartsportz.in@gmail.com"))
     privileged_otp_email: str = os.getenv("PRIVILEGED_OTP_EMAIL", "smartsportz.in@gmail.com")
-    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "1052442707513-ht85fnn4ag34pvna47vv6cnorv4bto7c.apps.googleusercontent.com")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 

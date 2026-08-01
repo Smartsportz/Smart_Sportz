@@ -7,6 +7,8 @@ import { Page } from "../components/UI";
 import { assets } from "../data/platform";
 import { apiRequest } from "../lib/api";
 
+const GOOGLE_CLIENT_ID = "1052442707513-ht85fnn4ag34pvna47vv6cnorv4bto7c.apps.googleusercontent.com";
+
 declare global {
   interface Window {
     google?: {
@@ -38,7 +40,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
 
   useEffect(() => {
     if (recovery || challenge || !googleClientId || !googleButtonRef.current) return;
@@ -178,7 +180,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
               {googleClientId ? (
                 <div ref={googleButtonRef} className="google-identity-button" />
               ) : (
-                <button className="google-login-button" type="button" onClick={() => setError("Google login needs VITE_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_ID configured.")}>
+                <button className="google-login-button" type="button" onClick={() => setError("Google login could not initialize. Refresh the page and confirm this domain is allowed in Google Cloud OAuth origins.")}>
                   <span className="google-mark" aria-hidden="true">G</span>
                   Login with Google
                 </button>
