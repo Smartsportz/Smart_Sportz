@@ -13,6 +13,10 @@ class LoginOtpVerifyRequest(BaseModel):
     code: str = Field(min_length=4, max_length=8)
 
 
+class GoogleLoginRequest(BaseModel):
+    credential: str = Field(min_length=20, max_length=4096)
+
+
 class SignupStartRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
@@ -24,6 +28,16 @@ class SignupStartRequest(BaseModel):
 class SignupVerifyRequest(BaseModel):
     challenge_id: str = Field(min_length=8, max_length=120)
     code: str = Field(min_length=4, max_length=8)
+
+
+class ForgotPasswordStartRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResetRequest(BaseModel):
+    challenge_id: str = Field(min_length=8, max_length=120)
+    code: str = Field(min_length=4, max_length=8)
+    password: str = Field(min_length=6, max_length=80)
 
 
 class RefreshTokenRequest(BaseModel):

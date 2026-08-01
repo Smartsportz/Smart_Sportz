@@ -287,7 +287,7 @@ function formatFileSize(size?: number) {
 }
 
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
-  const wizard = ["Tournament", "Category", "Team Details", "Players", "Team Group Image", "Payment", "Confirmation"];
+  const wizard = ["Tournament", "Category", "Team Details", "Players", "Payment", "Confirmation"];
   return (
     <div className="registration-stepper" aria-label="Registration progress">
       {wizard.map((step, index) => (
@@ -403,26 +403,9 @@ export function RegistrationPage() {
   const [documents, setDocuments] = useState<SavedDocument[]>(() => teamGroupImageDocument(savedDraft?.documents));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 4));
+  const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 3));
   const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
   const [categoryAccepted, setCategoryAccepted] = useState(() => savedDraft?.categoryAccepted ?? false);
-
-  useEffect(() => {
-    if (getCompletedRegistration(tournament.slug)) {
-      navigate(`/tournaments/${tournament.slug}/registration-pass`, { replace: true });
-      return;
-    }
-    if (!token) return;
-    apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`, {}, token)
-      .then((registration) => {
-        const completed = completedRecordFromBackend(registration, tournament);
-        if (completed) {
-          saveCompletedRegistration(completed);
-          navigate(`/tournaments/${tournament.slug}/registration-pass`, { replace: true });
-        }
-      })
-      .catch(() => undefined);
-  }, [navigate, token, tournament.slug]);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
@@ -473,17 +456,12 @@ export function RegistrationPage() {
       .map((name, index) => ({ name: name.trim(), label: memberSlots[index] }))
       .filter((item) => item.name.length < 2)
       .map((item) => item.label);
-    const missingDocuments = documents.filter((item) => item.status !== "uploaded").map((item) => item.documentType);
     if (missingTeamFields.length) {
       showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
       return;
     }
     if (missingMemberLabels.length) {
       showMissing(`Please complete these player names with at least 2 characters: ${missingMemberLabels.join(", ")}.`);
-      return;
-    }
-    if (missingDocuments.length) {
-      showMissing(`Please upload the required team group image: ${missingDocuments.join(", ")}.`);
       return;
     }
     setSaving(true);
@@ -533,7 +511,7 @@ export function RegistrationPage() {
       };
       writeSavedRegistration(tournament.slug, payload);
       localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify({
-        activeStep: 4,
+        activeStep: 3,
         teamDetails: { ...teamDetails, teamCode: "" },
         members,
         documents,
@@ -587,8 +565,7 @@ export function RegistrationPage() {
         showMissing(`Please complete these player entries: ${missingMembers.join(", ")}.`);
         return;
       }
-      setActiveStep(4);
-      scrollRegistrationTop();
+      void continueToRoster();
       return;
     }
     void continueToRoster();
@@ -611,7 +588,7 @@ export function RegistrationPage() {
           <p className="eyebrow">SmartSportz</p>
           <h1>Tournament Registration</h1>
           <h2>Compete. Perform. Become a Champion.</h2>
-          <p>Complete accurate team, player, team image, and payment details to secure your tournament spot and avoid verification delays.</p>
+          <p>Complete accurate team, player, and payment details to secure your tournament spot and avoid verification delays.</p>
         </section>
         <RegistrationStepper activeIndex={activeStep} />
         <div className="registration-reference-layout">
@@ -726,7 +703,7 @@ export function RegistrationPage() {
               </section>
             )}
 
-            {activeStep === 4 && (
+            {false && activeStep === 4 && (
               <section className="registration-form-section">
                 <h2>Team Group Image</h2>
                 <p>Upload one clear team group photo. This image is used for manager verification and team records.</p>
@@ -749,7 +726,7 @@ export function RegistrationPage() {
 
             <div className="registration-actions">
               <button className="btn btn-secondary" type="button" onClick={goBack}><ArrowLeft size={16} />{activeStep === 0 ? "Back to tournament" : "Back"}</button>
-              <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>{saving ? "Saving..." : activeStep === 4 ? "Save & Continue" : "Continue"}<ArrowRight size={16} /></button>
+              <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>{saving ? "Saving..." : "Continue"}<ArrowRight size={16} /></button>
             </div>
           </main>
           <RegistrationSummary tournament={tournament} amount={amount} showTimeline={activeStep === 0} />
@@ -770,9 +747,9 @@ export function RegistrationRosterPage() {
       <section className="registration-hero-copy compact">
         <p className="eyebrow">Roster Review</p>
         <h1>{tournament.name}</h1>
-        <p>Confirm player names, team image, and captain details before payment.</p>
+        <p>Confirm player names and captain details before payment.</p>
       </section>
-      <RegistrationStepper activeIndex={4} />
+      <RegistrationStepper activeIndex={3} />
       {!saved ? (
         <section className="panel">
           <h2>Registration details required</h2>
@@ -789,7 +766,7 @@ export function RegistrationRosterPage() {
               <p><b>Sub-captain</b><span>{saved.subCaptainName}</span></p>
               <p><b>Coach</b><span>{saved.coachName || "Not assigned"}</span></p>
               <p><b>City</b><span>{saved.city}</span></p>
-              <p><b>Team Image</b><span>{saved.documents.filter((item) => item.status === "uploaded").length}/{saved.documents.length} uploaded</span></p>
+              {saved.documents.length > 0 && <p><b>Team Image</b><span>{saved.documents.filter((item) => item.status === "uploaded").length}/{saved.documents.length} uploaded</span></p>}
             </div>
             <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register/payment`}>Continue to payment</Link>
           </section>
@@ -928,7 +905,7 @@ export function RegistrationPaymentPage() {
         <h1>Complete Payment</h1>
         <p>Use the local Razorpay-style payment flow. Live card PIN and bank OTP stay inside Razorpay in production.</p>
       </section>
-      <RegistrationStepper activeIndex={5} />
+      <RegistrationStepper activeIndex={4} />
       {!saved ? (
         <section className="panel">
           <h2>Registration details required</h2>
@@ -1075,7 +1052,7 @@ export function RegistrationReviewPage() {
         <h1>Team Verification Pass</h1>
         <p>Your QR code is generated after payment and can be used for check-in, manager verification, and document lookup.</p>
       </section>
-      <RegistrationStepper activeIndex={6} />
+      <RegistrationStepper activeIndex={5} />
       {!saved || !payment ? (
         <section className="panel">
           <h2>Payment confirmation required</h2>

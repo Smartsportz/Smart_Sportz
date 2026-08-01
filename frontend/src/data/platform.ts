@@ -273,6 +273,150 @@ export const liveMatches = [
   },
 ];
 
+export type TournamentArchivePlayer = {
+  team: string;
+  name: string;
+  role: string;
+  score: string;
+  record: string;
+};
+
+export type TournamentArchiveMatch = {
+  id: string;
+  round: string;
+  title: string;
+  teamA: string;
+  teamB: string;
+  scoreA: string;
+  scoreB: string;
+  winner: string;
+  venue: string;
+  date: string;
+  videoUrl: string;
+  summary: string;
+  players: TournamentArchivePlayer[];
+};
+
+export type TournamentArchive = {
+  tournamentSlug: string;
+  champion: string;
+  runnerUp: string;
+  mvp: string;
+  finalScore: string;
+  attendance: string;
+  investment: string;
+  partners: string[];
+  managers: string[];
+  operations: string[];
+  description: string;
+  rounds: Array<{
+    name: string;
+    stageNote: string;
+    matches: TournamentArchiveMatch[];
+  }>;
+};
+
+const cricketArchivePlayers = (teamA: string, teamB: string): TournamentArchivePlayer[] => [
+  { team: teamA, name: "Rohan Sharma", role: "Captain", score: "74 (42)", record: "Player of the match" },
+  { team: teamA, name: "Nikhil Rao", role: "All-rounder", score: "39 (24) + 1/18", record: "Best impact phase" },
+  { team: teamA, name: "Amit Varma", role: "Bowler", score: "3/22", record: "Powerplay wickets" },
+  { team: teamB, name: "Kabir Malik", role: "Opener", score: "52 (38)", record: "Top scorer" },
+  { team: teamB, name: "Imran Ali", role: "Bowler", score: "2/26", record: "Death over control" },
+  { team: teamB, name: "Vikram Sen", role: "Keeper", score: "31 (19)", record: "Fast finish attempt" },
+];
+
+const volleyballArchivePlayers = (teamA: string, teamB: string): TournamentArchivePlayer[] => [
+  { team: teamA, name: "Arun Dev", role: "Setter", score: "42 assists", record: "Best setter" },
+  { team: teamA, name: "Kiran Thomas", role: "Outside hitter", score: "21 kills", record: "Final MVP" },
+  { team: teamA, name: "Joseph Mathew", role: "Libero", score: "18 digs", record: "Defensive leader" },
+  { team: teamB, name: "Vishnu Raj", role: "Middle blocker", score: "7 blocks", record: "Net control" },
+  { team: teamB, name: "Sameer Khan", role: "Opposite", score: "19 points", record: "Best attack run" },
+  { team: teamB, name: "Rahul Menon", role: "Setter", score: "36 assists", record: "Tempo control" },
+];
+
+export const tournamentArchives: TournamentArchive[] = [
+  {
+    tournamentSlug: "kerala-volleyball-classic",
+    champion: "Kochi Spikers",
+    runnerUp: "Calicut Smashers",
+    mvp: "Kiran Thomas",
+    finalScore: "25-21, 22-25, 25-19, 25-23",
+    attendance: "18,400 total spectators",
+    investment: "INR 38L operations, broadcast, venue, and prize support",
+    partners: ["Kerala Sports Council", "SmartSportz Media", "Pulse Hydration"],
+    managers: ["Anil Joseph - Tournament Director", "Meera Nair - Match Operations", "Rahul Das - Media Lead"],
+    operations: ["20-team knockout draw", "6 venue courts", "32 published match reports", "Digital certificates issued"],
+    description: "Completed volleyball season archive with official scorecards, round-wise media, partner visibility, manager notes, and team/player records.",
+    rounds: [
+      {
+        name: "Quarter Final",
+        stageNote: "Four elimination matches with live score verification and replay review.",
+        matches: [
+          { id: "kv-qf-1", round: "Quarter Final", title: "Kochi Spikers vs Trivandrum Aces", teamA: "Kochi Spikers", teamB: "Trivandrum Aces", scoreA: "3", scoreB: "1", winner: "Kochi Spikers", venue: "Rajiv Gandhi Indoor Stadium", date: "Dec 07, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Kochi controlled serve pressure early and closed the fourth set through repeated left-side attacks.", players: volleyballArchivePlayers("Kochi Spikers", "Trivandrum Aces") },
+          { id: "kv-qf-2", round: "Quarter Final", title: "Calicut Smashers vs Thrissur Nets", teamA: "Calicut Smashers", teamB: "Thrissur Nets", scoreA: "3", scoreB: "2", winner: "Calicut Smashers", venue: "Kochi Central Court", date: "Dec 08, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Calicut survived two match-point phases and advanced through a disciplined fifth-set block rotation.", players: volleyballArchivePlayers("Calicut Smashers", "Thrissur Nets") },
+        ],
+      },
+      {
+        name: "Semi Final",
+        stageNote: "Top four teams advanced into a two-match semi-final night.",
+        matches: [
+          { id: "kv-sf-1", round: "Semi Final", title: "Kochi Spikers vs Kannur Royals", teamA: "Kochi Spikers", teamB: "Kannur Royals", scoreA: "3", scoreB: "0", winner: "Kochi Spikers", venue: "Rajiv Gandhi Indoor Stadium", date: "Dec 10, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Kochi used quick middle combinations to keep Kannur out of system throughout the match.", players: volleyballArchivePlayers("Kochi Spikers", "Kannur Royals") },
+          { id: "kv-sf-2", round: "Semi Final", title: "Calicut Smashers vs Alappuzha Waves", teamA: "Calicut Smashers", teamB: "Alappuzha Waves", scoreA: "3", scoreB: "1", winner: "Calicut Smashers", venue: "Kochi Central Court", date: "Dec 10, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Calicut's captain led a late third-set comeback that decided the match momentum.", players: volleyballArchivePlayers("Calicut Smashers", "Alappuzha Waves") },
+        ],
+      },
+      {
+        name: "Final",
+        stageNote: "Championship match with recorded video, awards, and official player score sheet.",
+        matches: [
+          { id: "kv-final", round: "Final", title: "Kochi Spikers vs Calicut Smashers", teamA: "Kochi Spikers", teamB: "Calicut Smashers", scoreA: "3", scoreB: "1", winner: "Kochi Spikers", venue: "Rajiv Gandhi Indoor Stadium", date: "Dec 12, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Kochi lifted the Classic trophy after a balanced attacking night and strong receive formation.", players: volleyballArchivePlayers("Kochi Spikers", "Calicut Smashers") },
+        ],
+      },
+    ],
+  },
+  {
+    tournamentSlug: "delhi-cricket-champions",
+    champion: "Delhi Capitals Academy",
+    runnerUp: "Noida Strikers",
+    mvp: "Rohan Sharma",
+    finalScore: "Delhi Capitals Academy won by 18 runs",
+    attendance: "24,200 total spectators",
+    investment: "INR 52L prize pool, venue production, officials, and media operations",
+    partners: ["Delhi Cricket Board", "SmartSportz Broadcast", "Nexa Sports"],
+    managers: ["Sanjay Mehta - Tournament Director", "Pooja Arora - Registration Lead", "Farhan Khan - Score Operations"],
+    operations: ["20-team seeded knockout", "40 match scorecards", "12 recorded highlight reels", "Payment and certificate archive completed"],
+    description: "Completed cricket archive with verified scorecards, recorded round videos, partner reports, manager notes, and team/player score details.",
+    rounds: [
+      {
+        name: "Round-1",
+        stageNote: "Opening elimination matches used automated team seeding and live score validation.",
+        matches: [
+          { id: "dc-r1-1", round: "Round-1", title: "Delhi Capitals Academy vs Faridabad Lions", teamA: "Delhi Capitals Academy", teamB: "Faridabad Lions", scoreA: "168/6", scoreB: "142/9", winner: "Delhi Capitals Academy", venue: "Arun Jaitley Practice Oval", date: "Nov 07, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Delhi controlled the middle overs and defended with three wickets in the final spell.", players: cricketArchivePlayers("Delhi Capitals Academy", "Faridabad Lions") },
+          { id: "dc-r1-2", round: "Round-1", title: "Noida Strikers vs Ghaziabad United", teamA: "Noida Strikers", teamB: "Ghaziabad United", scoreA: "151/5", scoreB: "148/8", winner: "Noida Strikers", venue: "Delhi Youth Ground", date: "Nov 08, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Noida won a tight chase through calm lower-order hitting and a final-over boundary.", players: cricketArchivePlayers("Noida Strikers", "Ghaziabad United") },
+        ],
+      },
+      {
+        name: "Semi Final",
+        stageNote: "Two high-pressure matches selected the finalists through score-linked progression.",
+        matches: [
+          { id: "dc-sf-1", round: "Semi Final", title: "Delhi Capitals Academy vs South Delhi Hawks", teamA: "Delhi Capitals Academy", teamB: "South Delhi Hawks", scoreA: "181/4", scoreB: "166/7", winner: "Delhi Capitals Academy", venue: "Arun Jaitley Practice Oval", date: "Nov 20, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "A 92-run second-wicket stand took Delhi into the final with a comfortable defense.", players: cricketArchivePlayers("Delhi Capitals Academy", "South Delhi Hawks") },
+          { id: "dc-sf-2", round: "Semi Final", title: "Noida Strikers vs Gurgaon Titans", teamA: "Noida Strikers", teamB: "Gurgaon Titans", scoreA: "159/8", scoreB: "154/9", winner: "Noida Strikers", venue: "Delhi Youth Ground", date: "Nov 21, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Noida defended five runs in the final over with two yorkers and a run-out.", players: cricketArchivePlayers("Noida Strikers", "Gurgaon Titans") },
+        ],
+      },
+      {
+        name: "Final",
+        stageNote: "Final match archive includes full scorecard, recorded stream, awards, and player rankings.",
+        matches: [
+          { id: "dc-final", round: "Final", title: "Delhi Capitals Academy vs Noida Strikers", teamA: "Delhi Capitals Academy", teamB: "Noida Strikers", scoreA: "176/5", scoreB: "158/8", winner: "Delhi Capitals Academy", venue: "Arun Jaitley Practice Oval", date: "Nov 24, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Delhi won the title by 18 runs after an aggressive powerplay and disciplined death bowling.", players: cricketArchivePlayers("Delhi Capitals Academy", "Noida Strikers") },
+        ],
+      },
+    ],
+  },
+];
+
+export function archiveForTournament(slug: string) {
+  return tournamentArchives.find((archive) => archive.tournamentSlug === slug);
+}
+
 export const teams = [
   { slug: "mumbai-mavericks", name: "Mumbai Mavericks", rank: "#01", sport: "Cricket", players: 18, wins: 15, rating: 92, image: assets.cricket },
   { slug: "bangalore-blaze", name: "Bangalore Blaze", rank: "#04", sport: "Football", players: 22, wins: 12, rating: 88, image: assets.football },

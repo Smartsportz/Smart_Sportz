@@ -19,6 +19,8 @@ export type AuthUser = {
   homePath: string;
   permissions: string[];
   programs: RoleProgram[];
+  avatarUrl?: string;
+  googleLogin?: boolean;
 };
 
 type LoginResponse = {
@@ -48,6 +50,7 @@ type AuthContextValue = {
   token: string | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<AuthUser | OtpChallenge>;
+  loginWithGoogle: (credential: string) => Promise<AuthUser>;
   verifyLoginOtp: (challengeId: string, code: string) => Promise<AuthUser>;
   startSignup: (payload: SignupPayload) => Promise<OtpChallenge>;
   verifySignup: (challengeId: string, code: string) => Promise<AuthUser>;
@@ -106,6 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       if (isOtpChallenge(data)) return data;
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      localStorage.setItem(TOKEN_KEY, data.accessToken);
+      localStorage.setItem(REFRESH_KEY, data.refreshToken);
+      setUser(data.user);
+      setToken(data.accessToken);
+      return data.user;
+    },
+    async loginWithGoogle(credential: string) {
+      const data = await apiRequest<LoginResponse>("/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ credential }),
+      });
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       localStorage.setItem(TOKEN_KEY, data.accessToken);
       localStorage.setItem(REFRESH_KEY, data.refreshToken);

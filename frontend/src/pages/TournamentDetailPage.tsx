@@ -1,43 +1,25 @@
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
-import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
-import { individualScores, liveMatches, tournaments, withRuntimeTournamentStatus } from "../data/platform";
-import { apiRequest } from "../lib/api";
-import { getCompletedRegistration } from "../lib/registrationStatus";
+import { useMemo, useState } from "react";
+import { archiveForTournament, individualScores, liveMatches, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { InfoPanel, Metric } from "./shared";
 
 export function TournamentDetailPage() {
   const params = useParams();
-  const { token } = useAuth();
   const item = withRuntimeTournamentStatus(tournaments.find((t) => t.slug === params.slug) ?? tournaments[0]);
   const isLive = item.phase === "live";
   const isExisting = item.phase === "existing";
   const isFeatureOnly = Boolean((item as any).featureOnly);
   const canRegister = item.status === "Registration Open";
-  const [hasCompletedRegistration, setHasCompletedRegistration] = useState(() => Boolean(getCompletedRegistration(item.slug)));
   const isUpcomingOnly = item.status === "Upcoming";
   const isRegistrationClosed = item.status === "Registration Closed";
   const liveMatch = liveMatches.find((match) => match.tournament === item.name) ?? liveMatches[0];
+  const archive = archiveForTournament(item.slug);
+  const archivedMatches = useMemo(() => archive?.rounds.flatMap((round) => round.matches) ?? [], [archive]);
+  const [selectedArchiveMatchId, setSelectedArchiveMatchId] = useState(archivedMatches[0]?.id ?? "");
+  const selectedArchiveMatch = archivedMatches.find((match) => match.id === selectedArchiveMatchId) ?? archivedMatches[0];
 
-  useEffect(() => {
-    if (getCompletedRegistration(item.slug)) {
-      setHasCompletedRegistration(true);
-      return;
-    }
-    if (!token || isFeatureOnly) return;
-    apiRequest(`/registrations/by-tournament/${item.slug}/mine`, {}, token)
-      .then(() => setHasCompletedRegistration(true))
-      .catch(() => setHasCompletedRegistration(false));
-  }, [token, item.slug, isFeatureOnly]);
-
-  const action = isFeatureOnly ? null : hasCompletedRegistration ? (
-    <>
-      <span className="btn btn-secondary disabled-action">Already registered</span>
-      <Link className="btn btn-primary" to={`/tournaments/${item.slug}/registration-pass`}>View your register</Link>
-      <Link className="btn btn-secondary" to={`/tournaments/${item.slug}/rounds`}>Rounds</Link>
-    </>
-  ) : isLive ? (
+  const action = isFeatureOnly ? null : isLive ? (
     <>
       <Link className="btn btn-primary" to={`/live/${liveMatch.id}`}>Open live center</Link>
       <Link className="btn btn-secondary" to={`/tournaments/${item.slug}/rounds`}>Rounds</Link>
@@ -112,12 +94,106 @@ export function TournamentDetailPage() {
           </div>
         </>
       ) : isExisting ? (
-        <div className="detail-grid tournament-info-grid">
-          <InfoPanel title="Archived Rounds" items={["Round-1 scorecards", "Semi-final scorecards", "Final result", "Clickable player/team details"]} to={`/tournaments/${item.slug}/rounds`} highlight />
-          <InfoPanel title="Final Result" items={["Winner: India Forge", "Runner-up: Mumbai Mavericks", "MVP: Rohan Sharma", "Downloadable records available"]} to="/leaderboards" />
-          <InfoPanel title="Highlights" items={["Best plays", "Score history", "Match timeline", "Player records"]} to="/gallery" />
-          <InfoPanel title="Documents" items={["Final fixture PDF", "Certificates", "Invoice archive", "Officials report"]} to="/user/documents" />
-        </div>
+        archive ? (
+          <div className="archive-detail-layout">
+            <section className="panel archive-summary-panel">
+              <div>
+                <p className="eyebrow">Completed Tournament Archive</p>
+                <h2>{archive.champion} won the title</h2>
+                <p>{archive.description}</p>
+              </div>
+              <div className="archive-summary-grid">
+                <Metric label="Champion" value={archive.champion} />
+                <Metric label="Runner-up" value={archive.runnerUp} />
+                <Metric label="Final Result" value={archive.finalScore} />
+                <Metric label="MVP" value={archive.mvp} />
+              </div>
+            </section>
+
+            <section className="detail-grid tournament-info-grid">
+              <InfoPanel title="Partners" items={archive.partners} highlight />
+              <InfoPanel title="Investments" items={[archive.investment, archive.attendance]} />
+              <InfoPanel title="Managers" items={archive.managers} />
+              <InfoPanel title="Operations" items={archive.operations} />
+            </section>
+
+            <section className="panel archive-rounds-panel">
+              <div className="section-head-inline">
+                <div>
+                  <p className="eyebrow">Round Records</p>
+                  <h2>Rounds, teams, scores, and recorded match videos</h2>
+                </div>
+                <Link className="btn btn-secondary" to={`/live?archive=${item.slug}`}>Open recorded videos</Link>
+              </div>
+              <div className="archive-round-stack">
+                {archive.rounds.map((round) => (
+                  <article className="archive-round-card" key={round.name}>
+                    <div className="archive-round-head">
+                      <h3>{round.name}</h3>
+                      <p>{round.stageNote}</p>
+                    </div>
+                    <div className="archive-match-list">
+                      {round.matches.map((match) => (
+                        <button
+                          className={`archive-match-button ${selectedArchiveMatch?.id === match.id ? "active" : ""}`}
+                          type="button"
+                          onClick={() => setSelectedArchiveMatchId(match.id)}
+                          key={match.id}
+                        >
+                          <span>{match.title}</span>
+                          <strong>{match.scoreA} - {match.scoreB}</strong>
+                          <small>Winner: {match.winner}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            {selectedArchiveMatch && (
+              <section className="archive-match-detail">
+                <article className="panel archive-video-panel">
+                  <iframe
+                    title={`${selectedArchiveMatch.title} recorded video`}
+                    src={selectedArchiveMatch.videoUrl}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                  <div>
+                    <span className="status emerald">{selectedArchiveMatch.round}</span>
+                    <h2>{selectedArchiveMatch.title}</h2>
+                    <p>{selectedArchiveMatch.summary}</p>
+                    <div className="archive-score-strip">
+                      <strong>{selectedArchiveMatch.teamA}<b>{selectedArchiveMatch.scoreA}</b></strong>
+                      <span>vs</span>
+                      <strong>{selectedArchiveMatch.teamB}<b>{selectedArchiveMatch.scoreB}</b></strong>
+                    </div>
+                    <small>{selectedArchiveMatch.date} - {selectedArchiveMatch.venue}</small>
+                  </div>
+                </article>
+                <section className="panel">
+                  <h2>Team Player Score Details</h2>
+                  <DataTable
+                    columns={["Team", "Player", "Role", "Score", "Record"]}
+                    rows={selectedArchiveMatch.players.map((player) => [
+                      player.team,
+                      <Link className="inline-link" to={`/teams/${player.team.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>{player.name}</Link>,
+                      player.role,
+                      player.score,
+                      player.record,
+                    ])}
+                  />
+                </section>
+              </section>
+            )}
+          </div>
+        ) : (
+          <div className="detail-grid tournament-info-grid">
+            <InfoPanel title="Archived Rounds" items={["Round scorecards", "Semi-final scorecards", "Final result", "Clickable player/team details"]} to={`/tournaments/${item.slug}/rounds`} highlight />
+            <InfoPanel title="Final Result" items={["Winner records", "Runner-up records", "MVP scorecard", "Downloadable archives"]} to="/leaderboards" />
+          </div>
+        )
       ) : (
         <div className="detail-grid tournament-info-grid">
           <InfoPanel title="Tournament Rules" items={["Roster min/max validation", "Team member details required", "Document verification required", "Payment required before approval"]} to="/faq" />

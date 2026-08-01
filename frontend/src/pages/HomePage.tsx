@@ -101,6 +101,7 @@ export function HomePage() {
       items: runtimeTournaments.filter((item) => item.status === "Completed"),
     },
   ].filter((group) => group.items.length > 0);
+  const visibleFeaturedGroups = featuredGroups.filter((group) => group.key === "upcoming");
   const homeSports = sportHomeVisibility
     .filter((item) => item.showOnHome)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -295,7 +296,7 @@ export function HomePage() {
           </div>
         </div>
         <div className="featured-status-stack">
-          {featuredGroups.map((group) => (
+          {visibleFeaturedGroups.map((group) => (
             <section className="featured-status-row" key={group.key}>
               <div className="featured-status-head">
                 <div>

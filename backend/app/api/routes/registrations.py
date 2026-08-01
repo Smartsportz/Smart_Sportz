@@ -62,12 +62,6 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
         raise HTTPException(status_code=404, detail="Tournament not found")
     if not registration_is_open(tournament):
         raise HTTPException(status_code=409, detail="Registration is not open for this tournament")
-    paid_existing = row(
-        "SELECT id FROM registrations WHERE tournament_slug = ? AND user_id = ? AND payment_status = 'paid' ORDER BY created_at DESC LIMIT 1",
-        (payload.tournament_slug, user["id"]),
-    )
-    if paid_existing:
-        raise HTTPException(status_code=409, detail="You already completed registration and payment for this tournament")
     required_members = int(tournament.get("team_size") or 16)
     if payload.members and len(payload.members) != required_members:
         raise HTTPException(status_code=422, detail=f"This tournament requires exactly {required_members} member names, including captain and sub-captain")

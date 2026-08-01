@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { navItems, withRuntimeTournamentStatus } from "../data/platform";
-import { apiRequest } from "../lib/api";
-import { getCompletedRegistration } from "../lib/registrationStatus";
+import { archiveForTournament, navItems, withRuntimeTournamentStatus } from "../data/platform";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -250,44 +248,46 @@ export function MetricCard({
 
 export function TournamentCard({ item }: { item: any }) {
   const tournament = withRuntimeTournamentStatus(item);
-  const { token } = useAuth();
-  const [completedRegistration, setCompletedRegistration] = useState(() => Boolean(getCompletedRegistration(item.slug)));
   const isFeatureOnly = Boolean(item.featureOnly);
   const canRegister = tournament.status === "Registration Open";
   const isUpcoming = tournament.status === "Upcoming";
+  const archive = archiveForTournament(item.slug);
+  const detailChips = archive
+    ? [
+        `Champion: ${archive.champion}`,
+        archive.investment,
+        `Partners: ${archive.partners.slice(0, 2).join(", ")}`,
+        `Managers: ${archive.managers.length}`,
+      ]
+    : [
+        item.tournamentDescription || `${item.sport} tournament operations`,
+        item.cities?.length ? `Cities: ${item.cities.slice(0, 3).join(", ")}` : `Venue: ${item.location}`,
+        `Roster size: ${item.teamSize || "manager set"}`,
+        item.prize ? `Prize/investment: ${item.prize}` : "Partner-ready event page",
+      ];
 
-  useEffect(() => {
-    if (getCompletedRegistration(item.slug)) {
-      setCompletedRegistration(true);
-      return;
-    }
-    if (!token || isFeatureOnly) return;
-    apiRequest(`/registrations/by-tournament/${item.slug}/mine`, {}, token)
-      .then(() => setCompletedRegistration(true))
-      .catch(() => setCompletedRegistration(false));
-  }, [token, item.slug, isFeatureOnly]);
-
-  const statusText = completedRegistration
-    ? "Already registered - payment complete"
-    : canRegister
+  const statusText = canRegister
     ? `Register: ${tournament.registrationStart} - ${tournament.registrationEnd}`
     : isUpcoming
       ? `Registration opens ${tournament.registrationStart}`
       : tournament.status === "Live"
         ? "Live tournament in progress"
         : `Registration closed ${tournament.registrationEnd}`;
-  const destination = completedRegistration ? `/tournaments/${item.slug}/registration-pass` : `/tournaments/${item.slug}`;
-  const actionLabel = completedRegistration ? "View your register" : "View details";
+  const destination = `/tournaments/${item.slug}`;
+  const actionLabel = "View details";
 
   return (
     <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
       <img src={tournament.image} alt={`${tournament.name} visual`} />
       <div className="card-body">
-        <span className={`status ${completedRegistration ? "emerald" : tournament.accent}`}>{completedRegistration ? "Already registered" : tournament.status}</span>
+        <span className={`status ${tournament.accent}`}>{tournament.status}</span>
         <h3>{tournament.name}</h3>
         <p className="registration-window">{statusText}</p>
         <p>{item.sport} • {item.location} • {item.date}</p>
+        <div className="tournament-detail-chip-grid">
+          {detailChips.slice(0, 4).map((chip) => <small key={chip}>{chip}</small>)}
+        </div>
         <div className="card-meta">
           <span>{tournament.teams}/{tournament.capacity} teams</span>
           <span>{tournament.prize}</span>

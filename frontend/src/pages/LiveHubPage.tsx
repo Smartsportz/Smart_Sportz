@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest } from "../lib/api";
-import { liveMatches, timeline } from "../data/platform";
+import { tournamentArchives, liveMatches, timeline, tournaments } from "../data/platform";
 
 type LivePerson = {
   team: string;
@@ -258,6 +258,11 @@ export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string })
 
 export function LiveHubPage() {
   const [matches, setMatches] = useState<LiveMatchDetail[]>(fallbackDetails);
+  const archivedVideoMatches = useMemo(() => tournamentArchives.flatMap((archive) =>
+    archive.rounds.flatMap((round) => round.matches.map((match) => ({ ...match, tournamentSlug: archive.tournamentSlug, tournamentName: tournaments.find((item) => item.slug === archive.tournamentSlug)?.name ?? archive.tournamentSlug }))),
+  ), []);
+  const [selectedArchiveId, setSelectedArchiveId] = useState(archivedVideoMatches[0]?.id ?? "");
+  const selectedArchive = archivedVideoMatches.find((match) => match.id === selectedArchiveId) ?? archivedVideoMatches[0];
 
   useEffect(() => {
     let active = true;
@@ -297,6 +302,52 @@ export function LiveHubPage() {
           </Link>
         ))}
       </div>
+
+      <section className="recorded-live-section">
+        <div className="section-head-inline">
+          <div>
+            <p className="eyebrow">Old Tournament Videos</p>
+            <h2>Recorded round videos and score archives</h2>
+            <p>Open a completed tournament round to review the recorded stream, teams, scores, winner path, and player records.</p>
+          </div>
+        </div>
+        {selectedArchive && (
+          <div className="recorded-video-layout">
+            <article className="live-video-shell recorded-video-player">
+              <iframe
+                title={`${selectedArchive.title} recorded match`}
+                src={selectedArchive.videoUrl}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+              <div className="live-video-badge"><Radio size={16} /> Recorded Round Video</div>
+            </article>
+            <aside className="live-panel recorded-video-detail">
+              <span className="status emerald">{selectedArchive.round}</span>
+              <h2>{selectedArchive.title}</h2>
+              <p>{selectedArchive.summary}</p>
+              <div className="live-tournament-score">
+                <strong>{selectedArchive.teamA}</strong>
+                <b>{selectedArchive.scoreA}</b>
+                <strong>{selectedArchive.teamB}</strong>
+                <b>{selectedArchive.scoreB}</b>
+              </div>
+              <small><Clock size={14} /> {selectedArchive.date} <MapPin size={14} /> {selectedArchive.venue}</small>
+              <Link className="btn btn-primary wide" to={`/tournaments/${selectedArchive.tournamentSlug}`}>Open tournament archive</Link>
+            </aside>
+          </div>
+        )}
+        <div className="recorded-round-row wheel-horizontal">
+          {archivedVideoMatches.map((match) => (
+            <button className={`recorded-round-card ${selectedArchive?.id === match.id ? "active" : ""}`} type="button" onClick={() => setSelectedArchiveId(match.id)} key={match.id}>
+              <span>{match.tournamentName}</span>
+              <strong>{match.round}</strong>
+              <p>{match.teamA} {match.scoreA} - {match.scoreB} {match.teamB}</p>
+              <small>Winner: {match.winner}</small>
+            </button>
+          ))}
+        </div>
+      </section>
     </Page>
   );
 }

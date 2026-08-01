@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT NOT NULL DEFAULT '',
   email_verified INTEGER NOT NULL DEFAULT 1,
   phone_verified INTEGER NOT NULL DEFAULT 1,
+  google_login INTEGER NOT NULL DEFAULT 0,
+  google_sub TEXT NOT NULL DEFAULT '',
+  avatar_url TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 
@@ -443,6 +446,9 @@ def _apply_operational_schema(path=None) -> None:
             "phone": "TEXT NOT NULL DEFAULT ''",
             "email_verified": "INTEGER NOT NULL DEFAULT 1",
             "phone_verified": "INTEGER NOT NULL DEFAULT 1",
+            "google_login": "INTEGER NOT NULL DEFAULT 0",
+            "google_sub": "TEXT NOT NULL DEFAULT ''",
+            "avatar_url": "TEXT NOT NULL DEFAULT ''",
         }
         for column, definition in user_columns.items():
             _add_column(conn, "users", column, definition)
