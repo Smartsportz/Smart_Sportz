@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { archiveForTournament, navItems, withRuntimeTournamentStatus } from "../data/platform";
+import { navItems, withRuntimeTournamentStatus } from "../data/platform";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -251,21 +251,6 @@ export function TournamentCard({ item }: { item: any }) {
   const isFeatureOnly = Boolean(item.featureOnly);
   const canRegister = tournament.status === "Registration Open";
   const isUpcoming = tournament.status === "Upcoming";
-  const archive = archiveForTournament(item.slug);
-  const detailChips = archive
-    ? [
-        `Champion: ${archive.champion}`,
-        archive.investment,
-        `Partners: ${archive.partners.slice(0, 2).join(", ")}`,
-        `Managers: ${archive.managers.length}`,
-      ]
-    : [
-        item.tournamentDescription || `${item.sport} tournament operations`,
-        item.cities?.length ? `Cities: ${item.cities.slice(0, 3).join(", ")}` : `Venue: ${item.location}`,
-        `Roster size: ${item.teamSize || "manager set"}`,
-        item.prize ? `Prize/investment: ${item.prize}` : "Partner-ready event page",
-      ];
-
   const statusText = canRegister
     ? `Register: ${tournament.registrationStart} - ${tournament.registrationEnd}`
     : isUpcoming
@@ -285,9 +270,6 @@ export function TournamentCard({ item }: { item: any }) {
         <h3>{tournament.name}</h3>
         <p className="registration-window">{statusText}</p>
         <p>{item.sport} • {item.location} • {item.date}</p>
-        <div className="tournament-detail-chip-grid">
-          {detailChips.slice(0, 4).map((chip) => <small key={chip}>{chip}</small>)}
-        </div>
         <div className="card-meta">
           <span>{tournament.teams}/{tournament.capacity} teams</span>
           <span>{tournament.prize}</span>
