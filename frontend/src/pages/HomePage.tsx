@@ -2,10 +2,10 @@ import { motion } from "framer-motion";
 import { BarChart3, CheckCircle2, MapPin, Radio, ShieldCheck, Trophy, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { RefObject } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
 import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
+import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
 const fade = {
   initial: { opacity: 0, y: 24 },
@@ -43,11 +43,26 @@ function readStoredNotices() {
   }
 }
 
+function FeaturedTournamentMiniCard({ item }: { item: any }) {
+  return (
+    <Link className="featured-mini-card click-card" to={`/tournaments/${item.slug}`}>
+      <img src={item.image} alt="" />
+      <div>
+        <span className={`status ${item.accent}`}>{item.status}</span>
+        <h3>{item.name}</h3>
+        <p><MapPin size={15} />{item.location}</p>
+      </div>
+    </Link>
+  );
+}
+
 export function HomePage() {
+  useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
   const leaderboardFilterRef = useRef<HTMLDivElement>(null);
   const upcomingTournamentsRef = useRef<HTMLDivElement>(null);
   const registrationOpenRef = useRef<HTMLDivElement>(null);
+  const liveTournamentsRef = useRef<HTMLDivElement>(null);
   const oldTournamentsRef = useRef<HTMLDivElement>(null);
   const newsRef = useRef<HTMLDivElement>(null);
   const organizerRef = useRef<HTMLDivElement>(null);
@@ -57,18 +72,26 @@ export function HomePage() {
   const runtimeTournaments = tournaments.map((item) => withRuntimeTournamentStatus(item));
   const featuredGroups = [
     {
-      key: "upcoming",
-      title: "Upcoming tournaments",
-      text: "Tournaments announced for future play. Registration opens on the published date.",
+      key: "featured",
+      title: "Featured tournaments",
+      text: "Manager-selected tournaments shown with title and place only.",
       ref: upcomingTournamentsRef,
-      items: runtimeTournaments.filter((item) => item.status === "Upcoming"),
+      compact: true,
+      items: runtimeTournaments.filter((item: any) => item.show_on_home !== false).slice(0, 8),
     },
     {
-      key: "registration-open",
-      title: "Open registration",
-      text: "Active registration windows where teams can enter before the closing date.",
+      key: "upcoming",
+      title: "Upcoming tournaments",
+      text: "Registration-open tournaments where teams can enter now.",
       ref: registrationOpenRef,
       items: runtimeTournaments.filter((item) => item.status === "Registration Open"),
+    },
+    {
+      key: "live",
+      title: "Live tournaments",
+      text: "Active tournaments with live match rooms and scoring updates.",
+      ref: liveTournamentsRef,
+      items: runtimeTournaments.filter((item) => item.status === "Live"),
     },
     {
       key: "old",
@@ -104,12 +127,6 @@ export function HomePage() {
     () => leaderboardRecords.filter((record) => record.sport === leaderboardSport).sort((a, b) => a.rank - b.rank),
     [leaderboardSport],
   );
-  const scrollLeaderboardFilter = (direction: "left" | "right") => {
-    leaderboardFilterRef.current?.scrollBy({ left: direction === "left" ? -180 : 180, behavior: "smooth" });
-  };
-  const scrollCarousel = (ref: RefObject<HTMLDivElement | null>, direction: "left" | "right") => {
-    ref.current?.scrollBy({ left: direction === "left" ? -360 : 360, behavior: "smooth" });
-  };
   const moveOrganizer = (direction: "left" | "right") => {
     setOrganizerIndex((current) => {
       const next = direction === "left"
@@ -273,8 +290,8 @@ export function HomePage() {
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Tournament Discovery</p>
-            <h2>Featured tournaments</h2>
-            <p>Grouped by status so teams can quickly find upcoming, open, and previous tournaments.</p>
+            <h2>Tournament highlights</h2>
+            <p>Manager-selected features, open registration, live tournaments, and old records are separated clearly.</p>
           </div>
         </div>
         <div className="featured-status-stack">
@@ -285,14 +302,13 @@ export function HomePage() {
                   <h3>{group.title}</h3>
                   <p>{group.text}</p>
                 </div>
-                <div className="carousel-controls top-carousel-controls">
-                  <button type="button" aria-label={`Previous ${group.title}`} onClick={() => scrollCarousel(group.ref, "left")}>&lt;</button>
-                  <button type="button" aria-label={`Next ${group.title}`} onClick={() => scrollCarousel(group.ref, "right")}>&gt;</button>
-                </div>
               </div>
               <div className="carousel-shell">
-                <div className="card-grid carousel-row featured-carousel featured-status-carousel" ref={group.ref}>
-                  {group.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
+                <div className="card-grid carousel-row wheel-horizontal featured-carousel featured-status-carousel" ref={group.ref}>
+                  {group.items.map((item) => group.compact
+                    ? <FeaturedTournamentMiniCard key={item.slug} item={item} />
+                    : <TournamentCard key={item.slug} item={item} />,
+                  )}
                 </div>
               </div>
             </section>
@@ -340,8 +356,7 @@ export function HomePage() {
             <p>All-in-one suite of professional tools to run world-class sports competitions.</p>
           </div>        </div>
         <div className="carousel-shell organizer-shell">
-          <button className="carousel-edge carousel-edge-left" type="button" aria-label="Previous organizer tool" onClick={() => moveOrganizer("left")}>&lt;</button>
-          <div className="organizer-grid" ref={organizerRef}>
+          <div className="organizer-grid wheel-horizontal" ref={organizerRef}>
           {organizerTools.map((tool, index) => (
             <div
               className={`panel organizer-card ${index === organizerIndex ? "is-active" : ""}`}
@@ -352,7 +367,6 @@ export function HomePage() {
             </div>
           ))}
         </div>
-          <button className="carousel-edge carousel-edge-right" type="button" aria-label="Next organizer tool" onClick={() => moveOrganizer("right")}>&gt;</button>
         </div>
       </section>
       <section className="section">
@@ -364,14 +378,10 @@ export function HomePage() {
           </div>
           <div className="section-actions news-section-actions">
             <Link className="inline-link" to="/news">View More News</Link>
-            <div className="carousel-controls top-carousel-controls">
-              <button type="button" aria-label="Previous completed match records" onClick={() => scrollCarousel(newsRef, "left")}>&lt;</button>
-              <button type="button" aria-label="Next completed match records" onClick={() => scrollCarousel(newsRef, "right")}>&gt;</button>
-            </div>
           </div>
         </div>
         <div className="carousel-shell">
-          <div className="content-grid carousel-row news-carousel" ref={newsRef}>
+          <div className="content-grid carousel-row wheel-horizontal news-carousel" ref={newsRef}>
           {oldMatchNews.map((post) => (
             <Link className="panel news-card home-news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
               <div className="news-card-media">
@@ -396,13 +406,11 @@ export function HomePage() {
           </div>
         </div>
         <div className="leaderboard-filter-shell">
-          <button className="filter-arrow filter-arrow-left" type="button" aria-label="Scroll sports left" onClick={() => scrollLeaderboardFilter("left")}>&lt;</button>
-          <div className="leaderboard-filter home-leaderboard-filter" ref={leaderboardFilterRef}>
+          <div className="leaderboard-filter wheel-horizontal home-leaderboard-filter" ref={leaderboardFilterRef}>
             {sports.map((sport) => (
               <button className={sport.name === leaderboardSport ? "active" : ""} type="button" onClick={() => setLeaderboardSport(sport.name)} key={sport.slug}>{sport.name}</button>
             ))}
           </div>
-          <button className="filter-arrow filter-arrow-right" type="button" aria-label="Scroll sports right" onClick={() => scrollLeaderboardFilter("right")}>&gt;</button>
         </div>
         <div className="leaderboard-preview panel">
           {selectedLeaders.map((record) => (

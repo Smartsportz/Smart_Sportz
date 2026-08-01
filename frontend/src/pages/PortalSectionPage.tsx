@@ -650,7 +650,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                 <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
                 <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
               </div>
-              <label className="visibility-row"><span><b>Display on user page</b><small>Show this tournament on user dashboard featured areas.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
+              <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
               <div className="registration-actions compact-actions">
                 <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save</button>
                 <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>

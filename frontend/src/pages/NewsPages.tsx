@@ -1,8 +1,9 @@
 import { CalendarDays } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { newsPosts, tournaments } from "../data/platform";
+import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
 
 function renderBlock(block: { type: string; content: string }, index: number) {
@@ -18,9 +19,9 @@ function renderBlock(block: { type: string; content: string }, index: number) {
 }
 
 export function NewsPage() {
+  useWheelHorizontal();
   const categories = ["Winner Teams", "Match Updates", "Tournament Updates", "Announcements"];
   const highlightedPosts = newsPosts.filter((post) => post.highlight);
-  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [highlightIndex, setHighlightIndex] = useState(0);
   const activeHighlight = highlightedPosts[highlightIndex] ?? newsPosts[0];
   const moveHighlight = (direction: "left" | "right") => {
@@ -38,10 +39,6 @@ export function NewsPage() {
     return () => window.clearInterval(timer);
   }, [highlightedPosts.length]);
 
-  const scrollCategory = (category: string, direction: "left" | "right") => {
-    categoryRefs.current[category]?.scrollBy({ left: direction === "left" ? -360 : 360, behavior: "smooth" });
-  };
-
   return (
     <Page className="news-page">
       <section className="news-highlight-section">
@@ -55,10 +52,6 @@ export function NewsPage() {
               <small><CalendarDays size={14} /> {activeHighlight.date} - {activeHighlight.city}</small>
             </div>
           </div>
-          <div className="news-highlight-controls carousel-controls" onClick={(event) => event.preventDefault()}>
-            <button type="button" aria-label="Previous highlight news" onClick={() => moveHighlight("left")}>&lt;</button>
-            <button type="button" aria-label="Next highlight news" onClick={() => moveHighlight("right")}>&gt;</button>
-          </div>
         </Link>
       </section>
       <section className="section news-category-sections">
@@ -68,19 +61,11 @@ export function NewsPage() {
             <div className="news-category-block" key={category}>
               <div className="news-category-heading">
                 <h2>{category}</h2>
-                <div className="news-category-heading-mobile-buttons">
-                  <button type="button" aria-label={`Previous ${category}`} onClick={() => scrollCategory(category, "left")}>&lt;</button>
-                  <button type="button" aria-label={`Next ${category}`} onClick={() => scrollCategory(category, "right")}>&gt;</button>
-                </div>
                 <div className="news-category-actions">
                   <span>{categoryPosts.length} updates</span>
-                  <div className="carousel-controls">
-                    <button type="button" aria-label={`Previous ${category}`} onClick={() => scrollCategory(category, "left")}>&lt;</button>
-                    <button type="button" aria-label={`Next ${category}`} onClick={() => scrollCategory(category, "right")}>&gt;</button>
-                  </div>
                 </div>
               </div>
-              <div className="news-list-grid news-category-carousel" ref={(element) => { categoryRefs.current[category] = element; }}>
+              <div className="news-list-grid wheel-horizontal news-category-carousel">
                 {categoryPosts.map((post) => (
                   <Link className="click-card" to={`/news/${post.slug}`} key={post.slug}>
                     <article className="news-card panel">
