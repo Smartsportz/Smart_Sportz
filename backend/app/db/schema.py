@@ -284,6 +284,27 @@ CREATE TABLE IF NOT EXISTS leaderboard_records (
   record_label TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS gallery_social (
+  image_key TEXT PRIMARY KEY,
+  likes INTEGER NOT NULL DEFAULT 0,
+  comments_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gallery_albums (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  city TEXT NOT NULL,
+  date_label TEXT NOT NULL,
+  month_label TEXT NOT NULL,
+  day_count INTEGER NOT NULL,
+  cover TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  published INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor TEXT NOT NULL,
@@ -372,6 +393,8 @@ CREATE INDEX IF NOT EXISTS idx_news_sport_city ON news_posts(sport, city);
 CREATE INDEX IF NOT EXISTS idx_news_blocks_post_order ON news_blocks(post_slug, sort_order);
 CREATE INDEX IF NOT EXISTS idx_sport_home_visibility_sort ON sport_home_visibility(show_on_home, sort_order);
 CREATE INDEX IF NOT EXISTS idx_manager_city_user ON manager_city_assignments(manager_user_id, city);
+CREATE INDEX IF NOT EXISTS idx_gallery_social_updated ON gallery_social(updated_at);
+CREATE INDEX IF NOT EXISTS idx_gallery_albums_month ON gallery_albums(month_label, sort_order);
 CREATE INDEX IF NOT EXISTS idx_live_matches_status ON live_matches(status);
 CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, id);
 CREATE INDEX IF NOT EXISTS idx_bracket_nodes_tournament ON bracket_nodes(tournament_slug, x, y);

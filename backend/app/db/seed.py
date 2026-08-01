@@ -27,6 +27,52 @@ def prize_rows(tournament_slug: str, total_amount: int) -> list[tuple[str, tuple
     ]
 
 
+def seed_gallery_album_metadata() -> None:
+    statements = [
+        (
+            """
+            INSERT OR IGNORE INTO gallery_albums (
+              slug, title, sport, city, date_label, month_label, day_count, cover, summary, sort_order, published
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "kerala-volleyball-classic",
+                "Kerala Volleyball Classic 2025",
+                "Volleyball",
+                "Kochi",
+                "Dec 02 - Dec 12, 2025",
+                "Dec 2025",
+                11,
+                "/assets/volleyball-match.png",
+                "Final day ceremony, winning rallies, team huddles, awards, and verified match media.",
+                1,
+                1,
+            ),
+        ),
+        (
+            """
+            INSERT OR IGNORE INTO gallery_albums (
+              slug, title, sport, city, date_label, month_label, day_count, cover, summary, sort_order, published
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "delhi-cricket-champions",
+                "Delhi Cricket Champions 2025",
+                "Cricket",
+                "Delhi",
+                "Nov 05 - Nov 24, 2025",
+                "Nov 2025",
+                20,
+                "/assets/cricket-stadium.png",
+                "Completed cricket archive with innings photos, awards, team records, and verified player score moments.",
+                2,
+                1,
+            ),
+        ),
+    ]
+    execute_many(statements)
+
+
 def live_detail_update_rows() -> list[tuple[str, tuple]]:
     return [
         (
@@ -219,6 +265,7 @@ def seed_operational_data() -> None:
         and row("SELECT id FROM tournament_prizes LIMIT 1")
     )
     seed_live_match_details()
+    seed_gallery_album_metadata()
     if operational_ready:
         return
     statements: list[tuple[str, tuple]] = []

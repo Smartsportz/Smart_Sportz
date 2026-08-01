@@ -1,13 +1,71 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from app.core.responses import ok
-from app.db.database import row, rows
+from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.tournament_status import apply_registration_window_statuses, with_runtime_status
 
 router = APIRouter(prefix="/public", tags=["public"])
+
+
+class GalleryLikePayload(BaseModel):
+    image_key: str = Field(min_length=3, max_length=220)
+    liked: bool
+
+
+class GalleryCommentPayload(BaseModel):
+    image_key: str = Field(min_length=3, max_length=220)
+    comment: str = Field(min_length=1, max_length=500)
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_comments(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed if str(item).strip()]
+    except json.JSONDecodeError:
+        return []
+    return []
+
+
+def gallery_social_item(image_key: str) -> dict:
+    item = row("SELECT image_key, likes, comments_json FROM gallery_social WHERE image_key = ?", (image_key,))
+    if not item:
+        return {"image_key": image_key, "likes": 0, "comments": []}
+    return {
+        "image_key": item["image_key"],
+        "likes": item["likes"],
+        "comments": parse_comments(item["comments_json"]),
+    }
+
+
+def upsert_gallery_social(image_key: str, likes: int, comments: list[str]) -> dict:
+    timestamp = now_iso()
+    comments_json = json.dumps(comments)
+    existing = row("SELECT image_key FROM gallery_social WHERE image_key = ?", (image_key,))
+    if existing:
+        execute(
+            "UPDATE gallery_social SET likes = ?, comments_json = ?, updated_at = ? WHERE image_key = ?",
+            (max(0, likes), comments_json, timestamp, image_key),
+        )
+    else:
+        execute(
+            "INSERT INTO gallery_social(image_key, likes, comments_json, updated_at) VALUES (?, ?, ?, ?)",
+            (image_key, max(0, likes), comments_json, timestamp),
+        )
+    return gallery_social_item(image_key)
 
 
 def attach_cities(item: dict) -> dict:
@@ -35,6 +93,44 @@ def home():
         }
 
     return ok(get_or_set_json(cache_key("public:home"), build))
+
+
+@router.get("/gallery/social")
+def gallery_social():
+    records = rows("SELECT image_key, likes, comments_json FROM gallery_social ORDER BY updated_at DESC")
+    return ok({
+        item["image_key"]: {
+            "likes": item["likes"],
+            "comments": parse_comments(item["comments_json"]),
+        }
+        for item in records
+    })
+
+
+@router.get("/gallery/albums")
+def gallery_albums():
+    return ok(rows(
+        """
+        SELECT slug, title, sport, city, date_label, month_label, day_count, cover, summary
+        FROM gallery_albums
+        WHERE published = 1
+        ORDER BY sort_order, month_label DESC, title
+        """
+    ))
+
+
+@router.post("/gallery/social/like")
+def gallery_social_like(payload: GalleryLikePayload):
+    current = gallery_social_item(payload.image_key)
+    likes = int(current["likes"]) + (1 if payload.liked else -1)
+    return ok(upsert_gallery_social(payload.image_key, likes, current["comments"]))
+
+
+@router.post("/gallery/social/comment")
+def gallery_social_comment(payload: GalleryCommentPayload):
+    current = gallery_social_item(payload.image_key)
+    comments = [*current["comments"], payload.comment.strip()]
+    return ok(upsert_gallery_social(payload.image_key, int(current["likes"]), comments))
 
 
 @router.get("/tournaments")

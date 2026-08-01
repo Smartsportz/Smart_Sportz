@@ -41,6 +41,8 @@ OPERATIONAL_TABLE_ORDER = [
     "sport_home_visibility",
     "manager_city_assignments",
     "leaderboard_records",
+    "gallery_albums",
+    "gallery_social",
     "audit_logs",
 ]
 

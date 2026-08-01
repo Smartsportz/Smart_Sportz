@@ -21,12 +21,14 @@ declare module "lucide-react" {
   export const Filter: LucideIcon;
   export const Flame: LucideIcon;
   export const GalleryHorizontal: LucideIcon;
+  export const Heart: LucideIcon;
   export const ImagePlus: LucideIcon;
   export const LifeBuoy: LucideIcon;
   export const Lock: LucideIcon;
   export const Mail: LucideIcon;
   export const MapPin: LucideIcon;
   export const Medal: LucideIcon;
+  export const MessageCircle: LucideIcon;
   export const Moon: LucideIcon;
   export const Plus: LucideIcon;
   export const Printer: LucideIcon;
@@ -34,6 +36,7 @@ declare module "lucide-react" {
   export const Search: LucideIcon;
   export const Send: LucideIcon;
   export const Settings: LucideIcon;
+  export const Share2: LucideIcon;
   export const ShieldCheck: LucideIcon;
   export const Smartphone: LucideIcon;
   export const Sun: LucideIcon;
@@ -41,5 +44,6 @@ declare module "lucide-react" {
   export const Upload: LucideIcon;
   export const UserPlus: LucideIcon;
   export const Users: LucideIcon;
+  export const X: LucideIcon;
   export const Zap: LucideIcon;
 }
