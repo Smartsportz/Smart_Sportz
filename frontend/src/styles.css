@@ -443,6 +443,13 @@ img { max-width: 100%; display: block; }
 .payment-method-tabs button.active { background: var(--surface); color: var(--primary-dark); box-shadow: var(--shadow-soft); }
 .upi-payment-box { display: grid; gap: 16px; }
 .qr-shell { display: grid; justify-items: center; gap: 12px; padding: 18px; border: 1px solid rgba(11, 136, 82, .2); border-radius: 18px; background: linear-gradient(135deg, rgba(11, 136, 82, .08), rgba(37, 99, 235, .08)); text-align: center; }
+.qr-shell small { color: var(--muted); font-weight: 800; }
+.upi-open-button { min-height: 52px; }
+.upi-app-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.upi-app-grid a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 8px 10px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 12px; background: var(--surface-soft); color: var(--primary-dark); font-size: 13px; font-weight: 900; text-align: center; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
+.upi-app-grid a:hover { transform: translateY(-2px); border-color: rgba(11, 136, 82, .36); background: rgba(11, 136, 82, .08); }
+.upi-fallback-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px dashed rgba(11, 136, 82, .28); border-radius: 14px; background: rgba(255, 255, 255, .7); color: var(--muted); font-size: 13px; font-weight: 800; }
+.upi-fallback-row button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--text); cursor: pointer; font-weight: 900; white-space: nowrap; }
 .qr-code-grid { display: grid; grid-template-columns: repeat(9, 12px); grid-auto-rows: 12px; gap: 3px; padding: 14px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px var(--line), var(--shadow-soft); }
 .qr-cell { width: 12px; height: 12px; border-radius: 3px; background: #edf4f2; }
 .qr-cell.filled { background: var(--primary-dark); }
@@ -1133,6 +1140,10 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .ops-flow { align-items: flex-start; }
   .form-grid, .footer, .footer-grid, .live-card, .auth-card { grid-template-columns: 1fr; }
   .payment-method-tabs { grid-template-columns: 1fr; }
+  .upi-app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .upi-app-grid a { min-height: 40px; font-size: 12px; }
+  .upi-fallback-row { align-items: stretch; flex-direction: column; }
+  .upi-fallback-row button { width: 100%; }
   .document-template-card { grid-template-columns: 34px 1fr; gap: 10px; padding: 12px; }
   .document-template-card > svg { width: 34px; height: 34px; padding: 8px; }
   .document-template-card .btn { grid-column: 1 / -1; min-height: 36px; font-size: 12px; }

@@ -13,8 +13,10 @@ declare module "lucide-react" {
   export const CheckCircle2: LucideIcon;
   export const ChevronRight: LucideIcon;
   export const CircleDollarSign: LucideIcon;
+  export const Copy: LucideIcon;
   export const Clock: LucideIcon;
   export const Download: LucideIcon;
+  export const ExternalLink: LucideIcon;
   export const FileText: LucideIcon;
   export const Filter: LucideIcon;
   export const Flame: LucideIcon;
@@ -33,6 +35,7 @@ declare module "lucide-react" {
   export const Send: LucideIcon;
   export const Settings: LucideIcon;
   export const ShieldCheck: LucideIcon;
+  export const Smartphone: LucideIcon;
   export const Sun: LucideIcon;
   export const Trophy: LucideIcon;
   export const Upload: LucideIcon;

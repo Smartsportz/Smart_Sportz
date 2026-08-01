@@ -1,5 +1,5 @@
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Download, FileText, ImagePlus, Printer, ShieldCheck, Trophy, Upload, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, ExternalLink, FileText, ImagePlus, Printer, ShieldCheck, Smartphone, Trophy, Upload, UserPlus, Users } from "lucide-react";
 import { Page } from "../components/UI";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -151,6 +151,33 @@ function totalPayableForAmount(amount: number) {
 
 function formatInr(cents: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(cents / 100);
+}
+
+function encodeUpiValue(value: string) {
+  return encodeURIComponent(value).replace(/%20/g, "+");
+}
+
+function buildUpiIntent({ amount, registrationId, teamName, tournamentName }: { amount: number; registrationId: string; teamName: string; tournamentName: string }) {
+  const params = [
+    ["pa", "smartsportz@upi"],
+    ["pn", "SmartSportz"],
+    ["am", (amount / 100).toFixed(2)],
+    ["cu", "INR"],
+    ["tr", registrationId],
+    ["tid", registrationId],
+    ["tn", `${tournamentName} - ${teamName}`],
+  ];
+  return `upi://pay?${params.map(([key, value]) => `${key}=${encodeUpiValue(value)}`).join("&")}`;
+}
+
+function buildAppUpiLinks(upiIntent: string) {
+  const query = upiIntent.replace("upi://pay?", "");
+  return [
+    { label: "Google Pay", href: `gpay://upi/pay?${query}` },
+    { label: "PhonePe", href: `phonepe://pay?${query}` },
+    { label: "Paytm", href: `paytmmp://pay?${query}` },
+    { label: "BHIM / Any UPI", href: upiIntent },
+  ];
 }
 
 function prizePoolAmount(prize: string) {
@@ -712,6 +739,10 @@ export function RegistrationPaymentPage() {
   const [qrGenerated, setQrGenerated] = useState(false);
   const [status, setStatus] = useState<"idle" | "checking">("idle");
   const [error, setError] = useState("");
+  const upiIntent = saved
+    ? buildUpiIntent({ amount: totalPayable, registrationId: saved.registrationId, teamName: saved.teamName, tournamentName: tournament.name })
+    : "";
+  const upiAppLinks = useMemo(() => buildAppUpiLinks(upiIntent), [upiIntent]);
 
   async function completePayment(selectedMethod: "upi" | "card") {
     if (!saved) return;
@@ -767,6 +798,17 @@ export function RegistrationPaymentPage() {
     void completePayment("upi");
   }
 
+  function openUpiApps() {
+    if (!contact.trim()) {
+      setError("Enter the payer mobile number or UPI ID before opening UPI apps.");
+      return;
+    }
+    if (!upiIntent || status === "checking") return;
+    setQrGenerated(true);
+    window.location.href = upiIntent;
+    void completePayment("upi");
+  }
+
   function startCardFlow() {
     const cleanNumber = card.number.replace(/\s/g, "");
     if (!contact.trim() || !card.name.trim() || cleanNumber.length < 12 || !card.expiry.trim() || card.cvv.length < 3) {
@@ -774,6 +816,16 @@ export function RegistrationPaymentPage() {
       return;
     }
     void completePayment("card");
+  }
+
+  async function copyUpiLink() {
+    if (!upiIntent) return;
+    try {
+      await navigator.clipboard.writeText(upiIntent);
+      setError("");
+    } catch {
+      setError("Copy is blocked by this browser. Long press the UPI QR or use Open UPI Apps.");
+    }
   }
 
   return (
@@ -808,10 +860,23 @@ export function RegistrationPaymentPage() {
             {method === "upi" ? (
               <div className="upi-payment-box">
                 <div className="qr-shell">
-                  <QRCodeSVG value={`upi://pay?pa=smartsportz@local&pn=SmartSportz&am=${(totalPayable / 100).toFixed(2)}&tn=${saved.registrationId}`} size={154} />
-                  <p>{qrGenerated ? "QR generated. Checking payment receipt..." : "Generate QR to scan and pay with any UPI app."}</p>
+                  <QRCodeSVG value={upiIntent} size={154} />
+                  <p>{qrGenerated ? "UPI request opened. Checking payment receipt..." : `Scan or open a UPI app to pay ${formatInr(totalPayable)}.`}</p>
+                  <small>Payment ref: {saved.registrationId}</small>
                 </div>
-                <button className="btn btn-primary" type="button" onClick={startUpiFlow} disabled={status === "checking"}>{status === "checking" ? "Checking payment..." : "Generate QR and check payment"}</button>
+                <button className="btn btn-primary upi-open-button" type="button" onClick={openUpiApps} disabled={status === "checking"}>
+                  <Smartphone size={17} />{status === "checking" ? "Checking payment..." : "Open UPI Apps"}
+                </button>
+                <div className="upi-app-grid" aria-label="UPI app choices">
+                  {upiAppLinks.map((app) => (
+                    <a href={app.href} key={app.label} onClick={() => setQrGenerated(true)}>{app.label}<ExternalLink size={13} /></a>
+                  ))}
+                </div>
+                <div className="upi-fallback-row">
+                  <span>Desktop users can scan the QR from a phone UPI app.</span>
+                  <button type="button" onClick={copyUpiLink}><Copy size={14} />Copy UPI link</button>
+                </div>
+                <button className="btn btn-secondary" type="button" onClick={startUpiFlow} disabled={status === "checking"}>{status === "checking" ? "Checking payment..." : "I have paid, check payment"}</button>
               </div>
             ) : (
               <div className="form-grid single">
