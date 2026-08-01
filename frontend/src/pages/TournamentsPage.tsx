@@ -13,6 +13,7 @@ function FeaturedTournamentMiniCard({ item }: { item: any }) {
       <div>
         <h3>{item.name}</h3>
         <p><MapPin size={15} />{item.location}</p>
+        {item.tournamentDescription && <small>{item.tournamentDescription}</small>}
       </div>
     </Link>
   );
@@ -44,7 +45,7 @@ export function TournamentsPage() {
     const matchesSearch = !query || searchable.includes(query);
     const matchesSport = selectedSports.length === 0 || selectedSports.includes(item.sport);
     const matchesPlace = selectedPlaces.length === 0 || selectedPlaces.some((place) => item.location === place || item.cities?.includes(place));
-    const isFeatured = item.show_on_home !== false;
+    const isFeatured = item.featureOnly || item.show_on_home === true;
     const matchesFeatured = !featuredOnly || isFeatured;
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.some((status) => {
       if (status === "Featured") return isFeatured;
@@ -69,7 +70,7 @@ export function TournamentsPage() {
       title: "Featured tournaments",
       text: "Manager-selected tournament cards with only the event title and place.",
       compact: true,
-      items: filteredTournaments.filter((item: any) => item.show_on_home !== false).slice(0, 8),
+      items: filteredTournaments.filter((item: any) => item.featureOnly || item.show_on_home === true).slice(0, 8),
     },
     {
       key: "upcoming",

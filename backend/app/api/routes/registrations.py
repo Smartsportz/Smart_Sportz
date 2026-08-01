@@ -12,7 +12,9 @@ from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.schemas import LocalPaymentCreate, RegistrationCreate
 from app.services.audit import log
+from app.services.cache import cache_key
 from app.services.notifications import send_registration_payment_success
+from app.services.runtime_state import runtime_state
 from app.services.tournament_status import apply_registration_window_statuses, registration_is_open
 
 router = APIRouter(prefix="/registrations", tags=["registrations"])
@@ -48,6 +50,10 @@ def _ensure_registration_access(item: dict, user: dict) -> None:
     raise HTTPException(status_code=403, detail="You do not have access to this registration")
 
 
+def _invalidate_user_dashboard(user: dict) -> None:
+    runtime_state.delete(cache_key("user:dashboard", user["id"], user["email"]))
+
+
 @router.post("")
 def create_registration(payload: RegistrationCreate, user: dict = Depends(current_user)):
     apply_registration_window_statuses()
@@ -62,8 +68,6 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
     )
     if paid_existing:
         raise HTTPException(status_code=409, detail="You already completed registration and payment for this tournament")
-    if tournament["teams"] >= tournament["capacity"]:
-        raise HTTPException(status_code=409, detail="Tournament capacity is full")
     required_members = int(tournament.get("team_size") or 16)
     if payload.members and len(payload.members) != required_members:
         raise HTTPException(status_code=422, detail=f"This tournament requires exactly {required_members} member names, including captain and sub-captain")
@@ -140,7 +144,35 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
             ),
         )
     log(payload.email, "registration_created", "registration", registration_id, f"Registration created for {payload.team_name}")
+    _invalidate_user_dashboard(user)
     return ok(row("SELECT * FROM registrations WHERE id = ?", (registration_id,)), "Registration created")
+
+
+@router.get("/by-tournament/{tournament_slug}/mine")
+def my_completed_registration_for_tournament(tournament_slug: str, user: dict = Depends(current_user)):
+    item = row(
+        """
+        SELECT
+          r.*,
+          t.name AS tournament_name,
+          t.sport AS tournament_sport,
+          t.location AS tournament_location,
+          t.image AS tournament_image
+        FROM registrations r
+        LEFT JOIN tournaments t ON t.slug = r.tournament_slug
+        WHERE r.tournament_slug = ? AND r.user_id = ? AND r.payment_status = 'paid'
+        ORDER BY r.created_at DESC
+        LIMIT 1
+        """,
+        (tournament_slug, user["id"]),
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="No completed registration found for this tournament")
+    item["payments"] = rows("SELECT * FROM payments WHERE registration_id = ? ORDER BY created_at DESC", (item["id"],))
+    item["members"] = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (item["id"],))
+    item["documents"] = rows("SELECT document_type, file_name, file_path, status, uploaded_at FROM registration_documents WHERE registration_id = ?", (item["id"],))
+    item["prizes"] = _prizes_for_tournament(item["tournament_slug"])
+    return ok(item)
 
 
 @router.get("/{registration_id}")
@@ -210,4 +242,5 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate, user: dict 
     for result in delivery_results:
         log(item["email"], "registration_notification", result.provider, registration_id, result.message)
     log(item["email"], "local_payment_paid", "payment", payment_id, "Local simulated payment completed")
+    _invalidate_user_dashboard(user)
     return ok(row("SELECT * FROM payments WHERE id = ?", (payment_id,)), "Local payment completed")

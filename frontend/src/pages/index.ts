@@ -1,4 +1,4 @@
-export { AdminPage } from "./AdminPage";
+export { AdminManagerDetailPage, AdminPage, AdminRegistrationTeamDetailPage, AdminTournamentPaymentsPage, AdminTournamentTeamsPage, AdminUserCreatePage, AdminUserDetailPage } from "./AdminPage";
 export { AccessDeniedPage } from "./AccessDeniedPage";
 export { ArticleDetailPage } from "./ArticleDetailPage";
 export { ContentPage } from "./ContentPage";

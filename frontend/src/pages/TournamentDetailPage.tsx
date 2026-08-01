@@ -1,20 +1,37 @@
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
+import { useEffect, useState } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { individualScores, liveMatches, tournaments, withRuntimeTournamentStatus } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { getCompletedRegistration } from "../lib/registrationStatus";
 import { InfoPanel, Metric } from "./shared";
 
 export function TournamentDetailPage() {
   const params = useParams();
+  const { token } = useAuth();
   const item = withRuntimeTournamentStatus(tournaments.find((t) => t.slug === params.slug) ?? tournaments[0]);
   const isLive = item.phase === "live";
   const isExisting = item.phase === "existing";
+  const isFeatureOnly = Boolean((item as any).featureOnly);
   const canRegister = item.status === "Registration Open";
-  const completedRegistration = getCompletedRegistration(item.slug);
+  const [hasCompletedRegistration, setHasCompletedRegistration] = useState(() => Boolean(getCompletedRegistration(item.slug)));
   const isUpcomingOnly = item.status === "Upcoming";
   const isRegistrationClosed = item.status === "Registration Closed";
   const liveMatch = liveMatches.find((match) => match.tournament === item.name) ?? liveMatches[0];
-  const action = completedRegistration ? (
+
+  useEffect(() => {
+    if (getCompletedRegistration(item.slug)) {
+      setHasCompletedRegistration(true);
+      return;
+    }
+    if (!token || isFeatureOnly) return;
+    apiRequest(`/registrations/by-tournament/${item.slug}/mine`, {}, token)
+      .then(() => setHasCompletedRegistration(true))
+      .catch(() => setHasCompletedRegistration(false));
+  }, [token, item.slug, isFeatureOnly]);
+
+  const action = isFeatureOnly ? null : hasCompletedRegistration ? (
     <>
       <span className="btn btn-secondary disabled-action">Already registered</span>
       <Link className="btn btn-primary" to={`/tournaments/${item.slug}/registration-pass`}>View your register</Link>
@@ -55,10 +72,15 @@ export function TournamentDetailPage() {
           <span className={`status ${item.accent}`}>{item.status}</span>
           <h1>{item.name}</h1>
           <p>{item.sport} tournament in {item.location}. Registration, payment, rules, schedule, venue, teams, live updates, and bracket rounds are connected in this frontend flow.</p>
-          <div className="hero-actions">{action}</div>
+          {action && <div className="hero-actions">{action}</div>}
         </div>
       </section>
-      {isLive ? (
+      {isFeatureOnly ? (
+        <div className="detail-grid tournament-info-grid">
+          <InfoPanel title="Featured Event Details" items={[item.location, item.date, (item as any).tournamentDescription || "Manager-selected feature tournament showcase"]} to="/tournaments" highlight />
+          <InfoPanel title="Public Showcase" items={["Name, place, and description only", "No registration button", "No rounds button", "Managed by admin or manager"]} to="/news" />
+        </div>
+      ) : isLive ? (
         <>
           <div className="detail-grid">
             <section className="panel video-panel">

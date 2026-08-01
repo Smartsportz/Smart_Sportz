@@ -181,6 +181,27 @@ class ManagerCreatePayload(BaseModel):
     cities: list[str] = Field(min_length=1, max_length=12)
 
 
+class AdminUserCreatePayload(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=3, max_length=80)
+    phone: str = Field(default="", max_length=20)
+
+
+class AdminUserUpdatePayload(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    phone: str = Field(default="", max_length=20)
+    password: str | None = Field(default=None, min_length=3, max_length=80)
+
+
+class ManagerUpdatePayload(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str | None = Field(default=None, min_length=3, max_length=80)
+    cities: list[str] = Field(min_length=1, max_length=12)
+
+
 class ManagerCitiesPayload(BaseModel):
     cities: list[str] = Field(min_length=1, max_length=12)
 

@@ -7,6 +7,12 @@ import { ScreenLoader } from "./loading/ScreenLoader";
 import { useLoading } from "./loading/LoadingContext";
 import {
   AdminPage,
+  AdminManagerDetailPage,
+  AdminRegistrationTeamDetailPage,
+  AdminTournamentPaymentsPage,
+  AdminTournamentTeamsPage,
+  AdminUserCreatePage,
+  AdminUserDetailPage,
   CmsSectionPage,
   ContentPage,
   GalleryAlbumPage,
@@ -153,11 +159,17 @@ export default function App() {
           <Route path="/super-admin/*" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/admin/dashboard" element={<ProtectedRoute roles={["super_admin"]}><AdminPage /></ProtectedRoute>} />
           <Route path="/admin/tournaments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/admin/users/add" element={<ProtectedRoute roles={["super_admin"]}><AdminUserCreatePage /></ProtectedRoute>} />
+          <Route path="/admin/users/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminUserDetailPage /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="users" /></ProtectedRoute>} />
+          <Route path="/admin/managers/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminManagerDetailPage /></ProtectedRoute>} />
           <Route path="/admin/managers" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="managers" /></ProtectedRoute>} />
           <Route path="/admin/roles" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="roles" /></ProtectedRoute>} />
+          <Route path="/admin/teams/tournament/:slug" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentTeamsPage /></ProtectedRoute>} />
+          <Route path="/admin/teams/registrations/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminRegistrationTeamDetailPage /></ProtectedRoute>} />
           <Route path="/admin/teams" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="teams" /></ProtectedRoute>} />
           <Route path="/admin/players" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="players" /></ProtectedRoute>} />
+          <Route path="/admin/payments/tournament/:slug" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentPaymentsPage /></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="payments" /></ProtectedRoute>} />
           <Route path="/admin/payments/operations" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-payments" /></ProtectedRoute>} />
           <Route path="/admin/cms" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="cms" /></ProtectedRoute>} />

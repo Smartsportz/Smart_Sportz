@@ -50,11 +50,21 @@ type SavedPayment = {
 
 type BackendRegistration = {
   id: string;
+  tournament_slug?: string;
+  tournament_name?: string;
   team_name: string;
   team_code?: string;
   captain_name: string;
+  sub_captain_name?: string;
+  coach_name?: string;
+  email?: string;
+  phone?: string;
+  city?: string;
+  category?: string;
   confirmation_code?: string;
   confirmation_qr_payload?: string;
+  payments?: Array<{ id: string; receipt_number: string; amount: number; method: "card" | "upi"; status: "paid"; created_at: string }>;
+  members?: Array<{ name: string; role?: string; jersey?: string; contact?: string }>;
   documents?: Array<{ document_type: string; file_name: string; file_path: string; status: SavedDocument["status"] }>;
   prizes?: Array<{ position: number; label: string; amount: number }>;
 };
@@ -83,16 +93,34 @@ type RegistrationDraft = {
   categoryAccepted: boolean;
 };
 
+const currentUserKey = "smart-sportz-user";
+
+function currentStorageUserScope() {
+  if (typeof localStorage === "undefined") return "guest";
+  try {
+    const raw = localStorage.getItem(currentUserKey);
+    if (!raw) return "guest";
+    const user = JSON.parse(raw) as { id?: string; email?: string };
+    return (user.id || user.email || "guest").toLowerCase();
+  } catch {
+    return "guest";
+  }
+}
+
+function scopedRegistrationKey(prefix: string, slug: string) {
+  return `${prefix}:${currentStorageUserScope()}:${slug}`;
+}
+
 function registrationDraftKey(slug: string) {
-  return `registration-draft:${slug}`;
+  return scopedRegistrationKey("registration-draft", slug);
 }
 
 function registrationDataKey(slug: string) {
-  return `registration:${slug}`;
+  return scopedRegistrationKey("registration", slug);
 }
 
 function paymentDataKey(slug: string) {
-  return `payment:${slug}`;
+  return scopedRegistrationKey("payment", slug);
 }
 
 function readRegistrationDraft(slug: string) {
@@ -137,6 +165,61 @@ function writeSavedPayment(slug: string, payload: SavedPayment) {
   const encoded = JSON.stringify(payload);
   localStorage.setItem(paymentDataKey(slug), encoded);
   sessionStorage.setItem(paymentDataKey(slug), encoded);
+}
+
+function teamGroupImageDocument(restored: SavedDocument[] | undefined): SavedDocument[] {
+  const match = restored?.find((item) => item.documentType === "Team Group Image");
+  return [match ?? { documentType: "Team Group Image", fileName: "", filePath: "", status: "required" }];
+}
+
+function completedRecordFromBackend(registration: BackendRegistration, tournament: any) {
+  const payment = registration.payments?.[0];
+  if (!payment) return null;
+  const qrPayload = registration.confirmation_qr_payload || JSON.stringify({
+    type: "SmartSportzTeamVerification",
+    registrationId: registration.id,
+    confirmationCode: registration.confirmation_code,
+    teamCode: registration.team_code,
+    teamName: registration.team_name,
+    tournamentSlug: registration.tournament_slug || tournament.slug,
+    tournamentName: registration.tournament_name || tournament.name,
+    captainName: registration.captain_name,
+    city: registration.city,
+    paymentReceipt: payment.receipt_number,
+    receiptNumber: payment.receipt_number,
+    verificationPath: `/registrations/${registration.id}`,
+  });
+  return {
+    tournamentSlug: registration.tournament_slug || tournament.slug,
+    tournamentName: registration.tournament_name || tournament.name,
+    registrationId: registration.id,
+    confirmationCode: registration.confirmation_code || `SS-${registration.id.replace("reg_", "").toUpperCase().slice(0, 8)}`,
+    qrPayload,
+    teamName: registration.team_name,
+    teamCode: registration.team_code || "Generated",
+    captainName: registration.captain_name,
+    subCaptainName: registration.sub_captain_name || "",
+    coachName: registration.coach_name || "",
+    email: registration.email || "",
+    phone: registration.phone || "",
+    city: registration.city || "",
+    category: registration.category || "",
+    members: (registration.members || []).map((member) => member.name),
+    documents: (registration.documents || []).map((document) => ({
+      documentType: document.document_type,
+      fileName: document.file_name,
+      status: document.status,
+    })),
+    payment: {
+      id: payment.id,
+      receiptNumber: payment.receipt_number,
+      amount: payment.amount,
+      method: payment.method,
+      status: payment.status,
+      paidAt: payment.created_at,
+    },
+    completedAt: payment.created_at,
+  };
 }
 
 function amountForTournament(slug: string) {
@@ -317,9 +400,7 @@ export function RegistrationPage() {
     const restored = savedDraft?.members ?? [];
     return memberSlots.map((_, index) => restored[index] ?? "");
   });
-  const [documents, setDocuments] = useState<SavedDocument[]>(() => savedDraft?.documents ?? [
-    { documentType: "Team Group Image", fileName: "", filePath: "", status: "required" },
-  ]);
+  const [documents, setDocuments] = useState<SavedDocument[]>(() => teamGroupImageDocument(savedDraft?.documents));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 4));
@@ -329,8 +410,19 @@ export function RegistrationPage() {
   useEffect(() => {
     if (getCompletedRegistration(tournament.slug)) {
       navigate(`/tournaments/${tournament.slug}/registration-pass`, { replace: true });
+      return;
     }
-  }, [navigate, tournament.slug]);
+    if (!token) return;
+    apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`, {}, token)
+      .then((registration) => {
+        const completed = completedRecordFromBackend(registration, tournament);
+        if (completed) {
+          saveCompletedRegistration(completed);
+          navigate(`/tournaments/${tournament.slug}/registration-pass`, { replace: true });
+        }
+      })
+      .catch(() => undefined);
+  }, [navigate, token, tournament.slug]);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
@@ -638,16 +730,6 @@ export function RegistrationPage() {
               <section className="registration-form-section">
                 <h2>Team Group Image</h2>
                 <p>Upload one clear team group photo. This image is used for manager verification and team records.</p>
-                <div className="document-template-card legacy-document-step" aria-hidden="true">
-                  <FileText />
-                  <div>
-                    <h3>Team Authorization Letter Format</h3>
-                    <p>Use this Word template to prepare captain authorization, team consent, and tournament participation declaration.</p>
-                  </div>
-                  <a className="btn btn-secondary" href={`${import.meta.env.BASE_URL}templates/team-authorization-letter.docx`} download>
-                    <Download size={16} />Download DOCX
-                  </a>
-                </div>
                 <div className="document-list">
               {documents.map((document, index) => (
                 <label className="document-row" key={document.documentType}>
@@ -872,7 +954,6 @@ export function RegistrationPaymentPage() {
                 <div className="qr-shell">
                   <QRCodeSVG value={upiIntent} size={154} />
                   <p>{qrGenerated ? "UPI request opened. Checking payment receipt..." : `Scan or open a UPI app to pay ${formatInr(totalPayable)}.`}</p>
-                  <small>Payment ref: {saved.registrationId}</small>
                 </div>
                 <button className="btn btn-primary upi-open-button" type="button" onClick={openUpiApps} disabled={status === "checking"}>
                   <Smartphone size={17} />{status === "checking" ? "Checking payment..." : "Open UPI Apps"}
@@ -1044,8 +1125,34 @@ export function RegistrationReviewPage() {
 
 export function RegistrationPassPage() {
   const { slug } = useParams();
+  const { token } = useAuth();
   const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const completed = getCompletedRegistration(tournament.slug);
+  const [completed, setCompleted] = useState(() => getCompletedRegistration(tournament.slug));
+  const [loadingCompleted, setLoadingCompleted] = useState(() => Boolean(token && !getCompletedRegistration(tournament.slug)));
+
+  useEffect(() => {
+    const stored = getCompletedRegistration(tournament.slug);
+    if (stored) {
+      setCompleted(stored);
+      setLoadingCompleted(false);
+      return;
+    }
+    if (!token) {
+      setLoadingCompleted(false);
+      return;
+    }
+    setLoadingCompleted(true);
+    apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`, {}, token)
+      .then((registration) => {
+        const record = completedRecordFromBackend(registration, tournament);
+        if (record) {
+          saveCompletedRegistration(record);
+          setCompleted(record);
+        }
+      })
+      .catch(() => setCompleted(null))
+      .finally(() => setLoadingCompleted(false));
+  }, [token, tournament.slug]);
 
   return (
     <RegistrationShell>
@@ -1055,7 +1162,12 @@ export function RegistrationPassPage() {
           <h1>Your Tournament Registration</h1>
           <p>This page is read-only after successful payment. Team, payment, unique ID, and QR verification details cannot be edited.</p>
         </section>
-        {!completed ? (
+        {loadingCompleted ? (
+          <section className="panel">
+            <h2>Loading registration pass</h2>
+            <p>Checking your completed payment and registration details.</p>
+          </section>
+        ) : !completed ? (
           <section className="panel">
             <h2>No completed registration found</h2>
             <p>Complete registration and payment first to generate your read-only verification pass.</p>

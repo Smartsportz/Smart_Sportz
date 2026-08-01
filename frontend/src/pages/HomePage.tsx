@@ -48,9 +48,9 @@ function FeaturedTournamentMiniCard({ item }: { item: any }) {
     <Link className="featured-mini-card click-card" to={`/tournaments/${item.slug}`}>
       <img src={item.image} alt="" />
       <div>
-        <span className={`status ${item.accent}`}>{item.status}</span>
         <h3>{item.name}</h3>
         <p><MapPin size={15} />{item.location}</p>
+        {item.tournamentDescription && <small>{item.tournamentDescription}</small>}
       </div>
     </Link>
   );
@@ -77,7 +77,7 @@ export function HomePage() {
       text: "Manager-selected tournaments shown with title and place only.",
       ref: upcomingTournamentsRef,
       compact: true,
-      items: runtimeTournaments.filter((item: any) => item.show_on_home !== false).slice(0, 8),
+      items: runtimeTournaments.filter((item: any) => item.featureOnly || item.show_on_home === true).slice(0, 8),
     },
     {
       key: "upcoming",

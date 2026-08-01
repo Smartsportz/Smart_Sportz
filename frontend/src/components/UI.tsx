@@ -5,6 +5,7 @@ import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { navItems, withRuntimeTournamentStatus } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { getCompletedRegistration } from "../lib/registrationStatus";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -134,7 +135,7 @@ export function PortalShell({
 }: {
   title: string;
   subtitle: string;
-  sidebar: Array<{ label: string; path: string; icon: React.ComponentType<{ size?: number | string }> }>;
+  sidebar: Array<{ label: string; path: string; icon: React.ComponentType<{ size?: number | string }>; hidden?: boolean }>;
   children: React.ReactNode;
   action?: React.ReactNode;
 }) {
@@ -171,7 +172,7 @@ export function PortalShell({
       <aside className="portal-sidebar">
         <BrandLogo />
         <nav>
-          {sidebar.map((item) => {
+          {sidebar.filter((item) => !item.hidden).map((item) => {
             const Icon = item.icon;
             return (
               <NavLink key={item.path} to={item.path}>
@@ -249,9 +250,23 @@ export function MetricCard({
 
 export function TournamentCard({ item }: { item: any }) {
   const tournament = withRuntimeTournamentStatus(item);
-  const completedRegistration = getCompletedRegistration(item.slug);
+  const { token } = useAuth();
+  const [completedRegistration, setCompletedRegistration] = useState(() => Boolean(getCompletedRegistration(item.slug)));
+  const isFeatureOnly = Boolean(item.featureOnly);
   const canRegister = tournament.status === "Registration Open";
   const isUpcoming = tournament.status === "Upcoming";
+
+  useEffect(() => {
+    if (getCompletedRegistration(item.slug)) {
+      setCompletedRegistration(true);
+      return;
+    }
+    if (!token || isFeatureOnly) return;
+    apiRequest(`/registrations/by-tournament/${item.slug}/mine`, {}, token)
+      .then(() => setCompletedRegistration(true))
+      .catch(() => setCompletedRegistration(false));
+  }, [token, item.slug, isFeatureOnly]);
+
   const statusText = completedRegistration
     ? "Already registered - payment complete"
     : canRegister
