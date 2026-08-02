@@ -23,6 +23,13 @@ def _load_local_env() -> None:
 _load_local_env()
 
 
+def _default_database_backend() -> str:
+    url = os.getenv("DATABASE_URL", "").lower()
+    if url.startswith(("postgres://", "postgresql://")):
+        return "postgres"
+    return "sqlite"
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Smart Sportz Backend")
@@ -31,7 +38,7 @@ class Settings:
     database_path: Path = BASE_DIR / os.getenv("DATABASE_PATH", "storage/smart_sportz.db")
     mirror_database_path: Path = BASE_DIR / os.getenv("MIRROR_DATABASE_PATH", "storage/smart_sportz_mirror.db")
     audit_database_path: Path = BASE_DIR / os.getenv("AUDIT_DATABASE_PATH", "storage/smart_sportz_audit.db")
-    database_backend: str = os.getenv("DATABASE_BACKEND", "sqlite").lower()
+    database_backend: str = os.getenv("DATABASE_BACKEND", _default_database_backend()).lower()
     database_url: str = os.getenv("DATABASE_URL", "")
     mirror_database_url: str = os.getenv("MIRROR_DATABASE_URL", os.getenv("DATABASE_URL", ""))
     audit_database_url: str = os.getenv("AUDIT_DATABASE_URL", os.getenv("DATABASE_URL", ""))
