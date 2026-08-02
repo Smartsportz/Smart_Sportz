@@ -250,12 +250,6 @@ export function NewsDetailPage() {
       </article>
       <section className="article-body panel">
         {post.blocks.map(renderBlock)}
-        <div className="news-context-grid">
-          <div><b>Game</b><span>{post.sport}</span></div>
-          <div><b>Tournament</b><span>{tournament?.name ?? post.title}</span></div>
-          <div><b>Sponsors</b><span>SmartSportz operations partners and city event supporters</span></div>
-          <div><b>Prize</b><span>{tournament?.prize ?? "Published with official tournament record"}</span></div>
-        </div>
         <div className="news-social-actions news-detail-actions">
           <button type="button" onClick={() => void apiRequest<{ likes: number }>("/news/social/like", { method: "POST", body: JSON.stringify({ slug: post.slug, liked: true }) }).then((updated) => setSocial((current) => ({ ...current, [post.slug]: { ...(current[post.slug] ?? { comments: [] }), likes: updated.likes } })))}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
           <button type="button" onClick={() => void shareNews()}><Share2 size={15} />Share</button>
