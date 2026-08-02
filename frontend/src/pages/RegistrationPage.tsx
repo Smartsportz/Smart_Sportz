@@ -499,7 +499,7 @@ export function RegistrationPage() {
             status: item.status,
           })),
         }),
-      }, token);
+      });
       const payload: SavedRegistration = {
         registrationId: created.id,
         tournament: tournament.name,
@@ -1119,7 +1119,7 @@ export function RegistrationPassPage() {
       return;
     }
     setLoadingCompleted(true);
-    apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`, {}, token)
+    apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`)
       .then((registration) => {
         const record = completedRecordFromBackend(registration, tournament);
         if (record) {
