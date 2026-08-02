@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
 import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
 const fade = {
@@ -56,6 +57,69 @@ function FeaturedTournamentMiniCard({ item }: { item: any }) {
   );
 }
 
+const sportStoryImages: Record<string, string> = {
+  chess: "/assets/generated/sport-chess-sponsor.png",
+  cricket: assets.cricket,
+  football: assets.football,
+  basketball: assets.basketball,
+  volleyball: assets.volleyball,
+  badminton: "/assets/generated/sport-badminton-sponsor.png",
+  "table-tennis": "/assets/generated/sport-table-tennis-sponsor.png",
+  esports: assets.basketball,
+  athletics: "/assets/generated/sport-athletics-sponsor.png",
+};
+
+const sportStoryCopy: Record<string, { title: string; date: string; sponsor: string; text: string }> = {
+  cricket: {
+    title: "Premier cricket leagues with city sponsors",
+    date: "Aug 2026 season",
+    sponsor: "SmartSportz Premier Partners",
+    text: "Cricket tournaments combine structured registrations, player verification, match scoring, sponsor placements, live highlights, and final award records for corporate and youth leagues.",
+  },
+  football: {
+    title: "Youth and club football circuits",
+    date: "Sep 2026 window",
+    sponsor: "Grassroots Football Network",
+    text: "Football events support city-based team discovery, fixture rounds, live match centers, venue details, and sponsor-backed community tournament storytelling.",
+  },
+  basketball: {
+    title: "Indoor pro-series basketball events",
+    date: "Oct 2026 series",
+    sponsor: "Arena Sports Collective",
+    text: "Basketball programs focus on compact rosters, fast scoring, player statistics, highlights, and clean public pages for fans, teams, sponsors, and organizers.",
+  },
+  volleyball: {
+    title: "Completed volleyball records and galleries",
+    date: "Dec 2025 archive",
+    sponsor: "Kerala Sports Circle",
+    text: "Volleyball tournament pages preserve completed brackets, team results, player details, gallery albums, match notes, and sponsor recognition after the event closes.",
+  },
+  badminton: {
+    title: "Precision court events for schools and clubs",
+    date: "2026 calendar",
+    sponsor: "Indoor Court Partners",
+    text: "Badminton events can support singles, doubles, age categories, registration approvals, round scheduling, certificates, and court-wise match reporting.",
+  },
+  "table-tennis": {
+    title: "Table tennis ranking meets",
+    date: "2026 ranking cycle",
+    sponsor: "SmartSportz Ranking Desk",
+    text: "Table tennis programs highlight fast match updates, category filters, ranking ladders, bracket progression, and player performance histories.",
+  },
+  esports: {
+    title: "E-sports brackets and streaming rooms",
+    date: "2026 digital season",
+    sponsor: "Digital Arena Partners",
+    text: "E-sports tournaments combine online registrations, team rosters, live video links, match rooms, bracket rules, and sponsor-led streaming content.",
+  },
+  athletics: {
+    title: "Athletics meet management",
+    date: "2026 meet schedule",
+    sponsor: "City Athletics Council",
+    text: "Athletics pages can organize events by discipline, school, city, timing, heat results, medal tables, certificates, and public records.",
+  },
+};
+
 export function HomePage() {
   useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
@@ -69,6 +133,11 @@ export function HomePage() {
   const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [organizerIndex, setOrganizerIndex] = useState(0);
   const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
+  const [homeContent, setHomeContent] = useState<{
+    discoveryCards?: Array<Record<string, any>>;
+    liveHighlight?: Record<string, any> | null;
+    sponsorLogos?: Array<Record<string, any>>;
+  }>({});
   const runtimeTournaments = tournaments.map((item) => withRuntimeTournamentStatus(item));
   const featuredGroups = [
     {
@@ -101,17 +170,12 @@ export function HomePage() {
       items: runtimeTournaments.filter((item) => item.status === "Completed"),
     },
   ].filter((group) => group.items.length > 0);
-  const visibleFeaturedGroups = featuredGroups.filter((group) => group.key === "upcoming");
+  const visibleFeaturedGroups = featuredGroups.filter((group) => ["featured", "upcoming"].includes(group.key));
   const homeSports = sportHomeVisibility
     .filter((item) => item.showOnHome)
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((visibility) => sports.find((sport) => sport.slug === visibility.sportSlug))
     .filter(Boolean) as typeof sports;
-  const sportCounts = (name: string) => ({
-    upcoming: runtimeTournaments.filter((item) => item.sport === name && ["Upcoming", "Registration Open", "Registration Closed"].includes(item.status)).length,
-    live: runtimeTournaments.filter((item) => item.sport === name && item.status === "Live").length,
-    old: runtimeTournaments.filter((item) => item.sport === name && item.status === "Completed").length,
-  });
   const oldMatchNews = newsPosts.filter((item) => item.category === "Winner Teams").slice(0, 3);
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
   const organizerTools = [
@@ -161,6 +225,16 @@ export function HomePage() {
     }
     setActiveNotice(null);
   }
+
+  useEffect(() => {
+    apiRequest<{
+      discoveryCards: Array<Record<string, any>>;
+      liveHighlight: Record<string, any> | null;
+      sponsorLogos: Array<Record<string, any>>;
+    }>("/public/home")
+      .then(setHomeContent)
+      .catch(() => setHomeContent({}));
+  }, []);
 
   useEffect(() => {
     const container = organizerRef.current;
@@ -258,29 +332,30 @@ export function HomePage() {
           <div>
             <p className="eyebrow">Explore Your Sport</p>
             <h2>Discover tournaments across categories</h2>
-            <p>Upcoming, live, and old tournaments are grouped inside each sport card.</p>
+            <p>Sport stories, sponsors, tournament dates, and event pathways are grouped for quick discovery.</p>
           </div>
           <Link className="inline-link" to="/sports">View All Sports</Link>
         </div>
         <div className="sport-home-grid">
-          {homeSports.map((sport) => {
-            const Icon = sport.icon;
-            const counts = sportCounts(sport.name);
+          {(homeContent.discoveryCards?.length ? homeContent.discoveryCards : homeSports.map((sport) => {
+            const story = sportStoryCopy[sport.slug] ?? sportStoryCopy.cricket;
+            return {
+              slug: sport.slug,
+              label: sport.name,
+              title: story.title,
+              sponsor_name: story.sponsor,
+              event_date: story.date,
+              image: sportStoryImages[sport.slug] ?? assets.cricket,
+            };
+          })).map((card) => {
             return (
-              <Link className="sport-home-card click-card" to={`/sports/${sport.slug}`} key={sport.slug}>
-                <Icon size={26} />
-                <span className={`status ${sport.color}`}>{sport.name}</span>
-                <div className="sport-home-metrics">
-                  {[
-                    ["Upcoming", counts.upcoming],
-                    ["Live", counts.live],
-                    ["Old", counts.old],
-                  ].map(([label, value]) => (
-                    <span className="sport-home-metric" key={label}>
-                      <small>{label}</small>
-                      <b>{value}</b>
-                    </span>
-                  ))}
+              <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={card.slug}>
+                <img src={card.image || assets.cricket} alt="" />
+                <div className="sport-home-card-body">
+                  <span className="status emerald">{card.label}</span>
+                  <h3>{card.title}</h3>
+                  <p><MapPin size={14} /> {card.sponsor_name}</p>
+                  <small>{card.event_date}</small>
                 </div>
               </Link>
             );
@@ -329,22 +404,23 @@ export function HomePage() {
       </section>
       <section className="section split live-analytics-section">
         <motion.div className="live-video-card" {...fade}>
-          <img src={assets.football} alt="Live analytics match" />
+          <img src={homeContent.liveHighlight?.image || assets.football} alt="Live analytics match" />
           <button type="button"><Radio size={24} /></button>
         </motion.div>
         <motion.div {...fade}>
-          <span className="live-dot">Live Now</span>
-          <h2>Experience Every Match Live with Pro Analytics</h2>
+          <span className="live-dot">{homeContent.liveHighlight?.stage_label || "Live Now"}</span>
+          <h2>{homeContent.liveHighlight?.title || "Experience Every Match Live with Pro Analytics"}</h2>
           <div className="live-action-row">
             <div className="score-mini-card">
-              <span>Wings SC</span>
-              <strong>128 - 110</strong>
-              <span>Titans Acad.</span>
+              <span>{homeContent.liveHighlight?.home_team || "Wings SC"}</span>
+              <strong>{homeContent.liveHighlight ? `${homeContent.liveHighlight.home_score} - ${homeContent.liveHighlight.away_score}` : "128 - 110"}</strong>
+              <span>{homeContent.liveHighlight?.away_team || "Titans Acad."}</span>
             </div>
-            <Link className="btn btn-primary live-center-btn" to="/live">Open Match Center</Link>
+            <Link className="btn btn-primary live-center-btn" to={homeContent.liveHighlight?.link_path || "/live"}>Open Match Center</Link>
           </div>
+          <p className="live-highlight-copy">{homeContent.liveHighlight?.description || "High-impact live moments surface automatically from semi-finals, finals, and active match centers."}</p>
           <div className="feature-list">
-            {["Instant AI-powered highlights for every match", "Heatmaps and advanced performance telemetry"].map((feature) => (
+            {(homeContent.liveHighlight?.impact_notes ? String(homeContent.liveHighlight.impact_notes).split(/\.|\|/).filter(Boolean).slice(0, 2) : ["Instant AI-powered highlights for every match", "Heatmaps and advanced performance telemetry"]).map((feature) => (
               <div className="feature-label" key={feature}><CheckCircle2 size={18} />{feature}</div>
             ))}
           </div>
@@ -398,7 +474,7 @@ export function HomePage() {
         </div>
         </div>
       </section>
-      <section className="section" id="home-leaderboards">
+      <section className="section" id="home-leaderboards" hidden aria-hidden="true">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Rankings</p>
@@ -456,6 +532,21 @@ export function HomePage() {
             </div>
           </div>
         </motion.div>
+      </section>
+      <section className="section sponsor-logo-section">
+        <SectionTitle eyebrow="Partner Network" title="Sponsor Companies" text="Official platform, technology, experience, and archive partners connected to Smart Sportz." />
+        <div className="sponsor-logo-grid">
+          {(homeContent.sponsorLogos?.length ? homeContent.sponsorLogos : [
+            { slug: "smartsportz", name: "SmartSportz", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/" },
+            { slug: "brillaris", name: "Brillaris", image: "https://brillaris.pro/assets/img/Logo1.png", link_url: "https://brillaris.pro" },
+            { slug: "machaxi", name: "Machaxi", image: "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp", link_url: "https://machaxi.com" },
+          ]).map((sponsor) => (
+            <a className="sponsor-logo-card" href={sponsor.link_url} target="_blank" rel="noreferrer" key={sponsor.slug}>
+              <img src={sponsor.image} alt="" />
+              <span>{sponsor.name}</span>
+            </a>
+          ))}
+        </div>
       </section>
     </Page>
   );

@@ -90,6 +90,9 @@ def home():
             },
             "featuredTournaments": [with_runtime_status(item) for item in rows("SELECT * FROM tournaments LIMIT 3")],
             "liveMatches": rows("SELECT * FROM live_matches LIMIT 3"),
+            "discoveryCards": rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"),
+            "liveHighlight": row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1"),
+            "sponsorLogos": rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"),
         }
 
     return ok(get_or_set_json(cache_key("public:home"), build))
@@ -173,6 +176,52 @@ def tournament_bracket(slug: str):
 @router.get("/sports")
 def sports():
     return ok(get_or_set_json(cache_key("public:sports"), lambda: rows("SELECT * FROM sports ORDER BY name")))
+
+
+@router.get("/home-discovery/{slug}")
+def home_discovery_detail(slug: str):
+    def build():
+        apply_registration_window_statuses()
+        card = row("SELECT * FROM home_discovery_cards WHERE slug = ? AND published = 1", (slug,))
+        if not card:
+            normalized = slug.lower().strip()
+            for item in rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order"):
+                sport_slug = item["sport"].lower().replace(" ", "-")
+                label_slug = item["label"].lower().replace(" ", "-")
+                title_slug = item["title"].lower().replace(" ", "-")
+                if normalized in {sport_slug, label_slug, title_slug}:
+                    card = item
+                    break
+        if not card:
+            sport = row("SELECT * FROM sports WHERE slug = ?", (slug,))
+            if not sport:
+                raise HTTPException(status_code=404, detail="Discovery card not found")
+            tournament = row("SELECT * FROM tournaments WHERE lower(sport) = lower(?) ORDER BY show_on_home DESC, created_at DESC LIMIT 1", (sport["name"],))
+            card = {
+                "slug": sport["slug"],
+                "label": f"{sport['name']} Program",
+                "title": f"{sport['name']} Tournament Operations",
+                "sport": sport["name"],
+                "tournament_slug": tournament["slug"] if tournament else "",
+                "sponsor_name": "SmartSportz",
+                "sponsor_image": "/assets/logo.png",
+                "image": sport["image"] if "image" in sport.keys() else "/assets/logo.png",
+                "event_date": "Manager scheduled",
+                "description": f"{sport['name']} programs can publish sponsors, tournament dates, registrations, live updates, gallery media, and manager-controlled public content from Smart Sportz.",
+                "sponsor_details": "SmartSportz provides the tournament operations layer for discovery, registrations, brackets, scoring, gallery, and news content.",
+                "register_path": f"/sports/{sport['slug']}",
+                "sort_order": 99,
+                "published": 1,
+            }
+        tournament = None
+        if card["tournament_slug"]:
+            tournament = row("SELECT * FROM tournaments WHERE slug = ?", (card["tournament_slug"],))
+            if tournament:
+                tournament = attach_cities(tournament)
+        card["tournament"] = tournament
+        return card
+
+    return ok(get_or_set_json(cache_key("public:home-discovery", slug), build))
 
 
 @router.get("/sports/{slug}")

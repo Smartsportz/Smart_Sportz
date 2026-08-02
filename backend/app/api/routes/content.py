@@ -1,15 +1,41 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.core.responses import ok
-from app.db.database import row, rows
+from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.tournament_status import apply_registration_window_statuses
 
 router = APIRouter(tags=["content"])
+
+
+class NewsLikePayload(BaseModel):
+    slug: str = Field(min_length=2, max_length=220)
+    liked: bool = True
+
+
+class NewsCommentPayload(BaseModel):
+    slug: str = Field(min_length=2, max_length=220)
+    comment: str = Field(min_length=1, max_length=600)
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_comments(value: str | None) -> list[dict]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    return parsed if isinstance(parsed, list) else []
 
 
 def attach_news_blocks(post: dict) -> dict:
@@ -26,6 +52,53 @@ def attach_news_blocks(post: dict) -> dict:
         for block in blocks
     ]
     return post
+
+
+@router.get("/news/social")
+def news_social():
+    items = rows("SELECT news_slug, likes, comments_json FROM news_social")
+    return ok({
+        item["news_slug"]: {
+            "likes": item["likes"],
+            "comments": parse_comments(item["comments_json"]),
+        }
+        for item in items
+    })
+
+
+@router.post("/news/social/like")
+def news_like(payload: NewsLikePayload):
+    if not row("SELECT slug FROM news_posts WHERE slug = ? AND status = 'published'", (payload.slug,)):
+        raise HTTPException(status_code=404, detail="News post not found")
+    existing = row("SELECT likes FROM news_social WHERE news_slug = ?", (payload.slug,))
+    likes = max(0, int(existing["likes"]) + (1 if payload.liked else -1)) if existing else (1 if payload.liked else 0)
+    execute(
+        """
+        INSERT INTO news_social(news_slug, likes, comments_json, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(news_slug) DO UPDATE SET likes = excluded.likes, updated_at = excluded.updated_at
+        """,
+        (payload.slug, likes, "[]", now_iso()),
+    )
+    return ok({"slug": payload.slug, "likes": likes})
+
+
+@router.post("/news/social/comment")
+def news_comment(payload: NewsCommentPayload):
+    if not row("SELECT slug FROM news_posts WHERE slug = ? AND status = 'published'", (payload.slug,)):
+        raise HTTPException(status_code=404, detail="News post not found")
+    existing = row("SELECT likes, comments_json FROM news_social WHERE news_slug = ?", (payload.slug,))
+    comments = parse_comments(existing["comments_json"] if existing else "[]")
+    comments.append({"text": payload.comment.strip(), "createdAt": now_iso()})
+    execute(
+        """
+        INSERT INTO news_social(news_slug, likes, comments_json, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(news_slug) DO UPDATE SET comments_json = excluded.comments_json, updated_at = excluded.updated_at
+        """,
+        (payload.slug, existing["likes"] if existing else 0, json.dumps(comments), now_iso()),
+    )
+    return ok({"slug": payload.slug, "comments": comments})
 
 
 @router.get("/news")

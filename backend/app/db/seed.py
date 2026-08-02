@@ -263,6 +263,11 @@ def seed_operational_data() -> None:
         and row("SELECT slug FROM news_posts LIMIT 1")
         and row("SELECT id FROM leaderboard_records LIMIT 1")
         and row("SELECT id FROM tournament_prizes LIMIT 1")
+        and row("SELECT slug FROM home_discovery_cards LIMIT 1")
+        and row("SELECT slug FROM home_discovery_cards WHERE image LIKE '/assets/generated/%' LIMIT 1")
+        and row("SELECT id FROM live_highlights LIMIT 1")
+        and row("SELECT slug FROM sponsor_logos WHERE slug = 'smartsportz' AND image = '/assets/logo.png'")
+        and row("SELECT post_slug FROM news_blocks WHERE post_slug = 'mumbai-mavericks-lift-premier-bash' AND sort_order >= 5 LIMIT 1")
     )
     seed_live_match_details()
     seed_gallery_album_metadata()
@@ -456,6 +461,38 @@ def seed_operational_data() -> None:
                     "INSERT INTO news_blocks(id, post_slug, block_type, content_json, sort_order) VALUES (?, ?, ?, ?, ?)",
                     (f"nblock_{uuid4().hex[:10]}", post_slug, block_type, json.dumps({"text": content}), sort_order),
                 ))
+    rich_news_blocks = {
+        "mumbai-mavericks-lift-premier-bash": [
+            ("heading", "Sponsors, prize, and tournament story"),
+            ("paragraph", "The Mumbai Premier Bash was supported by SmartSportz operations, local venue partners, and city managers who verified registrations, player rosters, scorecards, payment receipts, and winner records across the complete tournament lifecycle."),
+            ("paragraph", "The event prize pool, winner trophy, runner-up recognition, MVP awards, and digital certificates are connected with the tournament record so teams can review the same official story from the news page, public tournament page, and participant dashboard."),
+            ("image", "/assets/cricket-stadium.png"),
+        ],
+        "corporate-t20-live-score-surge": [
+            ("heading", "Game intelligence and partner visibility"),
+            ("paragraph", "This live update combines sponsor branding, cricket match context, team momentum, individual batting records, match clock, and manager-published highlights into one article for spectators and registered teams."),
+            ("paragraph", "Managers can extend this news article with more sub titles, optional images, sponsor notes, prize details, venue contacts, and tournament-specific paragraphs without exposing raw HTML."),
+        ],
+        "football-cup-registration-opens-delhi": [
+            ("heading", "Registration, city, and sponsor notes"),
+            ("paragraph", "The football program includes Delhi, Noida, and Gurugram city eligibility, team capacity rules, document checks, and sponsor-ready tournament information for public promotion."),
+            ("paragraph", "When registration opens, captains can move from this news story to the correct tournament registration flow and complete payment, roster, verification, and QR confirmation."),
+        ],
+        "kerala-volleyball-classic-archive": [
+            ("heading", "Archived media and final result"),
+            ("paragraph", "The completed tournament archive includes final-round media, winning team details, player scores, bracket history, prize record, sponsor mention, and shareable gallery/news links for the event."),
+            ("paragraph", "Spectators can use the article to revisit match videos, final results, and official media without mixing records from other tournaments."),
+        ],
+    }
+    for post_slug, blocks in rich_news_blocks.items():
+        existing_block_count = row("SELECT COUNT(*) AS count FROM news_blocks WHERE post_slug = ?", (post_slug,))
+        if existing_block_count and existing_block_count["count"] < 5:
+            next_order = existing_block_count["count"] + 1
+            for offset, (block_type, content) in enumerate(blocks):
+                statements.append((
+                    "INSERT INTO news_blocks(id, post_slug, block_type, content_json, sort_order) VALUES (?, ?, ?, ?, ?)",
+                    (f"nblock_{uuid4().hex[:10]}", post_slug, block_type, json.dumps({"text": content}), next_order + offset),
+                ))
     if not row("SELECT id FROM leaderboard_records LIMIT 1"):
         leaderboard = [
             ("Cricket", "Mumbai Mavericks", "Mumbai", 1, 12, 88, 4820, "15 wins / 2 finals"),
@@ -475,6 +512,203 @@ def seed_operational_data() -> None:
                 "INSERT INTO leaderboard_records(id, sport, team_name, city, rank, tournaments_won, win_rate, points, record_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (f"leader_{uuid4().hex[:10]}", sport, team_name, city, rank, tournaments_won, win_rate, points, record_label),
             ))
+    if not row("SELECT slug FROM home_discovery_cards LIMIT 1"):
+        discovery_cards = [
+            (
+                "smart-sportz-cricket-partner",
+                "Cricket Sponsor",
+                "Mumbai Premier Bash Operations Partner",
+                "Cricket",
+                "mumbai-premier-bash",
+                "SmartSportz",
+                "/assets/logo.png",
+                "/assets/cricket-stadium.png",
+                "Aug 14 - Sep 02, 2026",
+                "SmartSportz powers the Mumbai Premier Bash registration, roster verification, live scoring, QR confirmation, payment status, and final reporting workflow. The sponsor story connects the public tournament page, participant registration, manager approvals, and completed match records in one visible journey.",
+                "SmartSportz is the platform sponsor for tournament operations, public discovery, team registration, live score intelligence, payment tracking, and post-event archives.",
+                "/tournaments/mumbai-premier-bash/register",
+                1,
+                1,
+            ),
+            (
+                "brillaris-football-partner",
+                "Technology Partner",
+                "National Youth Football Digital Experience",
+                "Football",
+                "national-youth-football",
+                "Brillaris",
+                "https://brillaris.pro/assets/img/Logo1.png",
+                "/assets/football-match.png",
+                "Sep 12 - Sep 20, 2026",
+                "Brillaris represents the digital engineering partner behind professional tournament content, public pages, sponsor placement, gallery records, and manager-controlled updates. The football program highlights city-based registrations, club discovery, match schedules, and future event communications.",
+                "Brillaris supports the product design and engineering layer for Smart Sportz experiences, including frontend workflows, data-backed content sections, and tournament publishing systems.",
+                "/tournaments/national-youth-football",
+                2,
+                1,
+            ),
+            (
+                "machaxi-basketball-partner",
+                "Experience Partner",
+                "Pro Elite Basketball Matchday Showcase",
+                "Basketball",
+                "pro-elite-basketball",
+                "Machaxi",
+                "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp",
+                "/assets/basketball-match.png",
+                "Oct 04 - Oct 12, 2026",
+                "Machaxi is referenced as an experience benchmark for polished sports interaction design. The basketball showcase presents premium match cards, mobile-first event discovery, sponsor-led storytelling, and clean registration pathways for arena tournaments.",
+                "Machaxi-inspired patterns guide premium sports UI behavior, visual rhythm, and strong sponsor presentation without overwhelming tournament actions.",
+                "/tournaments/pro-elite-basketball/register",
+                3,
+                1,
+            ),
+            (
+                "volleyball-archive-partner",
+                "Archive Partner",
+                "Kerala Volleyball Classic Records",
+                "Volleyball",
+                "kerala-volleyball-classic",
+                "Smart Sportz Archive Desk",
+                "/assets/logo.png",
+                "/assets/volleyball-match.png",
+                "Dec 02 - Dec 12, 2025",
+                "The completed volleyball archive keeps tournament memories alive through month-based gallery records, round media, final result summaries, player score details, and shareable news pages for teams and fans.",
+                "The archive partner section is designed for completed tournament storytelling, sponsor recognition, and long-term public record keeping.",
+                "/tournaments/kerala-volleyball-classic",
+                4,
+                1,
+            ),
+        ]
+        statements += [(
+            """
+            INSERT OR IGNORE INTO home_discovery_cards (
+              slug, label, title, sport, tournament_slug, sponsor_name, sponsor_image, image,
+              event_date, description, sponsor_details, register_path, sort_order, published
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            item,
+        ) for item in discovery_cards]
+    extra_discovery_cards = [
+        (
+            "chess-championship-sponsor",
+            "Chess Sponsor",
+            "Chess Championship Operations Partner",
+            "Chess",
+            "",
+            "Mind Sports Development Desk",
+            "/assets/logo.png",
+            "/assets/generated/sport-chess-sponsor.png",
+            "Winter 2026 planning window",
+            "Chess events can be presented as premium school, academy, corporate, and city championships with rules, player verification, round allocation, ranking records, sponsor visibility, and final certificate workflows.",
+            "Mind Sports Development Desk represents strategy-focused sponsor programming for chess tournaments, ranking meets, student championships, and public result archives.",
+            "/sports/chess",
+            5,
+            1,
+        ),
+        (
+            "badminton-court-partner",
+            "Badminton Sponsor",
+            "Badminton Court Event Partner",
+            "Badminton",
+            "",
+            "Indoor Court Partners",
+            "/assets/logo.png",
+            "/assets/generated/sport-badminton-sponsor.png",
+            "2026 indoor court calendar",
+            "Badminton tournament discovery can include singles, doubles, academy meets, city circuits, court schedules, player categories, sponsor notes, and verified match result records.",
+            "Indoor Court Partners supports court availability, local sponsor promotion, category setup, and manager-published public event details.",
+            "/sports/badminton",
+            6,
+            1,
+        ),
+        (
+            "table-tennis-ranking-partner",
+            "Table Tennis Sponsor",
+            "Table Tennis Ranking Meet Partner",
+            "Table Tennis",
+            "",
+            "SmartSportz Ranking Desk",
+            "/assets/logo.png",
+            "/assets/generated/sport-table-tennis-sponsor.png",
+            "2026 ranking cycle",
+            "Table tennis programs can publish ranking meets, fast bracket updates, player score histories, category details, sponsor boards, and downloadable final records.",
+            "SmartSportz Ranking Desk supports rankings, player histories, public leaderboards, and category-based tournament discovery.",
+            "/sports/table-tennis",
+            7,
+            1,
+        ),
+        (
+            "athletics-meet-partner",
+            "Athletics Sponsor",
+            "Athletics Meet Records Partner",
+            "Athletics",
+            "",
+            "City Athletics Council",
+            "/assets/logo.png",
+            "/assets/generated/sport-athletics-sponsor.png",
+            "2026 meet schedule",
+            "Athletics meets can show event dates, heats, medal tables, timing records, school teams, city sponsors, media galleries, and final certificates in a clear public flow.",
+            "City Athletics Council represents official meet planning, medal records, venue communication, and sponsor-backed public performance archives.",
+            "/sports/athletics",
+            8,
+            1,
+        ),
+    ]
+    for item in extra_discovery_cards:
+        if not row("SELECT slug FROM home_discovery_cards WHERE slug = ?", (item[0],)):
+            statements.append((
+                """
+                INSERT OR IGNORE INTO home_discovery_cards (
+                  slug, label, title, sport, tournament_slug, sponsor_name, sponsor_image, image,
+                  event_date, description, sponsor_details, register_path, sort_order, published
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                item,
+            ))
+    if not row("SELECT id FROM live_highlights LIMIT 1"):
+        statements.append((
+            """
+            INSERT OR IGNORE INTO live_highlights (
+              id, match_id, title, stage_label, home_team, away_team, home_score, away_score,
+              image, description, impact_notes, link_path, sort_order, published
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "live_highlight_primary",
+                "match-48",
+                "Corporate T20 Semi-Final Impact Watch",
+                "Semi-Final Live",
+                "India Forge",
+                "England XI",
+                "156/4",
+                "Yet to bat",
+                "/assets/cricket-stadium.png",
+                "The current homepage highlight is selected from the live match feed so high-impact matches such as semi-finals, finals, and close chases can surface automatically instead of showing placeholder analytics.",
+                "Live score, batting momentum, individual player scores, match clock, substitutions, highlights, and commentary are ready for the match center.",
+                "/live/match-48",
+                1,
+                1,
+            ),
+        ))
+    if not row("SELECT slug FROM sponsor_logos LIMIT 1"):
+        sponsor_logos = [
+            ("smartsportz", "SmartSportz", "/assets/logo.png", "https://smart-sportz-dun.vercel.app/", 1, 1),
+            ("brillaris", "Brillaris", "https://brillaris.pro/assets/img/Logo1.png", "https://brillaris.pro", 2, 1),
+            ("machaxi", "Machaxi", "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp", "https://machaxi.com", 3, 1),
+            ("smart-archive", "Smart Archive Desk", "/assets/logo.png", "https://smart-sportz-dun.vercel.app/news", 4, 1),
+        ]
+        statements += [(
+            "INSERT OR IGNORE INTO sponsor_logos(slug, name, image, link_url, sort_order, published) VALUES (?, ?, ?, ?, ?, ?)",
+            item,
+        ) for item in sponsor_logos]
+    statements.append((
+        """
+        INSERT INTO sponsor_logos(slug, name, image, link_url, sort_order, published)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(slug) DO UPDATE SET image = excluded.image, link_url = excluded.link_url, published = excluded.published
+        """,
+        ("smartsportz", "SmartSportz", "/assets/logo.png", "https://smart-sportz-dun.vercel.app/", 1, 1),
+    ))
     if statements:
         execute_many(statements)
         audit_execute(

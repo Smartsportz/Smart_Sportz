@@ -1,10 +1,51 @@
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { newsPosts, tournaments } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
+
+type NewsBlock = { type: string; content: string; sortOrder?: number };
+type NewsPost = {
+  slug: string;
+  title: string;
+  shortDescription: string;
+  image: string;
+  category: string;
+  sport: string;
+  city: string;
+  date: string;
+  tournamentSlug?: string;
+  highlight?: boolean;
+  blocks: NewsBlock[];
+};
+type NewsSocial = Record<string, { likes: number; comments: Array<{ text: string; createdAt?: string }> }>;
+
+function normalizePost(item: any): NewsPost {
+  return {
+    slug: item.slug,
+    title: item.title,
+    shortDescription: item.shortDescription ?? item.short_description ?? "",
+    image: item.image,
+    category: item.category,
+    sport: item.sport,
+    city: item.city,
+    date: item.date ?? item.published_at?.slice(0, 10) ?? item.created_at?.slice(0, 10) ?? "Published",
+    tournamentSlug: item.tournamentSlug ?? item.tournament_slug,
+    highlight: Boolean(item.highlight ?? item.is_highlight),
+    blocks: (item.blocks ?? []).map((block: any) => ({
+      type: block.type ?? block.block_type ?? "paragraph",
+      content: block.content ?? block.text ?? "",
+      sortOrder: block.sortOrder ?? block.sort_order,
+    })),
+  };
+}
+
+function fallbackPosts() {
+  return newsPosts.map(normalizePost);
+}
 
 function renderBlock(block: { type: string; content: string }, index: number) {
   if (block.type === "heading") return <h2 key={index}>{block.content}</h2>;
@@ -20,10 +61,14 @@ function renderBlock(block: { type: string; content: string }, index: number) {
 
 export function NewsPage() {
   useWheelHorizontal();
+  const [remotePosts, setRemotePosts] = useState<NewsPost[]>([]);
+  const [social, setSocial] = useState<NewsSocial>({});
+  const posts = remotePosts.length ? remotePosts : fallbackPosts();
   const categories = ["Winner Teams", "Match Updates", "Tournament Updates", "Announcements"];
-  const highlightedPosts = newsPosts.filter((post) => post.highlight);
+  const visibleCategories = categories.filter((category) => posts.some((post) => post.category === category));
+  const highlightedPosts = posts.filter((post) => post.highlight);
   const [highlightIndex, setHighlightIndex] = useState(0);
-  const activeHighlight = highlightedPosts[highlightIndex] ?? newsPosts[0];
+  const activeHighlight = highlightedPosts[highlightIndex] ?? posts[0];
   const moveHighlight = (direction: "left" | "right") => {
     setHighlightIndex((current) => {
       if (!highlightedPosts.length) return 0;
@@ -38,6 +83,44 @@ export function NewsPage() {
     const timer = window.setInterval(() => moveHighlight("right"), 5200);
     return () => window.clearInterval(timer);
   }, [highlightedPosts.length]);
+
+  useEffect(() => {
+    let alive = true;
+    apiRequest<any[]>("/news")
+      .then((items) => {
+        if (alive) setRemotePosts(items.map(normalizePost));
+      })
+      .catch(() => {
+        if (alive) setRemotePosts([]);
+      });
+    apiRequest<NewsSocial>("/news/social")
+      .then((items) => {
+        if (alive) setSocial(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function toggleLike(slug: string) {
+    const updated = await apiRequest<{ slug: string; likes: number }>("/news/social/like", {
+      method: "POST",
+      body: JSON.stringify({ slug, liked: true }),
+    });
+    setSocial((current) => ({ ...current, [slug]: { ...(current[slug] ?? { comments: [] }), likes: updated.likes } }));
+  }
+
+  async function sharePost(post: NewsPost) {
+    const url = new URL(`/news/${post.slug}`, window.location.origin).toString();
+    const imageUrl = new URL(post.image, window.location.origin).toString();
+    const payload = { title: post.title, text: `${post.shortDescription} Image: ${imageUrl}`, url };
+    if (navigator.share) {
+      await navigator.share(payload);
+      return;
+    }
+    await navigator.clipboard.writeText(`${payload.text}\n${url}`);
+  }
 
   return (
     <Page className="news-page">
@@ -55,8 +138,8 @@ export function NewsPage() {
         </Link>
       </section>
       <section className="section news-category-sections">
-        {categories.map((category) => {
-          const categoryPosts = newsPosts.filter((post) => post.category === category);
+        {visibleCategories.map((category) => {
+          const categoryPosts = posts.filter((post) => post.category === category);
           return (
             <div className="news-category-block" key={category}>
               <div className="news-category-heading">
@@ -67,8 +150,8 @@ export function NewsPage() {
               </div>
               <div className="news-list-grid wheel-horizontal news-category-carousel">
                 {categoryPosts.map((post) => (
-                  <Link className="click-card" to={`/news/${post.slug}`} key={post.slug}>
-                    <article className="news-card panel">
+                  <article className="news-card panel" key={post.slug}>
+                    <Link className="click-card news-card-link" to={`/news/${post.slug}`}>
                       <div className="news-card-media">
                         <img src={post.image} alt="" />
                       </div>
@@ -78,8 +161,13 @@ export function NewsPage() {
                         <p>{post.shortDescription}</p>
                         <small>{post.sport} - {post.city} - {post.date}</small>
                       </div>
-                    </article>
-                  </Link>
+                    </Link>
+                    <div className="news-social-actions">
+                      <button type="button" onClick={() => void toggleLike(post.slug)}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
+                      <Link to={`/news/${post.slug}#comments`}><MessageCircle size={15} />{social[post.slug]?.comments?.length ?? 0}</Link>
+                      <button type="button" onClick={() => void sharePost(post)}><Share2 size={15} />Share</button>
+                    </div>
+                  </article>
                 ))}
               </div>
             </div>
@@ -92,9 +180,56 @@ export function NewsPage() {
 
 export function NewsDetailPage() {
   const { slug } = useParams();
-  const post = newsPosts.find((item) => item.slug === slug) ?? newsPosts[0];
+  const [remotePost, setRemotePost] = useState<NewsPost | null>(null);
+  const [social, setSocial] = useState<NewsSocial>({});
+  const [comment, setComment] = useState("");
+  const post = remotePost ?? fallbackPosts().find((item) => item.slug === slug) ?? fallbackPosts()[0];
   const tournament = tournaments.find((item) => item.slug === post.tournamentSlug);
-  const related = newsPosts.filter((item) => item.slug !== post.slug && (item.sport === post.sport || item.city === post.city)).slice(0, 3);
+  const related = fallbackPosts().filter((item) => item.slug !== post.slug && (item.sport === post.sport || item.city === post.city)).slice(0, 3);
+
+  useEffect(() => {
+    if (!slug) return;
+    let alive = true;
+    apiRequest<any>(`/news/${slug}`)
+      .then((item) => {
+        if (alive) setRemotePost(normalizePost(item));
+      })
+      .catch(() => undefined);
+    apiRequest<NewsSocial>("/news/social")
+      .then((items) => {
+        if (alive) setSocial(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
+
+  async function shareNews() {
+    const url = window.location.href;
+    const imageUrl = new URL(post.image, window.location.origin).toString();
+    const sharePayload = {
+      title: post.title,
+      text: `${post.shortDescription} Image: ${imageUrl}`,
+      url,
+    };
+    if (navigator.share) {
+      await navigator.share(sharePayload);
+      return;
+    }
+    await navigator.clipboard.writeText(`${sharePayload.text}\n${url}`);
+    window.alert("News image and link copied.");
+  }
+
+  async function submitComment() {
+    if (!comment.trim()) return;
+    const updated = await apiRequest<{ slug: string; comments: Array<{ text: string; createdAt?: string }> }>("/news/social/comment", {
+      method: "POST",
+      body: JSON.stringify({ slug: post.slug, comment }),
+    });
+    setSocial((current) => ({ ...current, [post.slug]: { ...(current[post.slug] ?? { likes: 0 }), comments: updated.comments } }));
+    setComment("");
+  }
 
   return (
     <Page>
@@ -110,10 +245,29 @@ export function NewsDetailPage() {
             <span>{post.city}</span>
             {tournament && <Link to={`/tournaments/${tournament.slug}`}>{tournament.name}</Link>}
           </div>
+          <button className="btn btn-secondary news-share-button" type="button" onClick={() => void shareNews()}><Share2 size={16} />Share image and link</button>
         </div>
       </article>
       <section className="article-body panel">
         {post.blocks.map(renderBlock)}
+        <div className="news-context-grid">
+          <div><b>Game</b><span>{post.sport}</span></div>
+          <div><b>Tournament</b><span>{tournament?.name ?? post.title}</span></div>
+          <div><b>Sponsors</b><span>SmartSportz operations partners and city event supporters</span></div>
+          <div><b>Prize</b><span>{tournament?.prize ?? "Published with official tournament record"}</span></div>
+        </div>
+        <div className="news-social-actions news-detail-actions">
+          <button type="button" onClick={() => void apiRequest<{ likes: number }>("/news/social/like", { method: "POST", body: JSON.stringify({ slug: post.slug, liked: true }) }).then((updated) => setSocial((current) => ({ ...current, [post.slug]: { ...(current[post.slug] ?? { comments: [] }), likes: updated.likes } })))}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
+          <button type="button" onClick={() => void shareNews()}><Share2 size={15} />Share</button>
+        </div>
+        <div className="news-comments" id="comments">
+          <h3>Comments</h3>
+          {(social[post.slug]?.comments ?? []).map((item, index) => <p key={`${item.createdAt}-${index}`}>{item.text}</p>)}
+          <div className="comment-form">
+            <input value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Write a comment..." />
+            <button className="btn btn-primary" type="button" onClick={() => void submitComment()}>Post</button>
+          </div>
+        </div>
       </section>
       <section className="section" id="latest">
         <PageHero title="Latest Updates" text="Related tournament and city stories." />

@@ -228,6 +228,49 @@ CREATE TABLE IF NOT EXISTS cms_content (
   published INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS home_discovery_cards (
+  slug TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  title TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  tournament_slug TEXT NOT NULL DEFAULT '',
+  sponsor_name TEXT NOT NULL,
+  sponsor_image TEXT NOT NULL,
+  image TEXT NOT NULL,
+  event_date TEXT NOT NULL,
+  description TEXT NOT NULL,
+  sponsor_details TEXT NOT NULL,
+  register_path TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS live_highlights (
+  id TEXT PRIMARY KEY,
+  match_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  stage_label TEXT NOT NULL,
+  home_team TEXT NOT NULL,
+  away_team TEXT NOT NULL,
+  home_score TEXT NOT NULL,
+  away_score TEXT NOT NULL,
+  image TEXT NOT NULL,
+  description TEXT NOT NULL,
+  impact_notes TEXT NOT NULL,
+  link_path TEXT NOT NULL DEFAULT '/live',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS sponsor_logos (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  image TEXT NOT NULL,
+  link_url TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS news_posts (
   slug TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -254,6 +297,14 @@ CREATE TABLE IF NOT EXISTS news_blocks (
   content_json TEXT NOT NULL,
   sort_order INTEGER NOT NULL,
   FOREIGN KEY(post_slug) REFERENCES news_posts(slug)
+);
+
+CREATE TABLE IF NOT EXISTS news_social (
+  news_slug TEXT PRIMARY KEY,
+  likes INTEGER NOT NULL DEFAULT 0,
+  comments_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(news_slug) REFERENCES news_posts(slug)
 );
 
 CREATE TABLE IF NOT EXISTS sport_home_visibility (
@@ -489,6 +540,54 @@ def _apply_operational_schema(path=None) -> None:
         for column, definition in user_columns.items():
             _add_column(conn, "users", column, definition)
         _add_column(conn, "news_posts", "is_highlight", "INTEGER NOT NULL DEFAULT 0")
+        _executescript(conn, """
+CREATE TABLE IF NOT EXISTS home_discovery_cards (
+  slug TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  title TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  tournament_slug TEXT NOT NULL DEFAULT '',
+  sponsor_name TEXT NOT NULL,
+  sponsor_image TEXT NOT NULL,
+  image TEXT NOT NULL,
+  event_date TEXT NOT NULL,
+  description TEXT NOT NULL,
+  sponsor_details TEXT NOT NULL,
+  register_path TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS live_highlights (
+  id TEXT PRIMARY KEY,
+  match_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL,
+  stage_label TEXT NOT NULL,
+  home_team TEXT NOT NULL,
+  away_team TEXT NOT NULL,
+  home_score TEXT NOT NULL,
+  away_score TEXT NOT NULL,
+  image TEXT NOT NULL,
+  description TEXT NOT NULL,
+  impact_notes TEXT NOT NULL,
+  link_path TEXT NOT NULL DEFAULT '/live',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS sponsor_logos (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  image TEXT NOT NULL,
+  link_url TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS news_social (
+  news_slug TEXT PRIMARY KEY,
+  likes INTEGER NOT NULL DEFAULT 0,
+  comments_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TEXT NOT NULL
+);
+""")
         live_match_columns = {
             "youtube_url": "TEXT NOT NULL DEFAULT ''",
             "venue": "TEXT NOT NULL DEFAULT ''",

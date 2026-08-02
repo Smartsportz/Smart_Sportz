@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Page } from "../components/UI";
-import { archiveForTournament, assets, tournaments, withRuntimeTournamentStatus } from "../data/platform";
+import { assets, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
@@ -168,7 +168,11 @@ function writeGalleryState(value: GallerySocialState) {
 
 export function GalleryPage() {
   useWheelHorizontal(".gallery-month-row");
+  const [params, setParams] = useSearchParams();
   const [albumList, setAlbumList] = useState(galleryAlbums);
+  const [social, setSocial] = useState(() => readGalleryState());
+  const [selectedKey, setSelectedKey] = useState(params.get("image") || "");
+  const [commentDraft, setCommentDraft] = useState("");
   const futureEvents = useMemo(
     () => tournaments.map((item) => withRuntimeTournamentStatus(item)).filter((item) => item.status !== "Completed").slice(0, 4),
     [],
@@ -211,6 +215,30 @@ export function GalleryPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    apiRequest<Record<string, { likes?: number; comments?: string[] }>>("/public/gallery/social")
+      .then((remote) => {
+        if (!active) return;
+        setSocial((current) => {
+          const merged: GallerySocialState = { ...current };
+          Object.entries(remote).forEach(([key, value]) => {
+            merged[key] = {
+              ...merged[key],
+              likes: value.likes,
+              comments: value.comments ?? [],
+            };
+          });
+          writeGalleryState(merged);
+          return merged;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const monthGroups = useMemo(() => {
     const groups = albumList.reduce<Record<string, GalleryAlbum[]>>((acc, album) => {
       acc[album.month] = [...(acc[album.month] ?? []), album];
@@ -218,6 +246,96 @@ export function GalleryPage() {
     }, {});
     return Object.entries(groups);
   }, [albumList]);
+
+  const winnerItems = useMemo(() => albumList.map((album) => {
+    const finalRound = album.rounds.find((round) => round.id === "final") ?? album.rounds[album.rounds.length - 1];
+    const finalImage = finalRound.images[0];
+    const key = imageKey(album.slug, finalRound.id, finalImage.id);
+    return { album, round: finalRound, image: finalImage, key };
+  }), [albumList]);
+  const selectedWinner = winnerItems.find((item) => item.key === selectedKey);
+
+  useEffect(() => {
+    const imageParam = params.get("image") || "";
+    if (imageParam) setSelectedKey(imageParam);
+  }, [params]);
+
+  function persistGallerySocial(next: GallerySocialState) {
+    setSocial(next);
+    writeGalleryState(next);
+  }
+
+  function openWinner(key: string) {
+    setSelectedKey(key);
+    setParams({ image: key });
+    setCommentDraft("");
+  }
+
+  function closeWinner() {
+    setSelectedKey("");
+    setParams({});
+    setCommentDraft("");
+  }
+
+  function toggleGalleryLike(key: string) {
+    const current = social[key] ?? { likes: 24, comments: [] };
+    const liked = !current.liked;
+    const next = {
+      ...social,
+      [key]: {
+        ...current,
+        liked,
+        likes: Math.max(0, (current.likes ?? 24) + (liked ? 1 : -1)),
+      },
+    };
+    persistGallerySocial(next);
+    apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/like", {
+      method: "POST",
+      body: JSON.stringify({ image_key: key, liked }),
+    }).then((remote) => {
+      setSocial((currentState) => {
+        const merged = { ...currentState, [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments } };
+        writeGalleryState(merged);
+        return merged;
+      });
+    }).catch(() => undefined);
+  }
+
+  function addGalleryComment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedWinner || !commentDraft.trim()) return;
+    const key = selectedWinner.key;
+    const current = social[key] ?? { likes: 24, comments: [] };
+    const comment = commentDraft.trim();
+    persistGallerySocial({ ...social, [key]: { ...current, comments: [...(current.comments ?? []), comment] } });
+    setCommentDraft("");
+    apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/comment", {
+      method: "POST",
+      body: JSON.stringify({ image_key: key, comment }),
+    }).then((remote) => {
+      setSocial((currentState) => {
+        const merged = { ...currentState, [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments } };
+        writeGalleryState(merged);
+        return merged;
+      });
+    }).catch(() => undefined);
+  }
+
+  async function shareGalleryWinner(item: typeof winnerItems[number]) {
+    const url = `${window.location.origin}${window.location.pathname}?image=${encodeURIComponent(item.key)}`;
+    const imageUrl = new URL(item.image.image, window.location.origin).toString();
+    const sharePayload = {
+      title: item.image.title,
+      text: `${item.image.title} - ${item.album.title}. Image: ${imageUrl}`,
+      url,
+    };
+    if (navigator.share) {
+      await navigator.share(sharePayload);
+      return;
+    }
+    await navigator.clipboard.writeText(`${sharePayload.text}\n${url}`);
+    window.alert("Gallery image link copied.");
+  }
 
   return (
     <Page className="gallery-page">
@@ -234,25 +352,29 @@ export function GalleryPage() {
               </div>
               <div className="gallery-month-row wheel-horizontal">
                 {albums.map((album) => {
-                  const archive = archiveForTournament(album.slug);
+                  const winner = winnerItems.find((item) => item.album.slug === album.slug);
+                  if (!winner) return null;
+                  const state = social[winner.key] ?? { likes: 24, comments: [] };
                   return (
-                    <Link className="gallery-tournament-row" key={album.slug} to={`/gallery/${album.slug}`}>
-                      <article className="gallery-album-card gallery-tournament-card">
-                        <img src={album.cover} alt="" />
+                    <article className="gallery-tournament-row gallery-winner-card" key={album.slug}>
+                      <button className="gallery-image-open" type="button" onClick={() => openWinner(winner.key)}>
+                        <div className="gallery-winner-media">
+                          <img src={winner.image.image} alt="" />
+                        </div>
                         <div className="gallery-album-copy">
                           <span className="status emerald">{album.sport}</span>
                           <h3>{album.title}</h3>
-                          <p>{album.summary}</p>
+                          <p>{winner.image.caption}</p>
                           <div className="gallery-card-date">{album.date}</div>
-                          <div className="gallery-album-stats">
-                            <small>Champion: {archive?.champion ?? "Published after final"}</small>
-                            <small>{album.rounds.length} rounds</small>
-                            <small>{album.rounds.reduce((total, round) => total + round.images.length, 0)} images</small>
-                          </div>
-                          <b>View details</b>
+                          <b>Open winner image</b>
                         </div>
-                      </article>
-                    </Link>
+                      </button>
+                      <div className="gallery-social-row">
+                        <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleGalleryLike(winner.key)}><Heart size={15} />{state.likes ?? 24}</button>
+                        <button type="button" onClick={() => openWinner(winner.key)}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
+                        <button type="button" onClick={() => void shareGalleryWinner(winner)}><Share2 size={15} />Share</button>
+                      </div>
+                    </article>
                   );
                 })}
               </div>
@@ -282,6 +404,34 @@ export function GalleryPage() {
           ))}
         </div>
       </section>
+
+      {selectedWinner && (
+        <div className="gallery-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${selectedWinner.image.title} gallery detail`}>
+          <article className="gallery-modal-card gallery-home-modal">
+            <button className="gallery-modal-close" type="button" onClick={closeWinner} aria-label="Close image detail"><X size={18} /></button>
+            <img className="gallery-home-modal-image" src={selectedWinner.image.image} alt="" />
+            <div className="gallery-home-modal-copy">
+              <span className="status emerald">{selectedWinner.round.name}</span>
+              <h2>{selectedWinner.image.title}</h2>
+              <p>{selectedWinner.image.description}</p>
+              <small>{selectedWinner.album.title} - {selectedWinner.album.date}</small>
+            </div>
+            <div className="gallery-modal-actions">
+              <button type="button" className={social[selectedWinner.key]?.liked ? "active" : ""} onClick={() => toggleGalleryLike(selectedWinner.key)}><Heart size={16} />{social[selectedWinner.key]?.likes ?? 24}</button>
+              <button type="button" onClick={() => void shareGalleryWinner(selectedWinner)}><Share2 size={16} />Share image</button>
+            </div>
+            <form className="gallery-comment-form" onSubmit={addGalleryComment}>
+              <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a comment for this winner image..." />
+              <button type="submit"><Send size={16} />Post</button>
+            </form>
+            <div className="gallery-comment-list">
+              {(social[selectedWinner.key]?.comments ?? []).map((comment, index) => (
+                <p key={`${comment}-${index}`}><b>Fan {index + 1}</b><span>{comment}</span></p>
+              ))}
+            </div>
+          </article>
+        </div>
+      )}
     </Page>
   );
 }

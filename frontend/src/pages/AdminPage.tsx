@@ -284,6 +284,7 @@ function AdminTournamentsDbPanel() {
     subHeader: "",
     body: "",
     quote: "",
+    sections: [{ subHeader: "", description: "", image: "" }],
   });
   const [announcementDraft, setAnnouncementDraft] = useState({ title: "", image: "", description: "" });
   const [deleteCandidate, setDeleteCandidate] = useState<Record<string, any> | null>(null);
@@ -412,6 +413,13 @@ function AdminTournamentsDbPanel() {
       subHeader: `${tournament.sport} tournament in ${tournament.location}`,
       body: tournament.tournament_description || form.tournamentDescription || "Manager can edit this story before publishing.",
       quote: tournament.sport_description || form.sportDescription || "Smart Sportz tournament operations update.",
+      sections: [
+        {
+          subHeader: "Tournament, sponsor, and prize detail",
+          description: `${tournament.name} includes sponsor visibility, game details, prize records, venue/city information, manager notes, and official Smart Sportz registration context.`,
+          image: tournament.image || form.image,
+        },
+      ],
     }));
     setFlowStage("news");
     setConfirmModal(null);
@@ -423,6 +431,11 @@ function AdminTournamentsDbPanel() {
     setMessage("");
     setError("");
     try {
+      const sectionBlocks = newsDraft.sections.flatMap((section) => [
+        { block_type: "heading", content: section.subHeader },
+        { block_type: "paragraph", content: section.description },
+        ...(section.image ? [{ block_type: "image", content: section.image }] : []),
+      ]).filter((block) => block.content.trim());
       await apiRequest("/management/news", {
         method: "POST",
         body: JSON.stringify({
@@ -439,6 +452,7 @@ function AdminTournamentsDbPanel() {
             { block_type: "heading", content: newsDraft.subHeader || newsDraft.title },
             { block_type: "paragraph", content: newsDraft.body || newsDraft.shortDescription },
             { block_type: "quote", content: newsDraft.quote || "Published from Smart Sportz manager workflow." },
+            ...sectionBlocks,
           ],
         }),
       }, token);
@@ -463,6 +477,26 @@ function AdminTournamentsDbPanel() {
   function saveWorkspace() {
     setWorkspaceSaved(true);
     setMessage(`${roundCount} round workspace saved for ${savedTournament?.name ?? form.name}.`);
+  }
+
+  function updateNewsSection(index: number, patch: Partial<{ subHeader: string; description: string; image: string }>) {
+    setNewsDraft((current) => ({
+      ...current,
+      sections: current.sections.map((section, sectionIndex) => sectionIndex === index ? { ...section, ...patch } : section),
+    }));
+  }
+
+  function addNewsSection() {
+    setNewsDraft((current) => ({
+      ...current,
+      sections: [...current.sections, { subHeader: "", description: "", image: "" }],
+    }));
+  }
+
+  function readImageFile(file: File, callback: (value: string) => void) {
+    const reader = new FileReader();
+    reader.onload = () => callback(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
   }
 
   async function deleteTournament() {
@@ -627,12 +661,32 @@ function AdminTournamentsDbPanel() {
                 <div className="form-grid">
                   <label>Title<input value={newsDraft.title} onChange={(event) => setNewsDraft((current) => ({ ...current, title: event.target.value }))} /></label>
                   <label>Category<select value={newsDraft.category} onChange={(event) => setNewsDraft((current) => ({ ...current, category: event.target.value }))}><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
-                  <label>Image<input value={newsDraft.image} onChange={(event) => setNewsDraft((current) => ({ ...current, image: event.target.value }))} /></label>
+                  <label>Main image<input type="file" accept="image/*" onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) readImageFile(file, (image) => setNewsDraft((current) => ({ ...current, image })));
+                  }} /></label>
+                  <label>Image URL<input value={newsDraft.image} onChange={(event) => setNewsDraft((current) => ({ ...current, image: event.target.value }))} /></label>
                   <label>Sub header<input value={newsDraft.subHeader} onChange={(event) => setNewsDraft((current) => ({ ...current, subHeader: event.target.value }))} /></label>
                 </div>
                 <label>Short description<textarea value={newsDraft.shortDescription} onChange={(event) => setNewsDraft((current) => ({ ...current, shortDescription: event.target.value }))} /></label>
                 <label>Body section<textarea value={newsDraft.body} onChange={(event) => setNewsDraft((current) => ({ ...current, body: event.target.value }))} /></label>
                 <label>Quote / callout<textarea value={newsDraft.quote} onChange={(event) => setNewsDraft((current) => ({ ...current, quote: event.target.value }))} /></label>
+                <div className="news-section-builder">
+                  {newsDraft.sections.map((section, index) => (
+                    <div className="panel subtle-panel" key={index}>
+                      <div className="form-grid">
+                        <label>Sub title<input value={section.subHeader} onChange={(event) => updateNewsSection(index, { subHeader: event.target.value })} /></label>
+                        <label>Optional image<input type="file" accept="image/*" onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) readImageFile(file, (image) => updateNewsSection(index, { image }));
+                        }} /></label>
+                      </div>
+                      <label>Sub title description<textarea value={section.description} onChange={(event) => updateNewsSection(index, { description: event.target.value })} /></label>
+                      <label>Optional image URL<input value={section.image} onChange={(event) => updateNewsSection(index, { image: event.target.value })} /></label>
+                    </div>
+                  ))}
+                  <button className="btn btn-secondary" type="button" onClick={addNewsSection}>Add Sub Title</button>
+                </div>
                 <div className="admin-flow-checks">
                   <label className="visibility-row"><span><b>Display news</b><small>Default selected.</small></span><input type="checkbox" checked={newsDraft.displayNews} onChange={(event) => setNewsDraft((current) => ({ ...current, displayNews: event.target.checked }))} /></label>
                   <label className="visibility-row"><span><b>Highlight news</b><small>Top slider.</small></span><input type="checkbox" checked={newsDraft.highlight} onChange={(event) => setNewsDraft((current) => ({ ...current, highlight: event.target.checked }))} /></label>
@@ -726,14 +780,25 @@ function OptionalDataTable({ title, columns, rows }: { title: string; columns: s
 function AdminCmsDbPanel() {
   const { token } = useAuth();
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
+  const [homeContent, setHomeContent] = useState<{
+    discoveryCards: Array<Record<string, any>>;
+    liveHighlights: Array<Record<string, any>>;
+    sponsorLogos: Array<Record<string, any>>;
+  }>({ discoveryCards: [], liveHighlights: [], sponsorLogos: [] });
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     let alive = true;
     setError("");
-    apiRequest<Array<Record<string, any>>>("/admin/cms", {}, token)
-      .then((payload) => {
-        if (alive) setRecords(payload);
+    Promise.all([
+      apiRequest<Array<Record<string, any>>>("/admin/cms", {}, token),
+      apiRequest<{ discoveryCards: Array<Record<string, any>>; liveHighlights: Array<Record<string, any>>; sponsorLogos: Array<Record<string, any>> }>("/admin/home-content", {}, token),
+    ])
+      .then(([cmsPayload, homePayload]) => {
+        if (!alive) return;
+        setRecords(cmsPayload);
+        setHomeContent(homePayload);
       })
       .catch((caught) => {
         if (alive) setError(caught instanceof Error ? caught.message : "Could not load CMS records.");
@@ -743,8 +808,33 @@ function AdminCmsDbPanel() {
 
   if (error) return <div className="form-alert">{error}</div>;
 
+  async function saveHomeItem(kind: "discovery" | "live-highlight" | "sponsor", id: string, item: Record<string, any>) {
+    const endpoint = kind === "discovery"
+      ? `/admin/home-content/discovery/${id}`
+      : kind === "live-highlight"
+        ? `/admin/home-content/live-highlight/${id}`
+        : `/admin/home-content/sponsor/${id}`;
+    try {
+      await apiRequest(endpoint, {
+        method: "PATCH",
+        body: JSON.stringify({ ...item, published: Boolean(item.published) }),
+      }, token);
+      setMessage("Homepage content updated.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save homepage content.");
+    }
+  }
+
+  function updateHomeList(listName: keyof typeof homeContent, index: number, patch: Record<string, any>) {
+    setHomeContent((current) => ({
+      ...current,
+      [listName]: current[listName].map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
+    }));
+  }
+
   return (
     <div className="manager-news-layout">
+      {message && <div className="form-alert success-alert">{message}</div>}
       <section className="panel admin-list-head">
         <div>
           <span className="status emerald">CMS Content</span>
@@ -762,6 +852,62 @@ function AdminCmsDbPanel() {
           <span className="table-actions"><Link to={`/admin/cms/${item.slug}`}>Edit</Link><Link to={item.path || "/"}>Preview</Link></span>,
         ])}
       />
+      <section className="panel cms-home-editor">
+        <h2>Homepage discovery cards</h2>
+        <p>Edit sponsor/game/tournament cards displayed in Discover tournaments across categories.</p>
+        {homeContent.discoveryCards.map((item, index) => (
+          <div className="cms-home-row" key={item.slug}>
+            <div className="form-grid">
+              <label>Label<input value={item.label || ""} onChange={(event) => updateHomeList("discoveryCards", index, { label: event.target.value })} /></label>
+              <label>Title<input value={item.title || ""} onChange={(event) => updateHomeList("discoveryCards", index, { title: event.target.value })} /></label>
+              <label>Sport<input value={item.sport || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sport: event.target.value })} /></label>
+              <label>Tournament slug<input value={item.tournament_slug || ""} onChange={(event) => updateHomeList("discoveryCards", index, { tournament_slug: event.target.value })} /></label>
+              <label>Sponsor name<input value={item.sponsor_name || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_name: event.target.value })} /></label>
+              <label>Image<input value={item.image || ""} onChange={(event) => updateHomeList("discoveryCards", index, { image: event.target.value })} /></label>
+              <label>Sponsor image<input value={item.sponsor_image || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_image: event.target.value })} /></label>
+              <label>Event date<input value={item.event_date || ""} onChange={(event) => updateHomeList("discoveryCards", index, { event_date: event.target.value })} /></label>
+              <label>Register path<input value={item.register_path || ""} onChange={(event) => updateHomeList("discoveryCards", index, { register_path: event.target.value })} /></label>
+              <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("discoveryCards", index, { sort_order: Number(event.target.value) })} /></label>
+            </div>
+            <label>Description<textarea rows={3} value={item.description || ""} onChange={(event) => updateHomeList("discoveryCards", index, { description: event.target.value })} /></label>
+            <label>Sponsor details<textarea rows={3} value={item.sponsor_details || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_details: event.target.value })} /></label>
+            <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("discoveryCards", index, { published: event.target.checked })} /> Published</label>
+            <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("discovery", item.slug, item)}>Save discovery card</button>
+          </div>
+        ))}
+      </section>
+      <section className="panel cms-home-editor">
+        <h2>Homepage live highlight</h2>
+        {homeContent.liveHighlights.map((item, index) => (
+          <div className="cms-home-row" key={item.id}>
+            <div className="form-grid">
+              {["title", "stage_label", "home_team", "away_team", "home_score", "away_score", "image", "link_path", "match_id"].map((field) => (
+                <label key={field}>{field.replace(/_/g, " ")}<input value={item[field] || ""} onChange={(event) => updateHomeList("liveHighlights", index, { [field]: event.target.value })} /></label>
+              ))}
+              <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("liveHighlights", index, { sort_order: Number(event.target.value) })} /></label>
+            </div>
+            <label>Description<textarea rows={3} value={item.description || ""} onChange={(event) => updateHomeList("liveHighlights", index, { description: event.target.value })} /></label>
+            <label>Impact notes<textarea rows={3} value={item.impact_notes || ""} onChange={(event) => updateHomeList("liveHighlights", index, { impact_notes: event.target.value })} /></label>
+            <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("liveHighlights", index, { published: event.target.checked })} /> Published</label>
+            <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("live-highlight", item.id, item)}>Save live highlight</button>
+          </div>
+        ))}
+      </section>
+      <section className="panel cms-home-editor">
+        <h2>Sponsor company logos</h2>
+        {homeContent.sponsorLogos.map((item, index) => (
+          <div className="cms-home-row compact" key={item.slug}>
+            <div className="form-grid">
+              <label>Name<input value={item.name || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { name: event.target.value })} /></label>
+              <label>Image<input value={item.image || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { image: event.target.value })} /></label>
+              <label>Link<input value={item.link_url || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { link_url: event.target.value })} /></label>
+              <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("sponsorLogos", index, { sort_order: Number(event.target.value) })} /></label>
+            </div>
+            <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("sponsorLogos", index, { published: event.target.checked })} /> Published</label>
+            <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("sponsor", item.slug, item)}>Save sponsor</button>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
@@ -947,6 +1093,10 @@ export function AdminTournamentEditorPage() {
 }
 
 function AdminTournamentPickerPanel({ mode }: { mode: "teams" | "payments" }) {
+  if (mode === "teams") {
+    return <AdminTeamsPanel />;
+  }
+
   const { token } = useAuth();
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
   const [error, setError] = useState("");
@@ -963,9 +1113,9 @@ function AdminTournamentPickerPanel({ mode }: { mode: "teams" | "payments" }) {
       {error && <div className="form-alert">{error}</div>}
       <section className="panel admin-list-head">
         <div>
-          <span className="status emerald">{mode === "teams" ? "Team Records" : "Payment Records"}</span>
+          <span className="status emerald">Payment Records</span>
           <h2>Select tournament</h2>
-          <p>{mode === "teams" ? "Open a tournament to view registered teams, players, scores, and registration records." : "Open a tournament to view total payments, team payments, receipts, and payment status."}</p>
+          <p>Open a tournament to view total payments, team payments, receipts, and payment status.</p>
         </div>
       </section>
       <div className="manager-tournament-row">
@@ -981,11 +1131,106 @@ function AdminTournamentPickerPanel({ mode }: { mode: "teams" | "payments" }) {
               <small>{item.teams}/{item.capacity} teams</small>
             </div>
             <div className="manager-card-actions">
-              <Link to={mode === "teams" ? `/admin/teams/tournament/${item.slug}` : `/admin/payments/tournament/${item.slug}`}>Open</Link>
+              <Link to={`/admin/payments/tournament/${item.slug}`}>Open</Link>
             </div>
           </article>
         ))}
       </div>
+    </>
+  );
+}
+
+type AdminTeamRow = {
+  id: string;
+  team_name: string;
+  tournament_name: string;
+  tournament_slug: string;
+  sport: string;
+  city: string;
+  captain_name: string;
+  user_email?: string;
+  payment_status: string;
+  status: string;
+  players_count: number;
+  latest_payment: number;
+  team_logo?: string;
+};
+
+function AdminTeamsPanel() {
+  const { token } = useAuth();
+  const [teams, setTeams] = useState<AdminTeamRow[]>([]);
+  const [deleteCandidate, setDeleteCandidate] = useState<AdminTeamRow | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function loadTeams() {
+    setError("");
+    try {
+      setTeams(await apiRequest<AdminTeamRow[]>("/admin/teams", {}, token));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load teams from database.");
+    }
+  }
+
+  useEffect(() => {
+    loadTeams();
+  }, [token]);
+
+  async function deleteTeam() {
+    if (!deleteCandidate) return;
+    try {
+      await apiRequest(`/admin/teams/${deleteCandidate.id}`, { method: "DELETE" }, token);
+      setTeams((current) => current.filter((item) => item.id !== deleteCandidate.id));
+      setMessage(`${deleteCandidate.team_name} deleted.`);
+      setDeleteCandidate(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete team.");
+    }
+  }
+
+  return (
+    <>
+      {message && <div className="form-alert success-alert">{message}</div>}
+      {error && <div className="form-alert">{error}</div>}
+      <section className="panel admin-list-head">
+        <div>
+          <span className="status emerald">Team Records</span>
+          <h2>Registered teams</h2>
+          <p>Open, edit, or delete database-backed team registrations without mixing data between tournaments.</p>
+        </div>
+      </section>
+      <DataTable
+        columns={["Team", "Tournament", "Captain", "City", "Players", "Payment", "Status", "Actions"]}
+        rows={teams.map((team) => [
+          <span className="admin-team-cell">
+            <img src={team.team_logo || "/assets/logo.png"} alt="" onError={(event) => { event.currentTarget.src = "/assets/logo.png"; }} />
+            <span><b>{team.team_name}</b><small>{team.user_email || team.sport}</small></span>
+          </span>,
+          team.tournament_name,
+          team.captain_name,
+          team.city,
+          team.players_count,
+          <span className={`status ${team.payment_status === "paid" ? "emerald" : "orange"}`}>{team.payment_status}</span>,
+          team.status,
+          <span className="table-action-group">
+            <Link className="inline-link" to={`/admin/teams/registrations/${team.id}`}>Open</Link>
+            <Link className="inline-link" to={`/admin/teams/${team.id}/edit`}>Edit</Link>
+            <button className="link-button danger-link" type="button" onClick={() => setDeleteCandidate(team)}>Delete</button>
+          </span>,
+        ])}
+      />
+      {deleteCandidate && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="panel confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-team-title">
+            <h3 id="delete-team-title">Delete team?</h3>
+            <p>This will remove {deleteCandidate.team_name}, its members, documents, and payment records from this tournament registration.</p>
+            <div className="form-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => setDeleteCandidate(null)}>Cancel</button>
+              <button className="btn btn-primary danger-button" type="button" onClick={deleteTeam}>Delete</button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
@@ -1073,6 +1318,88 @@ export function AdminRegistrationTeamDetailPage() {
             <DataTable columns={["Document", "File", "Status", "Uploaded"]} rows={data.documents.map((document) => [document.document_type, document.file_name, document.status, document.uploaded_at])} />
           </>
         )}
+      </PortalShell>
+    </Page>
+  );
+}
+
+export function AdminTeamEditPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { token } = useAuth();
+  const [form, setForm] = useState({
+    team_name: "",
+    captain_name: "",
+    sub_captain_name: "",
+    coach_name: "",
+    email: "",
+    phone: "",
+    city: "",
+    team_logo: "",
+    team_motto: "",
+  });
+  const [registration, setRegistration] = useState<Record<string, any> | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!id) return;
+    setError("");
+    apiRequest<{ registration: Record<string, any>; players: Array<Record<string, any>>; documents: Array<Record<string, any>>; payments: Array<Record<string, any>> }>(`/admin/registrations/${id}/team-detail`, {}, token)
+      .then((payload) => {
+        const item = payload.registration;
+        setRegistration(item);
+        setForm({
+          team_name: item.team_name || "",
+          captain_name: item.captain_name || "",
+          sub_captain_name: item.sub_captain_name || "",
+          coach_name: item.coach_name || "",
+          email: item.email || item.user_email || "",
+          phone: item.phone || "",
+          city: item.city || "",
+          team_logo: item.team_logo || "",
+          team_motto: item.team_motto || "",
+        });
+      })
+      .catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load team."));
+  }, [id, token]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!id) return;
+    setError("");
+    setMessage("");
+    try {
+      await apiRequest(`/admin/teams/${id}`, { method: "PATCH", body: JSON.stringify(form) }, token);
+      setMessage("Team updated successfully.");
+      setTimeout(() => navigate(`/admin/teams/registrations/${id}`), 500);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update team.");
+    }
+  }
+
+  return (
+    <Page>
+      <PortalShell title={registration?.team_name ? `Edit ${registration.team_name}` : "Edit Team"} subtitle="Update tournament-specific team registration details." sidebar={sidebar} action={<Link className="btn btn-secondary" to={id ? `/admin/teams/registrations/${id}` : "/admin/teams"}>Back</Link>}>
+        {message && <div className="form-alert success-alert">{message}</div>}
+        {error && <div className="form-alert">{error}</div>}
+        <form className="panel admin-edit-form" onSubmit={submit}>
+          <div className="form-grid">
+            <label>Team name<input value={form.team_name} onChange={(event) => setForm({ ...form, team_name: event.target.value })} required /></label>
+            <label>Captain name<input value={form.captain_name} onChange={(event) => setForm({ ...form, captain_name: event.target.value })} required /></label>
+            <label>Sub-captain name<input value={form.sub_captain_name} onChange={(event) => setForm({ ...form, sub_captain_name: event.target.value })} /></label>
+            <label>Coach name<input value={form.coach_name} onChange={(event) => setForm({ ...form, coach_name: event.target.value })} /></label>
+            <label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
+            <label>Phone<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+            <label>City<input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} required /></label>
+            <label>Team logo URL<input value={form.team_logo} onChange={(event) => setForm({ ...form, team_logo: event.target.value })} placeholder="/assets/logo.png" /></label>
+          </div>
+          <label>Team motto<textarea value={form.team_motto} onChange={(event) => setForm({ ...form, team_motto: event.target.value })} rows={3} /></label>
+          <div className="form-actions">
+            <Link className="btn btn-secondary" to={id ? `/admin/teams/registrations/${id}` : "/admin/teams"}>Cancel</Link>
+            <button className="btn btn-primary" type="submit">Save changes</button>
+          </div>
+        </form>
       </PortalShell>
     </Page>
   );

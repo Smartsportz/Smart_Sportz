@@ -9,7 +9,7 @@ from app.api.deps import require_roles
 from app.core.responses import ok
 from app.core.security import hash_password
 from app.db.database import audit_rows, execute, row, rows, sync_mirror
-from app.schemas import AdminUserCreatePayload, AdminUserUpdatePayload, CmsUpdate, ManagerCitiesPayload, ManagerCreatePayload, ManagerUpdatePayload
+from app.schemas import AdminTeamUpdatePayload, AdminUserCreatePayload, AdminUserUpdatePayload, CmsUpdate, HomeDiscoveryCardUpdate, LiveHighlightUpdate, ManagerCitiesPayload, ManagerCreatePayload, ManagerUpdatePayload, SponsorLogoUpdate
 from app.services.audit import log
 from app.services.database_architecture import compare_primary_mirror, database_status, export_json_backups
 
@@ -83,6 +83,47 @@ def admin_tournament_teams(tournament_slug: str, _: dict = Depends(require_roles
     return ok({"tournament": tournament, "teams": registrations})
 
 
+@router.get("/teams")
+def admin_teams(_: dict = Depends(require_roles("super_admin"))):
+    records = rows(
+        """
+        SELECT
+          r.id,
+          r.user_id,
+          r.tournament_slug,
+          r.team_name,
+          r.team_code,
+          r.captain_name,
+          r.sub_captain_name,
+          r.coach_name,
+          r.email,
+          r.phone,
+          r.city,
+          r.status,
+          r.payment_status,
+          r.team_logo,
+          r.team_motto,
+          r.created_at,
+          t.name AS tournament_name,
+          t.sport,
+          t.location,
+          u.name AS user_name,
+          u.email AS user_email,
+          COUNT(DISTINCT m.id) AS players_count,
+          COUNT(DISTINCT p.id) AS payments_count,
+          COALESCE(MAX(p.amount), 0) AS latest_payment
+        FROM registrations r
+        LEFT JOIN tournaments t ON t.slug = r.tournament_slug
+        LEFT JOIN users u ON u.id = r.user_id
+        LEFT JOIN registration_members m ON m.registration_id = r.id
+        LEFT JOIN payments p ON p.registration_id = r.id
+        GROUP BY r.id
+        ORDER BY r.created_at DESC
+        """
+    )
+    return ok(records)
+
+
 @router.get("/registrations/{registration_id}/team-detail")
 def admin_registration_team_detail(registration_id: str, _: dict = Depends(require_roles("super_admin"))):
     registration = row(
@@ -103,6 +144,53 @@ def admin_registration_team_detail(registration_id: str, _: dict = Depends(requi
         "documents": rows("SELECT document_type, file_name, file_path, status, uploaded_at FROM registration_documents WHERE registration_id = ? ORDER BY uploaded_at DESC", (registration_id,)),
         "payments": rows("SELECT id, status, amount, method, receipt_number, created_at FROM payments WHERE registration_id = ? ORDER BY created_at DESC", (registration_id,)),
     })
+
+
+@router.patch("/teams/{registration_id}")
+def admin_update_team(registration_id: str, payload: AdminTeamUpdatePayload, user: dict = Depends(require_roles("super_admin"))):
+    existing = row("SELECT id, team_name FROM registrations WHERE id = ?", (registration_id,))
+    if not existing:
+        raise HTTPException(status_code=404, detail="Registration team not found")
+    duplicate = row(
+        "SELECT id FROM registrations WHERE tournament_slug = (SELECT tournament_slug FROM registrations WHERE id = ?) AND LOWER(team_name) = LOWER(?) AND id <> ?",
+        (registration_id, payload.team_name.strip(), registration_id),
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="A team with this name is already registered for this tournament")
+    execute(
+        """
+        UPDATE registrations
+        SET team_name = ?, captain_name = ?, sub_captain_name = ?, coach_name = ?, email = ?, phone = ?, city = ?, team_logo = ?, team_motto = ?
+        WHERE id = ?
+        """,
+        (
+            payload.team_name.strip(),
+            payload.captain_name.strip(),
+            payload.sub_captain_name.strip(),
+            payload.coach_name.strip(),
+            payload.email,
+            payload.phone.strip(),
+            payload.city.strip(),
+            payload.team_logo.strip(),
+            payload.team_motto.strip(),
+            registration_id,
+        ),
+    )
+    log(user["email"], "admin_team_updated", "registration", registration_id, f"Updated team {payload.team_name}")
+    return admin_registration_team_detail(registration_id, user)
+
+
+@router.delete("/teams/{registration_id}")
+def admin_delete_team(registration_id: str, user: dict = Depends(require_roles("super_admin"))):
+    existing = row("SELECT id, team_name FROM registrations WHERE id = ?", (registration_id,))
+    if not existing:
+        raise HTTPException(status_code=404, detail="Registration team not found")
+    execute("DELETE FROM payments WHERE registration_id = ?", (registration_id,))
+    execute("DELETE FROM registration_documents WHERE registration_id = ?", (registration_id,))
+    execute("DELETE FROM registration_members WHERE registration_id = ?", (registration_id,))
+    execute("DELETE FROM registrations WHERE id = ?", (registration_id,))
+    log(user["email"], "admin_team_deleted", "registration", registration_id, f"Deleted team {existing['team_name']}")
+    return ok({"id": registration_id}, "Team deleted")
 
 
 @router.get("/tournaments/{tournament_slug}/payments")
@@ -421,6 +509,91 @@ def update_cms(slug: str, payload: CmsUpdate, user: dict = Depends(require_roles
     execute("UPDATE cms_content SET title = ?, body = ?, published = ? WHERE slug = ?", (payload.title, payload.body, int(payload.published), slug))
     log(user["email"], "cms_updated", "cms", slug, "CMS content updated")
     return ok(row("SELECT * FROM cms_content WHERE slug = ?", (slug,)), "CMS content updated")
+
+
+@router.get("/home-content")
+def admin_home_content(_: dict = Depends(require_roles("super_admin"))):
+    return ok({
+        "discoveryCards": rows("SELECT * FROM home_discovery_cards ORDER BY sort_order, title"),
+        "liveHighlights": rows("SELECT * FROM live_highlights ORDER BY sort_order, title"),
+        "sponsorLogos": rows("SELECT * FROM sponsor_logos ORDER BY sort_order, name"),
+    })
+
+
+@router.patch("/home-content/discovery/{slug}")
+def update_home_discovery(slug: str, payload: HomeDiscoveryCardUpdate, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT slug FROM home_discovery_cards WHERE slug = ?", (slug,)):
+        raise HTTPException(status_code=404, detail="Discovery card not found")
+    execute(
+        """
+        UPDATE home_discovery_cards
+        SET label = ?, title = ?, sport = ?, tournament_slug = ?, sponsor_name = ?, sponsor_image = ?, image = ?,
+            event_date = ?, description = ?, sponsor_details = ?, register_path = ?, sort_order = ?, published = ?
+        WHERE slug = ?
+        """,
+        (
+            payload.label,
+            payload.title,
+            payload.sport,
+            payload.tournament_slug,
+            payload.sponsor_name,
+            payload.sponsor_image,
+            payload.image,
+            payload.event_date,
+            payload.description,
+            payload.sponsor_details,
+            payload.register_path,
+            payload.sort_order,
+            int(payload.published),
+            slug,
+        ),
+    )
+    log(user["email"], "home_discovery_updated", "home_discovery", slug, "Home discovery card updated")
+    return ok(row("SELECT * FROM home_discovery_cards WHERE slug = ?", (slug,)), "Discovery card updated")
+
+
+@router.patch("/home-content/live-highlight/{item_id}")
+def update_live_highlight(item_id: str, payload: LiveHighlightUpdate, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT id FROM live_highlights WHERE id = ?", (item_id,)):
+        raise HTTPException(status_code=404, detail="Live highlight not found")
+    execute(
+        """
+        UPDATE live_highlights
+        SET match_id = ?, title = ?, stage_label = ?, home_team = ?, away_team = ?, home_score = ?, away_score = ?,
+            image = ?, description = ?, impact_notes = ?, link_path = ?, sort_order = ?, published = ?
+        WHERE id = ?
+        """,
+        (
+            payload.match_id,
+            payload.title,
+            payload.stage_label,
+            payload.home_team,
+            payload.away_team,
+            payload.home_score,
+            payload.away_score,
+            payload.image,
+            payload.description,
+            payload.impact_notes,
+            payload.link_path,
+            payload.sort_order,
+            int(payload.published),
+            item_id,
+        ),
+    )
+    log(user["email"], "live_highlight_updated", "live_highlight", item_id, "Homepage live highlight updated")
+    return ok(row("SELECT * FROM live_highlights WHERE id = ?", (item_id,)), "Live highlight updated")
+
+
+@router.patch("/home-content/sponsor/{slug}")
+def update_sponsor_logo(slug: str, payload: SponsorLogoUpdate, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT slug FROM sponsor_logos WHERE slug = ?", (slug,)):
+        raise HTTPException(status_code=404, detail="Sponsor logo not found")
+    execute(
+        "UPDATE sponsor_logos SET name = ?, image = ?, link_url = ?, sort_order = ?, published = ? WHERE slug = ?",
+        (payload.name, payload.image, payload.link_url, payload.sort_order, int(payload.published), slug),
+    )
+    log(user["email"], "sponsor_logo_updated", "sponsor", slug, "Sponsor logo updated")
+    return ok(row("SELECT * FROM sponsor_logos WHERE slug = ?", (slug,)), "Sponsor logo updated")
 
 
 @router.get("/logs")

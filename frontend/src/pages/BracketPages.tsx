@@ -41,6 +41,11 @@ function BracketCanvas({
   onSelect?: (node: BracketNode) => void;
   selected?: string;
 }) {
+  const teamLogoMap = useMemo(() => {
+    const entries = acceptedTeams.map((team) => [team.name, team.logo] as const);
+    return new Map(entries);
+  }, []);
+
   return (
     <section className={`bracket-canvas panel ${publicMode ? "public-bracket" : ""}`}>
       {bracketStages.map((stage) => (
@@ -66,7 +71,16 @@ function BracketCanvas({
             onDropTeam?.(node.id, event.dataTransfer.getData("text/team"));
           }}
         >
-          <span className="node-mark">{publicMode ? "" : node.team ? node.team.charAt(0) : <Plus size={18} />}</span>
+          <span className="node-mark">
+            {node.team ? (
+              <img
+                className="bracket-node-logo"
+                src={teamLogoMap.get(node.team) || "/assets/logo.png"}
+                alt=""
+                onError={(event) => { event.currentTarget.src = "/assets/logo.png"; }}
+              />
+            ) : publicMode ? "" : <Plus size={18} />}
+          </span>
           {!hideTeams && <b>{node.team || (publicMode ? "TBD" : node.label)}</b>}
         </button>
       ))}

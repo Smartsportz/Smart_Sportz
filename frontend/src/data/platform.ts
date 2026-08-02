@@ -492,6 +492,7 @@ export const registrationQueue = [
 ];
 
 export const sports = [
+  { slug: "chess", name: "Chess", icon: Trophy, active: 9, color: "emerald" },
   { slug: "cricket", name: "Cricket", icon: Trophy, active: 42, color: "emerald" },
   { slug: "football", name: "Football", icon: Medal, active: 36, color: "blue" },
   { slug: "basketball", name: "Basketball", icon: Zap, active: 18, color: "orange" },
@@ -637,14 +638,15 @@ export const newsPosts = [
 ];
 
 export const sportHomeVisibility = [
-  { sportSlug: "cricket", showOnHome: true, sortOrder: 1 },
-  { sportSlug: "football", showOnHome: true, sortOrder: 2 },
-  { sportSlug: "basketball", showOnHome: true, sortOrder: 3 },
-  { sportSlug: "volleyball", showOnHome: false, sortOrder: 4 },
-  { sportSlug: "badminton", showOnHome: false, sortOrder: 5 },
-  { sportSlug: "table-tennis", showOnHome: false, sortOrder: 6 },
-  { sportSlug: "e-sports", showOnHome: false, sortOrder: 7 },
-  { sportSlug: "athletics", showOnHome: false, sortOrder: 8 },
+  { sportSlug: "chess", showOnHome: true, sortOrder: 1 },
+  { sportSlug: "cricket", showOnHome: true, sortOrder: 2 },
+  { sportSlug: "football", showOnHome: true, sortOrder: 3 },
+  { sportSlug: "basketball", showOnHome: true, sortOrder: 4 },
+  { sportSlug: "volleyball", showOnHome: false, sortOrder: 5 },
+  { sportSlug: "badminton", showOnHome: false, sortOrder: 6 },
+  { sportSlug: "table-tennis", showOnHome: false, sortOrder: 7 },
+  { sportSlug: "e-sports", showOnHome: false, sortOrder: 8 },
+  { sportSlug: "athletics", showOnHome: false, sortOrder: 9 },
 ];
 
 export const leaderboardRecords = [

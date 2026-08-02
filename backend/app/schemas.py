@@ -222,6 +222,18 @@ class ManagerCitiesPayload(BaseModel):
     cities: list[str] = Field(min_length=1, max_length=12)
 
 
+class AdminTeamUpdatePayload(BaseModel):
+    team_name: str = Field(min_length=2, max_length=120)
+    captain_name: str = Field(min_length=2, max_length=120)
+    sub_captain_name: str = Field(default="", max_length=120)
+    coach_name: str = Field(default="", max_length=120)
+    email: EmailStr
+    phone: str = Field(default="", max_length=20)
+    city: str = Field(min_length=2, max_length=80)
+    team_logo: str = Field(default="", max_length=500)
+    team_motto: str = Field(default="", max_length=180)
+
+
 class LocalPaymentCreate(BaseModel):
     registration_id: str
     method: str = "local"
@@ -254,6 +266,46 @@ class LiveScoreUpdate(BaseModel):
 class CmsUpdate(BaseModel):
     title: str
     body: str
+    published: bool = True
+
+
+class HomeDiscoveryCardUpdate(BaseModel):
+    label: str = Field(min_length=2, max_length=80)
+    title: str = Field(min_length=2, max_length=180)
+    sport: str = Field(min_length=2, max_length=80)
+    tournament_slug: str = Field(default="", max_length=120)
+    sponsor_name: str = Field(min_length=2, max_length=140)
+    sponsor_image: str = Field(default="", max_length=500)
+    image: str = Field(min_length=2, max_length=500)
+    event_date: str = Field(min_length=2, max_length=120)
+    description: str = Field(min_length=10, max_length=1600)
+    sponsor_details: str = Field(min_length=5, max_length=1200)
+    register_path: str = Field(default="", max_length=220)
+    sort_order: int = Field(default=1, ge=1, le=999)
+    published: bool = True
+
+
+class LiveHighlightUpdate(BaseModel):
+    match_id: str = Field(default="", max_length=120)
+    title: str = Field(min_length=2, max_length=180)
+    stage_label: str = Field(min_length=2, max_length=80)
+    home_team: str = Field(min_length=2, max_length=120)
+    away_team: str = Field(min_length=2, max_length=120)
+    home_score: str = Field(min_length=1, max_length=40)
+    away_score: str = Field(min_length=1, max_length=40)
+    image: str = Field(min_length=2, max_length=500)
+    description: str = Field(min_length=10, max_length=1600)
+    impact_notes: str = Field(min_length=5, max_length=1200)
+    link_path: str = Field(default="/live", max_length=220)
+    sort_order: int = Field(default=1, ge=1, le=999)
+    published: bool = True
+
+
+class SponsorLogoUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=140)
+    image: str = Field(min_length=2, max_length=500)
+    link_url: str = Field(min_length=2, max_length=500)
+    sort_order: int = Field(default=1, ge=1, le=999)
     published: bool = True
 
 

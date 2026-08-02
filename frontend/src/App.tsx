@@ -10,6 +10,7 @@ import {
   AdminManagerCreatePage,
   AdminManagerDetailPage,
   AdminRegistrationTeamDetailPage,
+  AdminTeamEditPage,
   AdminTournamentEditorPage,
   AdminTournamentPaymentsPage,
   AdminTournamentTeamsPage,
@@ -17,6 +18,7 @@ import {
   AdminUserDetailPage,
   CmsSectionPage,
   ContentPage,
+  DiscoveryDetailPage,
   GalleryAlbumPage,
   GalleryPage,
   HomePage,
@@ -117,6 +119,7 @@ export default function App() {
           <Route path="/payments/:id/receipt" element={<ProtectedRoute roles={["user", "super_admin"]}><UtilityDetailPage type="payment" /></ProtectedRoute>} />
           <Route path="/sports" element={<SportsPage />} />
           <Route path="/sports/:slug" element={<SportDetailPage />} />
+          <Route path="/discover/:slug" element={<DiscoveryDetailPage />} />
           <Route path="/live" element={<LiveHubPage />} />
           <Route path="/live/:matchId" element={<LiveMatchPage />} />
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
@@ -174,6 +177,7 @@ export default function App() {
           <Route path="/admin/managers/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminManagerDetailPage /></ProtectedRoute>} />
           <Route path="/admin/managers" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="managers" /></ProtectedRoute>} />
           <Route path="/admin/roles" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="roles" /></ProtectedRoute>} />
+          <Route path="/admin/teams/:id/edit" element={<ProtectedRoute roles={["super_admin"]}><AdminTeamEditPage /></ProtectedRoute>} />
           <Route path="/admin/teams/tournament/:slug" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentTeamsPage /></ProtectedRoute>} />
           <Route path="/admin/teams/registrations/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminRegistrationTeamDetailPage /></ProtectedRoute>} />
           <Route path="/admin/teams" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="teams" /></ProtectedRoute>} />

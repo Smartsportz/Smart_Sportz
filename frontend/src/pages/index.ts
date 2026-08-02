@@ -1,8 +1,9 @@
-export { AdminManagerCreatePage, AdminManagerDetailPage, AdminPage, AdminRegistrationTeamDetailPage, AdminTournamentEditorPage, AdminTournamentPaymentsPage, AdminTournamentTeamsPage, AdminUserCreatePage, AdminUserDetailPage } from "./AdminPage";
+export { AdminManagerCreatePage, AdminManagerDetailPage, AdminPage, AdminRegistrationTeamDetailPage, AdminTeamEditPage, AdminTournamentEditorPage, AdminTournamentPaymentsPage, AdminTournamentTeamsPage, AdminUserCreatePage, AdminUserDetailPage } from "./AdminPage";
 export { AccessDeniedPage } from "./AccessDeniedPage";
 export { ArticleDetailPage } from "./ArticleDetailPage";
 export { ContentPage } from "./ContentPage";
 export { GalleryAlbumPage, GalleryPage } from "./GalleryPage";
+export { DiscoveryDetailPage } from "./DiscoveryDetailPage";
 export { CmsSectionPage } from "./CmsSectionPage";
 export { HomePage } from "./HomePage";
 export { LiveHubPage } from "./LiveHubPage";
