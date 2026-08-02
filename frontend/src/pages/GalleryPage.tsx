@@ -167,11 +167,12 @@ function writeGalleryState(value: GallerySocialState) {
 }
 
 export function GalleryPage() {
-  useWheelHorizontal(".gallery-month-row");
+  useWheelHorizontal(".gallery-feed-grid");
   const [params, setParams] = useSearchParams();
   const [albumList, setAlbumList] = useState(galleryAlbums);
   const [social, setSocial] = useState(() => readGalleryState());
   const [selectedKey, setSelectedKey] = useState(params.get("image") || "");
+  const [modalFlipped, setModalFlipped] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const futureEvents = useMemo(
     () => tournaments.map((item) => withRuntimeTournamentStatus(item)).filter((item) => item.status !== "Completed").slice(0, 4),
@@ -239,14 +240,6 @@ export function GalleryPage() {
     };
   }, []);
 
-  const monthGroups = useMemo(() => {
-    const groups = albumList.reduce<Record<string, GalleryAlbum[]>>((acc, album) => {
-      acc[album.month] = [...(acc[album.month] ?? []), album];
-      return acc;
-    }, {});
-    return Object.entries(groups);
-  }, [albumList]);
-
   const winnerItems = useMemo(() => albumList.map((album) => {
     const finalRound = album.rounds.find((round) => round.id === "final") ?? album.rounds[album.rounds.length - 1];
     const finalImage = finalRound.images[0];
@@ -269,12 +262,14 @@ export function GalleryPage() {
     setSelectedKey(key);
     setParams({ image: key });
     setCommentDraft("");
+    setModalFlipped(false);
   }
 
   function closeWinner() {
     setSelectedKey("");
     setParams({});
     setCommentDraft("");
+    setModalFlipped(false);
   }
 
   function toggleGalleryLike(key: string) {
@@ -341,49 +336,31 @@ export function GalleryPage() {
     <Page className="gallery-page">
       <section className="gallery-section gallery-section-first">
         <div className="gallery-simple-title">
-          <h1>Tournament Gallery</h1>
+          <h1>Gallery</h1>
         </div>
-        <div className="gallery-tournament-timeline">
-          {monthGroups.map(([month, albums]) => (
-            <section className="gallery-month-section" key={month}>
-              <div className="gallery-date-line">
-                <span>{albums.reduce((total, album) => total + Number.parseInt(album.days, 10), 0)} tournament days</span>
-                <strong>{month}</strong>
-              </div>
-              <div className="gallery-month-row wheel-horizontal">
-                {albums.map((album) => {
-                  const winner = winnerItems.find((item) => item.album.slug === album.slug);
-                  if (!winner) return null;
-                  const state = social[winner.key] ?? { likes: 24, comments: [] };
-                  return (
-                    <article className="gallery-tournament-row gallery-winner-card" key={album.slug}>
-                      <button className="gallery-image-open" type="button" onClick={() => openWinner(winner.key)}>
-                        <div className="gallery-winner-media">
-                          <img src={winner.image.image} alt="" />
-                        </div>
-                        <div className="gallery-album-copy">
-                          <span className="status emerald">{album.sport}</span>
-                          <h3>{album.title}</h3>
-                          <p>{winner.image.caption}</p>
-                          <div className="gallery-card-date">{album.date}</div>
-                          <b>Open winner image</b>
-                        </div>
-                      </button>
-                      <div className="gallery-social-row">
-                        <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleGalleryLike(winner.key)}><Heart size={15} />{state.likes ?? 24}</button>
-                        <button type="button" onClick={() => openWinner(winner.key)}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
-                        <button type="button" onClick={() => void shareGalleryWinner(winner)}><Share2 size={15} />Share</button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+        <div className="gallery-feed-grid wheel-horizontal">
+          {winnerItems.map((winner) => {
+            const state = social[winner.key] ?? { likes: 24, comments: [] };
+            return (
+              <article className="gallery-feed-card" key={winner.key}>
+                <button className="gallery-image-open" type="button" onClick={() => openWinner(winner.key)}>
+                  <div className="gallery-winner-media">
+                    <img src={winner.image.image} alt="" />
+                  </div>
+                  <h3>{winner.image.title}</h3>
+                </button>
+                <div className="gallery-social-row">
+                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleGalleryLike(winner.key)}><Heart size={15} />{state.likes ?? 24}</button>
+                  <button type="button" onClick={() => openWinner(winner.key)}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
+                  <button type="button" onClick={() => void shareGalleryWinner(winner)}><Share2 size={15} />Share</button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 
-      <section className="gallery-section">
+      <section className="gallery-section" hidden aria-hidden="true">
         <div className="section-title gallery-future-title">
           <div>
             <p className="eyebrow">Future Events</p>
@@ -407,15 +384,24 @@ export function GalleryPage() {
 
       {selectedWinner && (
         <div className="gallery-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${selectedWinner.image.title} gallery detail`}>
-          <article className="gallery-modal-card gallery-home-modal">
+          <article className={`gallery-modal-card gallery-home-modal ${modalFlipped ? "flipped" : ""}`}>
             <button className="gallery-modal-close" type="button" onClick={closeWinner} aria-label="Close image detail"><X size={18} /></button>
-            <img className="gallery-home-modal-image" src={selectedWinner.image.image} alt="" />
-            <div className="gallery-home-modal-copy">
-              <span className="status emerald">{selectedWinner.round.name}</span>
-              <h2>{selectedWinner.image.title}</h2>
-              <p>{selectedWinner.image.description}</p>
-              <small>{selectedWinner.album.title} - {selectedWinner.album.date}</small>
-            </div>
+            <button className="gallery-modal-flipper" type="button" onClick={() => setModalFlipped((current) => !current)} aria-label="Flip gallery image detail">
+              <div className="gallery-modal-face gallery-modal-front">
+                <img src={selectedWinner.image.image} alt="" />
+                <div>
+                  <span className="status emerald">{selectedWinner.round.name}</span>
+                  <h2>{selectedWinner.image.title}</h2>
+                  <p>{selectedWinner.image.caption}</p>
+                </div>
+              </div>
+              <div className="gallery-modal-face gallery-modal-back">
+                <span className="status emerald">{selectedWinner.album.sport}</span>
+                <h2>{selectedWinner.image.title}</h2>
+                <p>{selectedWinner.image.description}</p>
+                <small>{selectedWinner.album.title} - {selectedWinner.album.city} - {selectedWinner.album.date}</small>
+              </div>
+            </button>
             <div className="gallery-modal-actions">
               <button type="button" className={social[selectedWinner.key]?.liked ? "active" : ""} onClick={() => toggleGalleryLike(selectedWinner.key)}><Heart size={16} />{social[selectedWinner.key]?.likes ?? 24}</button>
               <button type="button" onClick={() => void shareGalleryWinner(selectedWinner)}><Share2 size={16} />Share image</button>

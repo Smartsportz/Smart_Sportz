@@ -64,7 +64,7 @@ export function NewsPage() {
   const [remotePosts, setRemotePosts] = useState<NewsPost[]>([]);
   const [social, setSocial] = useState<NewsSocial>({});
   const posts = remotePosts.length ? remotePosts : fallbackPosts();
-  const categories = ["Winner Teams", "Match Updates", "Tournament Updates", "Announcements"];
+  const categories = ["Match Updates", "Tournament Updates", "Announcements"];
   const visibleCategories = categories.filter((category) => posts.some((post) => post.category === category));
   const highlightedPosts = posts.filter((post) => post.highlight);
   const [highlightIndex, setHighlightIndex] = useState(0);

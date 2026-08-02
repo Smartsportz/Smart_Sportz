@@ -8,6 +8,20 @@ import type { TournamentNotice } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
+function assetUrl(path?: string) {
+  if (!path) return "";
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  if (path.startsWith(import.meta.env.BASE_URL)) return path;
+  if (/^\/(assets|media)\//.test(path)) return `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+  return path;
+}
+
+function externalUrl(path?: string) {
+  if (!path) return "#";
+  if (/^https?:\/\//i.test(path)) return path;
+  return `https://${path.replace(/^\/+/, "")}`;
+}
+
 const fade = {
   initial: { opacity: 0, y: 24 },
   whileInView: { opacity: 1, y: 0 },
@@ -47,7 +61,7 @@ function readStoredNotices() {
 function FeaturedTournamentMiniCard({ item }: { item: any }) {
   return (
     <Link className="featured-mini-card click-card" to={`/tournaments/${item.slug}`}>
-      <img src={item.image} alt="" />
+      <img src={assetUrl(item.image)} alt="" />
       <div>
         <h3>{item.name}</h3>
         <p><MapPin size={15} />{item.location}</p>
@@ -177,6 +191,24 @@ export function HomePage() {
     .map((visibility) => sports.find((sport) => sport.slug === visibility.sportSlug))
     .filter(Boolean) as typeof sports;
   const oldMatchNews = newsPosts.filter((item) => item.category === "Winner Teams").slice(0, 3);
+  const discoveryCards = homeContent.discoveryCards?.length ? homeContent.discoveryCards : homeSports.map((sport) => {
+    const story = sportStoryCopy[sport.slug] ?? sportStoryCopy.cricket;
+    return {
+      slug: sport.slug,
+      label: sport.name,
+      title: story.title,
+      sponsor_name: story.sponsor,
+      event_date: story.date,
+      image: sportStoryImages[sport.slug] ?? assets.cricket,
+    };
+  });
+  const discoveryQueue = discoveryCards.length > 1 ? [...discoveryCards, ...discoveryCards] : discoveryCards;
+  const sponsorLogos = homeContent.sponsorLogos?.length ? homeContent.sponsorLogos : [
+    { slug: "smartsportz", name: "SmartSportz", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/" },
+    { slug: "brillaris", name: "Brillaris", image: "https://brillaris.pro/assets/img/Logo1.png", link_url: "https://brillaris.pro" },
+    { slug: "machaxi", name: "Machaxi", image: "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp", link_url: "https://machaxi.com" },
+  ];
+  const sponsorQueue = sponsorLogos.length > 1 ? [...sponsorLogos, ...sponsorLogos] : sponsorLogos;
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
   const organizerTools = [
     "Online Registration",
@@ -331,26 +363,17 @@ export function HomePage() {
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Explore Your Sport</p>
-            <h2>Discover tournaments across categories</h2>
+            <h2>Discover sports across categories</h2>
             <p>Sport stories, sponsors, tournament dates, and event pathways are grouped for quick discovery.</p>
           </div>
           <Link className="inline-link" to="/sports">View All Sports</Link>
         </div>
-        <div className="sport-home-grid">
-          {(homeContent.discoveryCards?.length ? homeContent.discoveryCards : homeSports.map((sport) => {
-            const story = sportStoryCopy[sport.slug] ?? sportStoryCopy.cricket;
-            return {
-              slug: sport.slug,
-              label: sport.name,
-              title: story.title,
-              sponsor_name: story.sponsor,
-              event_date: story.date,
-              image: sportStoryImages[sport.slug] ?? assets.cricket,
-            };
-          })).map((card) => {
+        <div className="queue-shell discovery-queue-shell">
+          <div className="queue-track discovery-queue-track wheel-horizontal">
+          {discoveryQueue.map((card, index) => {
             return (
-              <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={card.slug}>
-                <img src={card.image || assets.cricket} alt="" />
+              <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
+                <img src={assetUrl(card.image || assets.cricket)} alt="" />
                 <div className="sport-home-card-body">
                   <span className="status emerald">{card.label}</span>
                   <h3>{card.title}</h3>
@@ -360,6 +383,7 @@ export function HomePage() {
               </Link>
             );
           })}
+          </div>
         </div>
       </section>
       <section className="section">
@@ -432,12 +456,12 @@ export function HomePage() {
             <h2>Empowering Tournament Organizers</h2>
             <p>All-in-one suite of professional tools to run world-class sports competitions.</p>
           </div>        </div>
-        <div className="carousel-shell organizer-shell">
-          <div className="organizer-grid wheel-horizontal" ref={organizerRef}>
-          {organizerTools.map((tool, index) => (
+        <div className="queue-shell organizer-shell">
+          <div className="queue-track organizer-grid wheel-horizontal" ref={organizerRef}>
+          {[...organizerTools, ...organizerTools].map((tool, index) => (
             <div
               className={`panel organizer-card ${index === organizerIndex ? "is-active" : ""}`}
-              key={tool}
+              key={`${tool}-${index}`}
               ref={(element) => { organizerCardRefs.current[index] = element; }}
             >
               <ShieldCheck size={18} /><h3>{tool}</h3><p>Premium workflow controls for secure tournament operations.</p>
@@ -535,17 +559,14 @@ export function HomePage() {
       </section>
       <section className="section sponsor-logo-section">
         <SectionTitle eyebrow="Partner Network" title="Sponsor Companies" text="Official platform, technology, experience, and archive partners connected to Smart Sportz." />
-        <div className="sponsor-logo-grid">
-          {(homeContent.sponsorLogos?.length ? homeContent.sponsorLogos : [
-            { slug: "smartsportz", name: "SmartSportz", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/" },
-            { slug: "brillaris", name: "Brillaris", image: "https://brillaris.pro/assets/img/Logo1.png", link_url: "https://brillaris.pro" },
-            { slug: "machaxi", name: "Machaxi", image: "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp", link_url: "https://machaxi.com" },
-          ]).map((sponsor) => (
-            <a className="sponsor-logo-card" href={sponsor.link_url} target="_blank" rel="noreferrer" key={sponsor.slug}>
-              <img src={sponsor.image} alt="" />
-              <span>{sponsor.name}</span>
+        <div className="queue-shell sponsor-logo-shell">
+          <div className="queue-track sponsor-logo-grid wheel-horizontal">
+          {sponsorQueue.map((sponsor, index) => (
+            <a className="sponsor-logo-card" href={externalUrl(sponsor.link_url)} target="_blank" rel="noreferrer" key={`${sponsor.slug}-${index}`} aria-label={sponsor.name}>
+              <img src={assetUrl(sponsor.image)} alt="" />
             </a>
           ))}
+          </div>
         </div>
       </section>
     </Page>
