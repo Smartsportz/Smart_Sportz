@@ -645,6 +645,17 @@ textarea { width: 100%; min-height: 112px; padding: 12px 14px; border: 1px solid
 .bar, .meter { height: 8px; background: var(--surface-strong); border-radius: 999px; overflow: hidden; }
 .bar span, .meter span { display: block; height: 100%; width: 68%; background: linear-gradient(90deg, var(--primary), #72db9d); border-radius: inherit; }
 .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+.admin-metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
+.manager-allocation-card { margin: 8px 0 16px; }
+.manager-select-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.manager-select-list .visibility-row { margin: 0; }
+.manager-select-list small { display: block; color: var(--muted); margin-top: 3px; }
+.admin-flow-panel { display: grid; gap: 16px; }
+.round-workspace-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.round-workspace-preview article { min-height: 112px; display: grid; align-content: center; justify-items: center; gap: 8px; padding: 16px; border: 1px solid rgba(11, 136, 82, .22); border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(234,244,228,.78)); box-shadow: var(--shadow-soft); text-align: center; }
+.round-workspace-preview b { font-family: Poppins, sans-serif; font-size: 18px; }
+.round-workspace-preview span { color: var(--muted); font-weight: 800; font-size: 12px; }
+.admin-flow-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .metric-mini { padding: 16px; border-radius: 14px; background: var(--surface-soft); }
 .metric-mini strong { display: block; font-size: 28px; }
 .metric-mini span { color: var(--muted); font-size: 12px; font-weight: 700; }
@@ -1097,6 +1108,9 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .carousel-edge-left { left: 4px; }
   .carousel-edge-right { right: 4px; }
   .card-grid, .team-grid, .catalog-grid, .content-grid, .live-grid, .metrics-grid, .mini-grid, .wizard, .role-program-grid { grid-template-columns: 1fr; }
+  .admin-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manager-select-list, .admin-flow-checks { grid-template-columns: 1fr; }
+  .round-workspace-preview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filter-bar { gap: 8px; padding: 11px; }
   .tournament-filter-bar { width: calc(100vw - 24px); max-width: calc(100vw - 24px); margin-inline: 0; grid-template-columns: auto minmax(0, 1fr); overflow: visible; }
   .filter-bar input { font-size: 14px; }

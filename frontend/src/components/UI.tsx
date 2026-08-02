@@ -147,12 +147,6 @@ export function PortalShell({
     .join("")
     .slice(0, 2)
     .toUpperCase() || "U";
-  const primaryAction = user?.role === "super_admin"
-    ? { label: "Create Tournament", path: "/admin/tournaments" }
-    : user?.role === "management"
-      ? { label: "Live Control", path: "/management/matches" }
-      : { label: "Register Team", path: "/tournaments/mumbai-premier-bash/register" };
-
   return (
     <div className={`portal-shell ${isUserPortal ? "user-portal-shell" : ""} ${portalMenuOpen ? "portal-menu-open" : ""}`}>
       {isUserPortal && (
@@ -180,7 +174,6 @@ export function PortalShell({
             );
           })}
         </nav>
-        <Link className="btn btn-primary wide" to={primaryAction.path}>{primaryAction.label}</Link>
         {!isUserPortal && <Link className="sidebar-link" to="/settings"><Settings size={16} /> Settings</Link>}
         <button className="sidebar-link sidebar-button" type="button" onClick={logout}><ArrowRight size={16} /> Logout</button>
       </aside>

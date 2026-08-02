@@ -28,11 +28,31 @@ def manager_cities(user: dict) -> list[str]:
     ]
 
 
+def manager_tournament_slugs(user: dict) -> list[str]:
+    if user["role"] == "super_admin":
+        return []
+    return [
+        item["tournament_slug"]
+        for item in rows("SELECT tournament_slug FROM tournament_manager_assignments WHERE manager_user_id = ? ORDER BY tournament_slug", (user["id"],))
+    ]
+
+
 def ensure_city_access(user: dict, city: str) -> None:
     if user["role"] == "super_admin":
         return
     if city.lower() not in [item.lower() for item in manager_cities(user)]:
         raise HTTPException(status_code=403, detail="Manager is not assigned to this city")
+
+
+def ensure_tournament_access(user: dict, item: dict) -> None:
+    if user["role"] == "super_admin":
+        return
+    allowed_cities = [city.lower() for city in manager_cities(user)]
+    if str(item.get("location", "")).lower() in allowed_cities:
+        return
+    if item.get("slug") in manager_tournament_slugs(user):
+        return
+    raise HTTPException(status_code=403, detail="Manager is not assigned to this tournament")
 
 
 def slugify(title: str) -> str:
@@ -58,6 +78,7 @@ def _save_tournament_children(slug: str, payload: TournamentUpsertPayload) -> No
     clean_cities = _clean_unique(payload.cities or [payload.location])
     execute("DELETE FROM tournament_cities WHERE tournament_slug = ?", (slug,))
     execute("DELETE FROM tournament_prizes WHERE tournament_slug = ?", (slug,))
+    execute("DELETE FROM tournament_manager_assignments WHERE tournament_slug = ?", (slug,))
     statements: list[tuple[str, tuple]] = []
     statements.extend(
         (
@@ -73,6 +94,20 @@ def _save_tournament_children(slug: str, payload: TournamentUpsertPayload) -> No
         )
         for index, prize in enumerate(payload.prizes, start=1)
     )
+    clean_manager_ids = _clean_unique(payload.assigned_manager_ids)
+    if clean_manager_ids:
+        placeholders = ",".join(["?"] * len(clean_manager_ids))
+        valid_manager_ids = [
+            item["id"]
+            for item in rows(f"SELECT id FROM users WHERE role = 'management' AND id IN ({placeholders})", tuple(clean_manager_ids))
+        ]
+        statements.extend(
+            (
+                "INSERT INTO tournament_manager_assignments(id, tournament_slug, manager_user_id) VALUES (?, ?, ?)",
+                (f"tmgr_{uuid4().hex[:10]}", slug, manager_id),
+            )
+            for manager_id in valid_manager_ids
+        )
     if statements:
         execute_many(statements)
 
@@ -84,6 +119,17 @@ def _tournament_detail(slug: str) -> dict | None:
     detail = dict(item)
     detail["cities"] = [entry["city"] for entry in rows("SELECT city FROM tournament_cities WHERE tournament_slug = ? ORDER BY sort_order", (slug,))]
     detail["prizes"] = rows("SELECT position, label, amount, sort_order FROM tournament_prizes WHERE tournament_slug = ? ORDER BY sort_order, position", (slug,))
+    detail["assigned_managers"] = rows(
+        """
+        SELECT u.id, u.name, u.email
+        FROM tournament_manager_assignments tma
+        INNER JOIN users u ON u.id = tma.manager_user_id
+        WHERE tma.tournament_slug = ?
+        ORDER BY u.name
+        """,
+        (slug,),
+    )
+    detail["assigned_manager_ids"] = [manager["id"] for manager in detail["assigned_managers"]]
     try:
         detail["fee_breakdown"] = json.loads(detail.get("fee_breakdown_json") or "[]")
     except Exception:
@@ -97,13 +143,24 @@ def _tournament_detail(slug: str) -> dict | None:
 def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
     def build():
         cities = manager_cities(user)
-        if user["role"] != "super_admin" and not cities:
+        assigned_slugs = manager_tournament_slugs(user)
+        if user["role"] != "super_admin" and not cities and not assigned_slugs:
             return {"assignedCities": [], "assignedTournaments": [], "pendingRegistrations": [], "liveMatches": []}
-        tournament_filter = "" if user["role"] == "super_admin" else f" AND location IN ({','.join(['?'] * len(cities))})"
-        registration_filter = "" if user["role"] == "super_admin" else f" AND city IN ({','.join(['?'] * len(cities))})"
+        tournament_filter = ""
+        tournament_params: list[str] = []
+        if user["role"] != "super_admin":
+            filters = []
+            if cities:
+                filters.append(f"location IN ({','.join(['?'] * len(cities))})")
+                tournament_params.extend(cities)
+            if assigned_slugs:
+                filters.append(f"slug IN ({','.join(['?'] * len(assigned_slugs))})")
+                tournament_params.extend(assigned_slugs)
+            tournament_filter = f" AND ({' OR '.join(filters)})" if filters else " AND 1 = 0"
+        registration_filter = "" if user["role"] == "super_admin" else (f" AND city IN ({','.join(['?'] * len(cities))})" if cities else " AND 1 = 0")
         return {
             "assignedCities": cities,
-            "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", cities),
+            "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", tuple(tournament_params)),
             "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval'){registration_filter}", cities),
             "liveMatches": rows("SELECT * FROM live_matches"),
         }
@@ -118,7 +175,16 @@ def tournaments(user: dict = Depends(require_roles("super_admin", "management"))
         if user["role"] == "super_admin" or not cities:
             records = rows("SELECT * FROM tournaments ORDER BY name")
         else:
-            records = rows(f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(cities))}) ORDER BY name", cities)
+            assigned_slugs = manager_tournament_slugs(user)
+            filters = []
+            params: list[str] = []
+            if cities:
+                filters.append(f"location IN ({','.join(['?'] * len(cities))})")
+                params.extend(cities)
+            if assigned_slugs:
+                filters.append(f"slug IN ({','.join(['?'] * len(assigned_slugs))})")
+                params.extend(assigned_slugs)
+            records = rows(f"SELECT * FROM tournaments WHERE {' OR '.join(filters)} ORDER BY name", tuple(params)) if filters else []
         order = {"Upcoming": 0, "Registration Open": 1, "Live": 2, "Registration Closed": 3, "Completed": 4}
         details = [_tournament_detail(item["slug"]) for item in records]
         return sorted([item for item in details if item], key=lambda item: (order.get(item["status"], 9), item["name"]))
@@ -149,8 +215,9 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     computed_accent = accent_for_status(computed_status, payload.accent)
     execute(
         """INSERT INTO tournaments(slug, name, sport, status, location, date, registration_start, registration_end, teams, capacity, team_size,
-          min_team_size, max_team_size, prize, image, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          min_team_size, max_team_size, prize, image, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home,
+          block_repeat_registration)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             tournament_slug,
             payload.name,
@@ -173,6 +240,7 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
             payload.tournament_description,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
             int(payload.show_on_home),
+            int(payload.block_repeat_registration),
         ),
     )
     _save_tournament_children(tournament_slug, payload)
@@ -185,7 +253,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
     if not item:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    ensure_city_access(user, item["location"])
+    ensure_tournament_access(user, item)
     ensure_city_access(user, payload.location)
     sport_name = payload.new_sport_name.strip() if payload.new_sport_name else payload.sport
     sport_slug = tournament_slugify(sport_name)
@@ -197,7 +265,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     execute(
         """UPDATE tournaments SET name = ?, sport = ?, status = ?, location = ?, date = ?, registration_start = ?, registration_end = ?,
           teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, prize = ?, image = ?, accent = ?, address = ?,
-          sport_description = ?, tournament_description = ?, fee_breakdown_json = ?, show_on_home = ? WHERE slug = ?""",
+          sport_description = ?, tournament_description = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
         (
             payload.name,
             sport_name,
@@ -219,6 +287,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
             payload.tournament_description,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
             int(payload.show_on_home),
+            int(payload.block_repeat_registration),
             tournament_slug,
         ),
     )
@@ -232,11 +301,12 @@ def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("
     item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
     if not item:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    ensure_city_access(user, item["location"])
+    ensure_tournament_access(user, item)
     blockers = row("SELECT COUNT(*) AS count FROM registrations WHERE tournament_slug = ?", (tournament_slug,))
     if blockers and blockers["count"]:
         raise HTTPException(status_code=409, detail="Tournament has registrations. Archive or complete it instead of deleting.")
-    for table in ["tournament_prizes", "tournament_cities", "bracket_connections", "bracket_nodes", "notification_events"]:
+    ensure_tournament_access(user, item)
+    for table in ["tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_connections", "bracket_nodes", "notification_events"]:
         execute(f"DELETE FROM {table} WHERE tournament_slug = ?", (tournament_slug,))
     execute("DELETE FROM tournaments WHERE slug = ?", (tournament_slug,))
     log(user["email"], "tournament_deleted", "tournament", tournament_slug, f"Deleted {item['name']}")

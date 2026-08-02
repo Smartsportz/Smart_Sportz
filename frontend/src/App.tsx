@@ -7,8 +7,10 @@ import { ScreenLoader } from "./loading/ScreenLoader";
 import { useLoading } from "./loading/LoadingContext";
 import {
   AdminPage,
+  AdminManagerCreatePage,
   AdminManagerDetailPage,
   AdminRegistrationTeamDetailPage,
+  AdminTournamentEditorPage,
   AdminTournamentPaymentsPage,
   AdminTournamentTeamsPage,
   AdminUserCreatePage,
@@ -77,6 +79,9 @@ function ScrollToTop() {
     } else {
       window.scrollTo(0, 0);
     }
+    (window as any).gtag?.("config", "G-YFZSW0TZP1", {
+      page_path: `${pathname}${search}${hash}`,
+    });
     showFor(window.location.search.includes("loading=1") ? 3000 : 1200);
   }, [hash, pathname, search]);
 
@@ -138,6 +143,7 @@ export default function App() {
           <Route path="/user/profile" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="profile" /></ProtectedRoute>} />
           <Route path="/user/registrations" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="registrations" /></ProtectedRoute>} />
           <Route path="/user/payments" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="payments" /></ProtectedRoute>} />
+          <Route path="/user/members" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="members" /></ProtectedRoute>} />
           <Route path="/user/certificates" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="certificates" /></ProtectedRoute>} />
           <Route path="/user/schedules" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="schedules" /></ProtectedRoute>} />
           <Route path="/user/documents" element={<ProtectedRoute roles={["user"]}><UserSectionPage section="documents" /></ProtectedRoute>} />
@@ -158,10 +164,13 @@ export default function App() {
           <Route path="/super-admin/programs" element={<ProtectedRoute roles={["super_admin"]}><RoleProgramsPage role="super_admin" /></ProtectedRoute>} />
           <Route path="/super-admin/*" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/admin/dashboard" element={<ProtectedRoute roles={["super_admin"]}><AdminPage /></ProtectedRoute>} />
+          <Route path="/admin/tournaments/new" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentEditorPage /></ProtectedRoute>} />
+          <Route path="/admin/tournaments/:slug/edit" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentEditorPage /></ProtectedRoute>} />
           <Route path="/admin/tournaments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="tournaments" /></ProtectedRoute>} />
           <Route path="/admin/users/add" element={<ProtectedRoute roles={["super_admin"]}><AdminUserCreatePage /></ProtectedRoute>} />
           <Route path="/admin/users/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminUserDetailPage /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="users" /></ProtectedRoute>} />
+          <Route path="/admin/managers/new" element={<ProtectedRoute roles={["super_admin"]}><AdminManagerCreatePage /></ProtectedRoute>} />
           <Route path="/admin/managers/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminManagerDetailPage /></ProtectedRoute>} />
           <Route path="/admin/managers" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="managers" /></ProtectedRoute>} />
           <Route path="/admin/roles" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="roles" /></ProtectedRoute>} />

@@ -29,7 +29,20 @@ def dashboard(_: dict = Depends(require_roles("super_admin", "management"))):
 
 @router.get("/tournaments")
 def admin_tournaments(_: dict = Depends(require_roles("super_admin", "management"))):
-    return ok(rows("SELECT * FROM tournaments ORDER BY name"))
+    records = rows("SELECT * FROM tournaments ORDER BY name")
+    for item in records:
+        item["assigned_managers"] = rows(
+            """
+            SELECT u.id, u.name, u.email
+            FROM tournament_manager_assignments tma
+            INNER JOIN users u ON u.id = tma.manager_user_id
+            WHERE tma.tournament_slug = ?
+            ORDER BY u.name
+            """,
+            (item["slug"],),
+        )
+        item["assigned_manager_ids"] = [manager["id"] for manager in item["assigned_managers"]]
+    return ok(records)
 
 
 @router.get("/tournaments/{tournament_slug}/teams")
@@ -300,12 +313,23 @@ def manager_detail(manager_id: str, _: dict = Depends(require_roles("super_admin
         raise HTTPException(status_code=404, detail="Manager not found")
     manager = manager_with_cities(manager)
     assigned = []
+    assigned = rows(
+        """
+        SELECT DISTINCT t.*
+        FROM tournaments t
+        LEFT JOIN tournament_manager_assignments tma ON tma.tournament_slug = t.slug
+        WHERE tma.manager_user_id = ?
+        """,
+        (manager_id,),
+    )
     if manager["cities"]:
-        assigned = rows(
+        city_assigned = rows(
             f"SELECT * FROM tournaments WHERE location IN ({','.join(['?'] * len(manager['cities']))}) ORDER BY name",
             tuple(manager["cities"]),
         )
-    manager["assigned_tournaments"] = assigned
+        seen = {item["slug"] for item in assigned}
+        assigned.extend([item for item in city_assigned if item["slug"] not in seen])
+    manager["assigned_tournaments"] = sorted(assigned, key=lambda item: item["name"])
     return ok(manager)
 
 
@@ -338,6 +362,7 @@ def delete_manager(manager_id: str, user: dict = Depends(require_roles("super_ad
     if not manager:
         raise HTTPException(status_code=404, detail="Manager not found")
     execute("DELETE FROM manager_city_assignments WHERE manager_user_id = ?", (manager_id,))
+    execute("DELETE FROM tournament_manager_assignments WHERE manager_user_id = ?", (manager_id,))
     execute("DELETE FROM users WHERE id = ? AND role = 'management'", (manager_id,))
     log(user["email"], "manager_deleted", "user", manager_id, f"Manager {manager['email']} deleted")
     return ok({"id": manager_id}, "Manager deleted")

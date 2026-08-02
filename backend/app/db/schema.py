@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS tournaments (
   sport_description TEXT NOT NULL DEFAULT '',
   tournament_description TEXT NOT NULL DEFAULT '',
   fee_breakdown_json TEXT NOT NULL DEFAULT '[]',
-  show_on_home INTEGER NOT NULL DEFAULT 1
+  show_on_home INTEGER NOT NULL DEFAULT 1,
+  block_repeat_registration INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tournament_prizes (
@@ -272,6 +273,15 @@ CREATE TABLE IF NOT EXISTS manager_city_assignments (
   FOREIGN KEY(manager_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS tournament_manager_assignments (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  manager_user_id TEXT NOT NULL,
+  UNIQUE(tournament_slug, manager_user_id),
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug),
+  FOREIGN KEY(manager_user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS leaderboard_records (
   id TEXT PRIMARY KEY,
   sport TEXT NOT NULL,
@@ -384,6 +394,7 @@ CREATE INDEX IF NOT EXISTS idx_registrations_user ON registrations(user_id);
 CREATE INDEX IF NOT EXISTS idx_registrations_email ON registrations(email);
 CREATE INDEX IF NOT EXISTS idx_registrations_city_status ON registrations(city, status);
 CREATE INDEX IF NOT EXISTS idx_registrations_tournament_status ON registrations(tournament_slug, status);
+CREATE INDEX IF NOT EXISTS idx_registrations_tournament_team_name_lookup ON registrations(tournament_slug, lower(trim(team_name)));
 CREATE INDEX IF NOT EXISTS idx_registration_members_reg ON registration_members(registration_id);
 CREATE INDEX IF NOT EXISTS idx_registration_documents_reg ON registration_documents(registration_id);
 CREATE INDEX IF NOT EXISTS idx_payments_registration ON payments(registration_id);
@@ -393,6 +404,7 @@ CREATE INDEX IF NOT EXISTS idx_news_sport_city ON news_posts(sport, city);
 CREATE INDEX IF NOT EXISTS idx_news_blocks_post_order ON news_blocks(post_slug, sort_order);
 CREATE INDEX IF NOT EXISTS idx_sport_home_visibility_sort ON sport_home_visibility(show_on_home, sort_order);
 CREATE INDEX IF NOT EXISTS idx_manager_city_user ON manager_city_assignments(manager_user_id, city);
+CREATE INDEX IF NOT EXISTS idx_tournament_manager_user ON tournament_manager_assignments(manager_user_id, tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_gallery_social_updated ON gallery_social(updated_at);
 CREATE INDEX IF NOT EXISTS idx_gallery_albums_month ON gallery_albums(month_label, sort_order);
 CREATE INDEX IF NOT EXISTS idx_live_matches_status ON live_matches(status);
@@ -462,6 +474,7 @@ def _apply_operational_schema(path=None) -> None:
             "tournament_description": "TEXT NOT NULL DEFAULT ''",
             "fee_breakdown_json": "TEXT NOT NULL DEFAULT '[]'",
             "show_on_home": "INTEGER NOT NULL DEFAULT 1",
+            "block_repeat_registration": "INTEGER NOT NULL DEFAULT 0",
         }
         for column, definition in tournament_columns.items():
             _add_column(conn, "tournaments", column, definition)

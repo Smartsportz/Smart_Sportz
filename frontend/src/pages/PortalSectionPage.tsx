@@ -13,6 +13,7 @@ const userContent = {
   profile: ["Identity verification", "Captain and player details", "Emergency contact", "Document upload"],
   registrations: ["Approved tournaments", "Pending review", "Payment required", "Waitlisted entries"],
   payments: ["Receipts", "Invoices", "Refunds", "Webhook status"],
+  members: ["Registered roster", "Captain and sub-captain", "Player contacts", "Team-only details"],
   certificates: ["Participation certificates", "Winner certificates", "MVP awards", "Download history"],
   schedules: ["Upcoming fixtures", "Venue reporting time", "Match reminders", "Calendar export"],
   documents: ["Identity documents", "Team roster files", "Medical forms", "Private downloads"],
@@ -176,6 +177,11 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
       <span className="status emerald">{item.status}</span>,
       <Link className="inline-link" to={`/payments/${item.id}/receipt`}>Receipt</Link>,
     ]),
+    members: (data?.members ?? []).map((item) => [
+      item.name,
+      item.role,
+      item.contact || "-",
+    ]),
     certificates: certificateRows.map((item) => [
       item.tournament_name,
       item.team_name,
@@ -195,6 +201,7 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
     profile: ["Name", "Email", "Role"],
     registrations: ["Tournament", "Team", "City", "Payment", "Action"],
     payments: ["Receipt", "Amount", "Method", "Status", "Action"],
+    members: ["Member", "Role", "Contact"],
     certificates: ["Tournament", "Team", "City", "Status", "Note"],
     schedules: ["Tournament", "Sport", "Schedule", "City"],
     documents: ["Document", "File", "Status"],

@@ -528,6 +528,7 @@ export const userSidebar = [
   { label: "Home", path: "/user/dashboard", icon: BarChart3 },
   { label: "My Tournaments", path: "/user/registrations", icon: Trophy },
   { label: "Payments", path: "/user/payments", icon: CircleDollarSign },
+  { label: "Team Members", path: "/user/members", icon: Users },
   { label: "Certificates", path: "/user/certificates", icon: Medal },
   { label: "Documents", path: "/user/documents", icon: FileText },
   { label: "Settings", path: "/user/settings", icon: ShieldCheck },

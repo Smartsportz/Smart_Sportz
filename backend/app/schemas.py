@@ -162,7 +162,9 @@ class TournamentUpsertPayload(BaseModel):
     fee_breakdown: list[TournamentFeeLinePayload] = Field(default_factory=list, max_length=20)
     prizes: list[TournamentPrizePayload] = Field(default_factory=list, max_length=20)
     cities: list[str] = Field(default_factory=list, max_length=12)
+    assigned_manager_ids: list[str] = Field(default_factory=list, max_length=20)
     show_on_home: bool = True
+    block_repeat_registration: bool = False
 
 
 class NewsBlockPayload(BaseModel):

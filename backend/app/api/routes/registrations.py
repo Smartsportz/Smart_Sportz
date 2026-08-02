@@ -62,6 +62,13 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
         raise HTTPException(status_code=404, detail="Tournament not found")
     if not registration_is_open(tournament):
         raise HTTPException(status_code=409, detail="Registration is not open for this tournament")
+    if int(tournament.get("block_repeat_registration") or 0):
+        existing_user_registration = row(
+            "SELECT id FROM registrations WHERE tournament_slug = ? AND user_id = ? LIMIT 1",
+            (payload.tournament_slug, user["id"]),
+        )
+        if existing_user_registration:
+            raise HTTPException(status_code=409, detail="You are already registered for this tournament")
     required_members = int(tournament.get("team_size") or 16)
     if payload.members and len(payload.members) != required_members:
         raise HTTPException(status_code=422, detail=f"This tournament requires exactly {required_members} member names, including captain and sub-captain")
@@ -71,6 +78,12 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
     )
     if not city_allowed:
         raise HTTPException(status_code=422, detail="Selected city is not configured for this tournament")
+    existing_team_name = row(
+        "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(trim(team_name)) = lower(trim(?))",
+        (payload.tournament_slug, payload.team_name),
+    )
+    if existing_team_name:
+        raise HTTPException(status_code=409, detail="This team name is already registered for this tournament")
     if payload.team_code:
         existing_code = row(
             "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(team_code) = lower(?)",

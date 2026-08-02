@@ -40,6 +40,7 @@ OPERATIONAL_TABLE_ORDER = [
     "news_blocks",
     "sport_home_visibility",
     "manager_city_assignments",
+    "tournament_manager_assignments",
     "leaderboard_records",
     "gallery_albums",
     "gallery_social",
@@ -121,19 +122,36 @@ def connect_mirror():
     return conn
 
 
+def _is_read_query(sql: str) -> bool:
+    return sql.lstrip().lower().startswith(("select", "with", "pragma"))
+
+
 def connect_audit():
     return connect(settings.audit_database_path)
 
 
 def rows(sql: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
-    with connect() as conn:
-        return [dict(item) for item in conn.execute(_translate_sql(sql), tuple(params)).fetchall()]
+    try:
+        with connect() as conn:
+            return [dict(item) for item in conn.execute(_translate_sql(sql), tuple(params)).fetchall()]
+    except Exception:
+        if not _is_read_query(sql):
+            raise
+        with connect_mirror() as conn:
+            return [dict(item) for item in conn.execute(_translate_sql(sql), tuple(params)).fetchall()]
 
 
 def row(sql: str, params: Iterable[Any] = ()) -> dict[str, Any] | None:
-    with connect() as conn:
-        result = conn.execute(_translate_sql(sql), tuple(params)).fetchone()
-        return dict(result) if result else None
+    try:
+        with connect() as conn:
+            result = conn.execute(_translate_sql(sql), tuple(params)).fetchone()
+            return dict(result) if result else None
+    except Exception:
+        if not _is_read_query(sql):
+            raise
+        with connect_mirror() as conn:
+            result = conn.execute(_translate_sql(sql), tuple(params)).fetchone()
+            return dict(result) if result else None
 
 
 def execute(sql: str, params: Iterable[Any] = ()) -> int:
@@ -214,62 +232,69 @@ def sync_mirror() -> None:
     batch_id = datetime.now(timezone.utc).strftime("mirror_%Y%m%d_%H%M%S_%f")
     mirrored_at = datetime.now(timezone.utc).isoformat()
     with connect(settings.database_path) as primary, connect(settings.mirror_database_path) as mirror:
-        if using_postgres():
-            mirror.execute("SET default_transaction_read_only = off")
-            if source_tables:
-                mirror.execute(
-                    "TRUNCATE "
-                    + ", ".join(f'"{table}"' for table in source_tables)
-                    + " RESTART IDENTITY CASCADE"
+        try:
+            if using_postgres():
+                mirror.execute("SET default_transaction_read_only = off")
+                if source_tables:
+                    mirror.execute(
+                        "TRUNCATE "
+                        + ", ".join(f'"{table}"' for table in source_tables)
+                        + " RESTART IDENTITY CASCADE"
+                    )
+            else:
+                mirror.execute("PRAGMA foreign_keys = OFF")
+                mirror.execute("PRAGMA query_only = OFF")
+                mirror.execute("BEGIN IMMEDIATE")
+                for table in reversed(source_tables):
+                    mirror.execute(f'DELETE FROM "{table}"')
+
+            table_stats: dict[str, tuple[str, int]] = {}
+            for table in source_tables:
+                records = primary.execute(f'SELECT * FROM "{table}"').fetchall()
+                table_records = [dict(record) for record in records]
+                table_stats[table] = (
+                    sha256(json.dumps(table_records, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
+                    len(table_records),
                 )
-        else:
-            mirror.execute("PRAGMA foreign_keys = OFF")
-            mirror.execute("PRAGMA query_only = OFF")
-            for table in reversed(source_tables):
-                mirror.execute(f'DELETE FROM "{table}"')
+                if not records:
+                    continue
+                columns = [
+                    description[0] if isinstance(description, tuple) else description.name
+                    for description in primary.execute(f'SELECT * FROM "{table}" LIMIT 0').description
+                ]
+                placeholders = ", ".join(["?"] * len(columns))
+                column_sql = ", ".join(f'"{column}"' for column in columns)
+                insert_sql = _translate_sql(f'INSERT INTO "{table}" ({column_sql}) VALUES ({placeholders})')
+                for record in records:
+                    mirror.execute(insert_sql, tuple(record[column] for column in columns))
 
-        table_stats: dict[str, tuple[str, int]] = {}
-        for table in source_tables:
-            records = primary.execute(f'SELECT * FROM "{table}"').fetchall()
-            table_records = [dict(record) for record in records]
-            table_stats[table] = (
-                sha256(json.dumps(table_records, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
-                len(table_records),
-            )
-            if not records:
-                continue
-            columns = [
-                description[0] if isinstance(description, tuple) else description.name
-                for description in primary.execute(f'SELECT * FROM "{table}" LIMIT 0').description
-            ]
-            placeholders = ", ".join(["?"] * len(columns))
-            column_sql = ", ".join(f'"{column}"' for column in columns)
-            insert_sql = _translate_sql(f'INSERT INTO "{table}" ({column_sql}) VALUES ({placeholders})')
-            for record in records:
-                mirror.execute(insert_sql, tuple(record[column] for column in columns))
-
-        mirror.execute(
-            _translate_sql(
-                "INSERT INTO mirror_sync_batches(batch_id, source_updated_at, mirrored_at, backup_status) "
-                "VALUES (?, ?, ?, ?)"
-            ),
-            (batch_id, mirrored_at, mirrored_at, "synced"),
-        )
-        mirror.execute("DELETE FROM mirror_table_checksums")
-        for table in source_tables:
-            checksum, row_count = table_stats[table]
             mirror.execute(
                 _translate_sql(
-                    "INSERT INTO mirror_table_checksums(table_name, checksum, row_count, mirrored_at) "
+                    "INSERT INTO mirror_sync_batches(batch_id, source_updated_at, mirrored_at, backup_status) "
                     "VALUES (?, ?, ?, ?)"
                 ),
-                (
-                    table,
-                    checksum,
-                    row_count,
-                    mirrored_at,
-                ),
+                (batch_id, mirrored_at, mirrored_at, "synced"),
             )
-        if not using_postgres():
-            mirror.execute("PRAGMA foreign_keys = ON")
-        mirror.commit()
+            mirror.execute("DELETE FROM mirror_table_checksums")
+            for table in source_tables:
+                checksum, row_count = table_stats[table]
+                mirror.execute(
+                    _translate_sql(
+                        "INSERT INTO mirror_table_checksums(table_name, checksum, row_count, mirrored_at) "
+                        "VALUES (?, ?, ?, ?)"
+                    ),
+                    (
+                        table,
+                        checksum,
+                        row_count,
+                        mirrored_at,
+                    ),
+                )
+            if not using_postgres():
+                mirror.execute("PRAGMA foreign_keys = ON")
+            mirror.commit()
+        except Exception:
+            mirror.rollback()
+            if not using_postgres():
+                mirror.execute("PRAGMA foreign_keys = ON")
+            raise

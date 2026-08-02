@@ -51,6 +51,7 @@ export type UserDashboardData = {
     registration_id: string;
     name: string;
     role: string;
+    contact?: string;
   }>;
 };
 
