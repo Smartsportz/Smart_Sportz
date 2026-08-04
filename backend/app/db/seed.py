@@ -391,7 +391,7 @@ def seed_operational_data() -> None:
             ("c17", "bangalore-corporate-t20", "f1a", "champ"),
             ("c18", "bangalore-corporate-t20", "f1b", "champ"),
         ]
-        statements += [("INSERT INTO bracket_nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in nodes]
+        statements += [("INSERT INTO bracket_nodes(id, tournament_slug, label, team, round, x, y, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in nodes]
         statements += [("INSERT INTO bracket_connections VALUES (?, ?, ?, ?)", item) for item in connections]
     manager = row("SELECT id FROM users WHERE email = ?", ("manager@smartsportz.in",))
     if manager and not row("SELECT id FROM manager_city_assignments WHERE manager_user_id = ? LIMIT 1", (manager["id"],)):

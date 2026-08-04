@@ -153,22 +153,23 @@ export default function App() {
           <Route path="/user/settings" element={<ProtectedRoute roles={["user"]}><SettingsPage /></ProtectedRoute>} />
           <Route path="/user/*" element={<ProtectedRoute roles={["user"]}><UserDashboardPage /></ProtectedRoute>} />
           <Route path="/management/programs" element={<ProtectedRoute roles={["management"]}><RoleProgramsPage role="management" /></ProtectedRoute>} />
-          <Route path="/management/tournaments" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="tournaments" /></ProtectedRoute>} />
-          <Route path="/management/registrations" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="registrations" /></ProtectedRoute>} />
-          <Route path="/management/matches" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="matches" /></ProtectedRoute>} />
-          <Route path="/management/players" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="players" /></ProtectedRoute>} />
-          <Route path="/management/announcements" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="announcements" /></ProtectedRoute>} />
-          <Route path="/management/news" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="news" /></ProtectedRoute>} />
-          <Route path="/management/reports" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementSectionPage section="reports" /></ProtectedRoute>} />
-          <Route path="/management/matches/:id/control" element={<ProtectedRoute roles={["management", "super_admin"]}><LiveMatchPage /></ProtectedRoute>} />
-          <Route path="/management/tournaments/:slug/bracket" element={<ProtectedRoute roles={["management", "super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
-          <Route path="/management/*" element={<ProtectedRoute roles={["management", "super_admin"]}><ManagementPage /></ProtectedRoute>} />
+          <Route path="/management/tournaments" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/management/registrations" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="registrations" /></ProtectedRoute>} />
+          <Route path="/management/matches" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="matches" /></ProtectedRoute>} />
+          <Route path="/management/players" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="players" /></ProtectedRoute>} />
+          <Route path="/management/announcements" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="announcements" /></ProtectedRoute>} />
+          <Route path="/management/news" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="news" /></ProtectedRoute>} />
+          <Route path="/management/reports" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="reports" /></ProtectedRoute>} />
+          <Route path="/management/matches/:id/control" element={<ProtectedRoute roles={["management"]}><LiveMatchPage /></ProtectedRoute>} />
+          <Route path="/management/tournaments/:slug/bracket" element={<ProtectedRoute roles={["management"]}><BracketWorkspacePage /></ProtectedRoute>} />
+          <Route path="/management/*" element={<ProtectedRoute roles={["management"]}><ManagementPage /></ProtectedRoute>} />
           <Route path="/super-admin" element={<Navigate to="/super-admin/programs" replace />} />
           <Route path="/super-admin/programs" element={<ProtectedRoute roles={["super_admin"]}><RoleProgramsPage role="super_admin" /></ProtectedRoute>} />
           <Route path="/super-admin/*" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/admin/dashboard" element={<ProtectedRoute roles={["super_admin"]}><AdminPage /></ProtectedRoute>} />
           <Route path="/admin/tournaments/new" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentEditorPage /></ProtectedRoute>} />
           <Route path="/admin/tournaments/:slug/edit" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentEditorPage /></ProtectedRoute>} />
+          <Route path="/admin/tournaments/:slug/bracket" element={<ProtectedRoute roles={["super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
           <Route path="/admin/tournaments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="tournaments" /></ProtectedRoute>} />
           <Route path="/admin/users/add" element={<ProtectedRoute roles={["super_admin"]}><AdminUserCreatePage /></ProtectedRoute>} />
           <Route path="/admin/users/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminUserDetailPage /></ProtectedRoute>} />

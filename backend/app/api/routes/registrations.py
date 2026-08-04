@@ -97,10 +97,10 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
     execute(
         """INSERT INTO registrations(
              id, user_id, tournament_slug, team_name, team_code, captain_name, sub_captain_name, coach_name,
-             email, phone, city, district_state, team_logo, primary_jersey_color, secondary_jersey_color,
+             email, phone, city, district_state, team_logo, selected_jersey_image,
              team_motto, category, confirmation_code, confirmation_qr_payload, status, payment_status, amount, created_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             registration_id,
             user["id"],
@@ -115,8 +115,7 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
             payload.city,
             payload.district_state,
             payload.team_logo,
-            payload.primary_jersey_color,
-            payload.secondary_jersey_color,
+            payload.selected_jersey_image,
             payload.team_motto,
             payload.category,
             "",
@@ -133,8 +132,17 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
     for member in members:
         data = member if isinstance(member, dict) else member.model_dump()
         execute(
-            "INSERT INTO registration_members(id, registration_id, name, role, jersey, contact) VALUES (?, ?, ?, ?, ?, ?)",
-            (f"mem_{uuid4().hex[:10]}", registration_id, data["name"], data.get("role", "Player"), data.get("jersey"), data.get("contact")),
+            "INSERT INTO registration_members(id, registration_id, name, role, jersey, contact, age, jersey_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                f"mem_{uuid4().hex[:10]}",
+                registration_id,
+                data["name"],
+                data.get("role", "Player"),
+                data.get("jersey"),
+                data.get("contact"),
+                int(data.get("age") or 0),
+                data.get("jersey_size") or "",
+            ),
         )
     for document in payload.documents:
         data = document.model_dump()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.api.deps import require_roles
 from app.core.responses import ok
@@ -195,6 +195,10 @@ def admin_delete_team(registration_id: str, user: dict = Depends(require_roles("
 
 @router.get("/tournaments/{tournament_slug}/payments")
 def admin_tournament_payments(tournament_slug: str, _: dict = Depends(require_roles("super_admin"))):
+    return ok(_admin_tournament_payments_payload(tournament_slug))
+
+
+def _admin_tournament_payments_payload(tournament_slug: str):
     tournament = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
@@ -207,6 +211,10 @@ def admin_tournament_payments(tournament_slug: str, _: dict = Depends(require_ro
           p.amount,
           p.method,
           p.receipt_number,
+          p.refund_destination,
+          p.refund_reference,
+          p.action_note,
+          p.action_at,
           p.created_at,
           r.team_name,
           r.captain_name,
@@ -222,7 +230,7 @@ def admin_tournament_payments(tournament_slug: str, _: dict = Depends(require_ro
         (tournament_slug,),
     )
     total_paid = sum(int(item["amount"] or 0) for item in payment_rows if item["status"] == "paid")
-    return ok({
+    return {
         "tournament": tournament,
         "summary": {
             "total": total_paid,
@@ -232,7 +240,61 @@ def admin_tournament_payments(tournament_slug: str, _: dict = Depends(require_ro
             "pendingPayments": row("SELECT COUNT(*) AS count FROM registrations WHERE tournament_slug = ? AND payment_status <> 'paid'", (tournament_slug,))["count"],
         },
         "payments": payment_rows,
-    })
+    }
+
+
+@router.post("/payments/{payment_id}/refund")
+def admin_refund_payment(payment_id: str, payload: dict = Body(default_factory=dict), user: dict = Depends(require_roles("super_admin"))):
+    payment = row(
+        """
+        SELECT p.*, r.tournament_slug, r.team_name
+        FROM payments p
+        INNER JOIN registrations r ON r.id = p.registration_id
+        WHERE p.id = ?
+        """,
+        (payment_id,),
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    execute(
+        """
+        UPDATE payments
+        SET status = 'refunded', refund_destination = ?, refund_reference = ?, action_note = ?, action_at = ?
+        WHERE id = ?
+        """,
+        (
+            str(payload.get("refund_destination") or ""),
+            str(payload.get("refund_reference") or ""),
+            str(payload.get("note") or ""),
+            datetime.now(timezone.utc).isoformat(),
+            payment_id,
+        ),
+    )
+    execute("UPDATE registrations SET payment_status = 'refunded' WHERE id = ?", (payment["registration_id"],))
+    log(user["email"], "payment_refunded", "payment", payment_id, f"Refund recorded for {payment['team_name']}")
+    return ok(_admin_tournament_payments_payload(payment["tournament_slug"]), "Payment refund recorded")
+
+
+@router.post("/payments/{payment_id}/cancel")
+def admin_cancel_payment(payment_id: str, payload: dict = Body(default_factory=dict), user: dict = Depends(require_roles("super_admin"))):
+    payment = row(
+        """
+        SELECT p.*, r.tournament_slug, r.team_name
+        FROM payments p
+        INNER JOIN registrations r ON r.id = p.registration_id
+        WHERE p.id = ?
+        """,
+        (payment_id,),
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    execute(
+        "UPDATE payments SET status = 'cancelled', action_note = ?, action_at = ? WHERE id = ?",
+        (str(payload.get("note") or ""), datetime.now(timezone.utc).isoformat(), payment_id),
+    )
+    execute("UPDATE registrations SET payment_status = 'cancelled' WHERE id = ?", (payment["registration_id"],))
+    log(user["email"], "payment_cancelled", "payment", payment_id, f"Payment cancelled for {payment['team_name']}")
+    return ok(_admin_tournament_payments_payload(payment["tournament_slug"]), "Payment cancelled")
 
 
 @router.get("/registrations")

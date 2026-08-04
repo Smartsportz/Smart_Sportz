@@ -77,6 +77,51 @@ def attach_cities(item: dict) -> dict:
     return item
 
 
+def default_jersey_svg(label: str, color: str) -> str:
+    svg = (
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='320' height='220' viewBox='0 0 320 220'>"
+        "<rect width='320' height='220' rx='26' fill='#f5fbf6'/>"
+        f"<path d='M111 31h98l22 18 34 12-17 35-25-8v96H77V88l-25 8-17-35 34-12 22-18z' fill='{color}' stroke='#0b1b33' stroke-width='6'/>"
+        "<path d='M121 31c10 18 24 26 39 26s29-8 39-26' fill='none' stroke='#0b1b33' stroke-width='6' stroke-linecap='round'/>"
+        f"<text x='160' y='188' text-anchor='middle' font-family='Arial,sans-serif' font-size='24' font-weight='700' fill='#0b1b33'>{label}</text>"
+        "</svg>"
+    )
+    from urllib.parse import quote
+    return f"data:image/svg+xml;utf8,{quote(svg)}"
+
+
+def tournament_jersey_options(tournament_slug: str) -> list[dict]:
+    tournament = row("SELECT slug, capacity FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    uploaded = rows(
+        "SELECT id, label, image, sort_order FROM tournament_jerseys WHERE tournament_slug = ? ORDER BY sort_order, label",
+        (tournament_slug,),
+    )
+    reserved = {
+        item["selected_jersey_image"]
+        for item in rows(
+            "SELECT selected_jersey_image FROM registrations WHERE tournament_slug = ? AND payment_status = 'paid' AND selected_jersey_image <> ''",
+            (tournament_slug,),
+        )
+    }
+    if uploaded:
+        options = uploaded
+    else:
+        colors = ["#0b8852", "#1d4ed8", "#ea580c", "#7c3aed", "#dc2626", "#0891b2", "#4d7c0f", "#9333ea"]
+        count = max(1, int(tournament.get("capacity") or 4))
+        options = [
+            {
+                "id": f"default-{index + 1}",
+                "label": f"Jersey {index + 1}",
+                "image": default_jersey_svg(str(index + 1), colors[index % len(colors)]),
+                "sort_order": index + 1,
+            }
+            for index in range(count)
+        ]
+    return [{**item, "reserved": item["image"] in reserved} for item in options]
+
+
 @router.get("/home")
 def home():
     def build():
@@ -157,6 +202,11 @@ def tournament_detail(slug: str):
     return ok(get_or_set_json(cache_key("public:tournament", slug), build))
 
 
+@router.get("/tournaments/{slug}/jerseys")
+def tournament_jerseys(slug: str):
+    return ok(tournament_jersey_options(slug))
+
+
 @router.get("/tournaments/{slug}/bracket")
 def tournament_bracket(slug: str):
     def build():
@@ -166,8 +216,9 @@ def tournament_bracket(slug: str):
             raise HTTPException(status_code=404, detail="Tournament not found")
         return {
             "tournament": item,
-            "nodes": rows("SELECT id, label, team, round, x, y, status FROM bracket_nodes WHERE tournament_slug = ? ORDER BY x, y", (slug,)),
+            "nodes": rows("SELECT id, label, team, round, x, y, status, bucket, scheduled_at FROM bracket_nodes WHERE tournament_slug = ? ORDER BY bucket, x, y", (slug,)),
             "connections": rows("SELECT id, source_id, target_id FROM bracket_connections WHERE tournament_slug = ?", (slug,)),
+            "roundSchedules": rows("SELECT round, bucket, scheduled_at FROM bracket_round_schedules WHERE tournament_slug = ? ORDER BY round, bucket", (slug,)),
         }
 
     return ok(get_or_set_json(cache_key("public:bracket", slug), build))

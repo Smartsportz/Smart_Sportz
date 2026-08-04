@@ -253,6 +253,9 @@ export function TournamentCard({ item }: { item: any }) {
         : `Registration closed ${tournament.registrationEnd}`;
   const destination = `/tournaments/${item.slug}`;
   const actionLabel = "View details";
+  const minAge = Number((item as any).minAge ?? (item as any).min_age ?? 0);
+  const maxAge = Number((item as any).maxAge ?? (item as any).max_age ?? 0);
+  const ageLabel = minAge && maxAge ? `${minAge}-${maxAge} yrs` : minAge ? `${minAge}+ yrs` : maxAge ? `Up to ${maxAge} yrs` : "Open age";
 
   return (
     <Link to={destination} className="click-card">
@@ -266,6 +269,7 @@ export function TournamentCard({ item }: { item: any }) {
         <div className="card-meta">
           <span>{tournament.teams}/{tournament.capacity} teams</span>
           <span>{tournament.prize}</span>
+          <span>{ageLabel}</span>
         </div>
         <span className="inline-link">{actionLabel} <ChevronRight size={16} /></span>
       </div>

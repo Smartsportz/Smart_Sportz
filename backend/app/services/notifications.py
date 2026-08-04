@@ -115,6 +115,33 @@ def send_sms_message(phone: str, message: str) -> DeliveryResult:
         return DeliveryResult(False, "twilio", str(exc))
 
 
+def send_whatsapp_message(phone: str, message: str) -> DeliveryResult:
+    auth = _twilio_auth_header()
+    if not auth:
+        return DeliveryResult(False, "twilio", "Twilio credentials are not configured")
+    if not settings.twilio_from_number and not settings.twilio_messaging_service_sid:
+        return DeliveryResult(False, "twilio", "WhatsApp requires TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID")
+    to_number = settings.twilio_default_to or phone
+    payload = {"To": f"whatsapp:{to_number}", "Body": message}
+    if settings.twilio_messaging_service_sid:
+        payload["MessagingServiceSid"] = settings.twilio_messaging_service_sid
+    else:
+        payload["From"] = settings.twilio_from_number if settings.twilio_from_number.startswith("whatsapp:") else f"whatsapp:{settings.twilio_from_number}"
+    form = urllib.parse.urlencode(payload).encode("utf-8")
+    request = urllib.request.Request(
+        f"https://api.twilio.com/2010-04-01/Accounts/{settings.twilio_account_sid}/Messages.json",
+        data=form,
+        method="POST",
+        headers={"Authorization": auth, "Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        return DeliveryResult(True, "twilio", f"WhatsApp queued {payload.get('sid', '')}".strip())
+    except Exception as exc:
+        return DeliveryResult(False, "twilio", str(exc))
+
+
 def send_email(to_email: str, subject: str, html: str, text: str | None = None) -> DeliveryResult:
     if settings.email_provider == "brevo":
         return send_brevo_email(to_email, subject, html, text)
@@ -250,6 +277,7 @@ def send_registration_payment_success(to_email: str, phone: str, details: dict[s
     results = [send_email(to_email, "Smart Sportz payment successful and registration code", html, text)]
     sms_message = f"Smart Sportz paid: {details.get('teamName')} code {details.get('confirmationCode')} receipt {details.get('receiptNumber')}"
     results.append(send_sms_message(phone or settings.twilio_default_to, sms_message))
+    results.append(send_whatsapp_message(phone or settings.twilio_default_to, sms_message))
     if not results[-1].ok:
-        results[-1].message = f"{results[-1].message}; SMS text fallback: {sms_message}"
+        results[-1].message = f"{results[-1].message}; WhatsApp text fallback: {sms_message}"
     return results

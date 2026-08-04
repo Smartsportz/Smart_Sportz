@@ -41,8 +41,11 @@ CREATE TABLE IF NOT EXISTS tournaments (
   team_size INTEGER NOT NULL DEFAULT 16,
   min_team_size INTEGER NOT NULL DEFAULT 2,
   max_team_size INTEGER NOT NULL DEFAULT 16,
+  min_age INTEGER NOT NULL DEFAULT 18,
+  max_age INTEGER NOT NULL DEFAULT 45,
   prize TEXT NOT NULL,
   image TEXT NOT NULL,
+  poster TEXT NOT NULL DEFAULT '',
   accent TEXT NOT NULL,
   address TEXT NOT NULL DEFAULT '',
   sport_description TEXT NOT NULL DEFAULT '',
@@ -128,8 +131,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   city TEXT NOT NULL DEFAULT '',
   district_state TEXT NOT NULL DEFAULT '',
   team_logo TEXT NOT NULL DEFAULT '',
-  primary_jersey_color TEXT NOT NULL DEFAULT '#0b8852',
-  secondary_jersey_color TEXT NOT NULL DEFAULT '#ffffff',
+  selected_jersey_image TEXT NOT NULL DEFAULT '',
   team_motto TEXT NOT NULL DEFAULT '',
   category TEXT NOT NULL DEFAULT '',
   confirmation_code TEXT NOT NULL DEFAULT '',
@@ -148,6 +150,8 @@ CREATE TABLE IF NOT EXISTS registration_members (
   role TEXT NOT NULL,
   jersey TEXT,
   contact TEXT,
+  age INTEGER NOT NULL DEFAULT 0,
+  jersey_size TEXT NOT NULL DEFAULT '',
   FOREIGN KEY(registration_id) REFERENCES registrations(id)
 );
 
@@ -162,6 +166,16 @@ CREATE TABLE IF NOT EXISTS registration_documents (
   FOREIGN KEY(registration_id) REFERENCES registrations(id)
 );
 
+CREATE TABLE IF NOT EXISTS tournament_jerseys (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  label TEXT NOT NULL,
+  image TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
   registration_id TEXT NOT NULL,
@@ -169,6 +183,10 @@ CREATE TABLE IF NOT EXISTS payments (
   amount INTEGER NOT NULL,
   method TEXT NOT NULL,
   receipt_number TEXT NOT NULL,
+  refund_destination TEXT NOT NULL DEFAULT '',
+  refund_reference TEXT NOT NULL DEFAULT '',
+  action_note TEXT NOT NULL DEFAULT '',
+  action_at TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   FOREIGN KEY(registration_id) REFERENCES registrations(id)
 );
@@ -197,6 +215,8 @@ CREATE TABLE IF NOT EXISTS bracket_nodes (
   x INTEGER NOT NULL,
   y INTEGER NOT NULL,
   status TEXT NOT NULL,
+  bucket TEXT NOT NULL DEFAULT 'main',
+  scheduled_at TEXT NOT NULL DEFAULT '',
   FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
 );
 
@@ -226,6 +246,16 @@ CREATE TABLE IF NOT EXISTS cms_content (
   body TEXT NOT NULL,
   path TEXT NOT NULL,
   published INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bracket_round_schedules (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  round TEXT NOT NULL,
+  bucket TEXT NOT NULL DEFAULT 'all',
+  scheduled_at TEXT NOT NULL DEFAULT '',
+  UNIQUE(tournament_slug, round, bucket),
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
 );
 
 CREATE TABLE IF NOT EXISTS home_discovery_cards (
@@ -462,6 +492,7 @@ CREATE INDEX IF NOT EXISTS idx_live_matches_status ON live_matches(status);
 CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, id);
 CREATE INDEX IF NOT EXISTS idx_bracket_nodes_tournament ON bracket_nodes(tournament_slug, x, y);
 CREATE INDEX IF NOT EXISTS idx_bracket_connections_tournament ON bracket_connections(tournament_slug);
+CREATE INDEX IF NOT EXISTS idx_bracket_round_schedules_tournament ON bracket_round_schedules(tournament_slug, round);
 """
 
 
@@ -520,6 +551,9 @@ def _apply_operational_schema(path=None) -> None:
         tournament_columns = {
             "min_team_size": "INTEGER NOT NULL DEFAULT 2",
             "max_team_size": "INTEGER NOT NULL DEFAULT 16",
+            "min_age": "INTEGER NOT NULL DEFAULT 18",
+            "max_age": "INTEGER NOT NULL DEFAULT 45",
+            "poster": "TEXT NOT NULL DEFAULT ''",
             "address": "TEXT NOT NULL DEFAULT ''",
             "sport_description": "TEXT NOT NULL DEFAULT ''",
             "tournament_description": "TEXT NOT NULL DEFAULT ''",
@@ -529,6 +563,20 @@ def _apply_operational_schema(path=None) -> None:
         }
         for column, definition in tournament_columns.items():
             _add_column(conn, "tournaments", column, definition)
+        payment_columns = {
+            "refund_destination": "TEXT NOT NULL DEFAULT ''",
+            "refund_reference": "TEXT NOT NULL DEFAULT ''",
+            "action_note": "TEXT NOT NULL DEFAULT ''",
+            "action_at": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in payment_columns.items():
+            _add_column(conn, "payments", column, definition)
+        bracket_node_columns = {
+            "bucket": "TEXT NOT NULL DEFAULT 'main'",
+            "scheduled_at": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in bracket_node_columns.items():
+            _add_column(conn, "bracket_nodes", column, definition)
         user_columns = {
             "phone": "TEXT NOT NULL DEFAULT ''",
             "email_verified": "INTEGER NOT NULL DEFAULT 1",
@@ -609,6 +657,44 @@ CREATE TABLE IF NOT EXISTS news_social (
             conn.execute("ALTER TABLE tournaments ADD COLUMN registration_end TEXT NOT NULL DEFAULT ''")
         if "team_size" not in columns:
             conn.execute("ALTER TABLE tournaments ADD COLUMN team_size INTEGER NOT NULL DEFAULT 16")
+        if "min_age" not in columns:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN min_age INTEGER NOT NULL DEFAULT 18")
+        if "max_age" not in columns:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN max_age INTEGER NOT NULL DEFAULT 45")
+        if "poster" not in columns:
+            conn.execute("ALTER TABLE tournaments ADD COLUMN poster TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS tournament_jerseys (
+              id TEXT PRIMARY KEY,
+              tournament_slug TEXT NOT NULL,
+              label TEXT NOT NULL,
+              image TEXT NOT NULL,
+              sort_order INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL
+            )"""
+        )
+        registration_columns = [row[1] for row in conn.execute("PRAGMA table_info(registrations)").fetchall()]
+        if "selected_jersey_image" not in registration_columns:
+            conn.execute("ALTER TABLE registrations ADD COLUMN selected_jersey_image TEXT NOT NULL DEFAULT ''")
+        member_columns = [row[1] for row in conn.execute("PRAGMA table_info(registration_members)").fetchall()]
+        if "age" not in member_columns:
+            conn.execute("ALTER TABLE registration_members ADD COLUMN age INTEGER NOT NULL DEFAULT 0")
+        if "jersey_size" not in member_columns:
+            conn.execute("ALTER TABLE registration_members ADD COLUMN jersey_size TEXT NOT NULL DEFAULT ''")
+        payment_columns = [row[1] for row in conn.execute("PRAGMA table_info(payments)").fetchall()]
+        if "refund_destination" not in payment_columns:
+            conn.execute("ALTER TABLE payments ADD COLUMN refund_destination TEXT NOT NULL DEFAULT ''")
+        if "refund_reference" not in payment_columns:
+            conn.execute("ALTER TABLE payments ADD COLUMN refund_reference TEXT NOT NULL DEFAULT ''")
+        if "action_note" not in payment_columns:
+            conn.execute("ALTER TABLE payments ADD COLUMN action_note TEXT NOT NULL DEFAULT ''")
+        if "action_at" not in payment_columns:
+            conn.execute("ALTER TABLE payments ADD COLUMN action_at TEXT NOT NULL DEFAULT ''")
+        bracket_node_columns = [row[1] for row in conn.execute("PRAGMA table_info(bracket_nodes)").fetchall()]
+        if "bucket" not in bracket_node_columns:
+            conn.execute("ALTER TABLE bracket_nodes ADD COLUMN bucket TEXT NOT NULL DEFAULT 'main'")
+        if "scheduled_at" not in bracket_node_columns:
+            conn.execute("ALTER TABLE bracket_nodes ADD COLUMN scheduled_at TEXT NOT NULL DEFAULT ''")
         registration_columns = [row[1] for row in conn.execute("PRAGMA table_info(registrations)").fetchall()]
         if "city" not in registration_columns:
             conn.execute("ALTER TABLE registrations ADD COLUMN city TEXT NOT NULL DEFAULT ''")

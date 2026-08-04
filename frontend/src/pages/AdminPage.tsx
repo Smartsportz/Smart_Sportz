@@ -106,7 +106,10 @@ type AdminTournamentForm = {
   capacity: number;
   minTeamSize: number;
   maxTeamSize: number;
+  minAge: number;
+  maxAge: number;
   image: string;
+  poster: string;
   accent: string;
   address: string;
   sportDescription: string;
@@ -132,7 +135,10 @@ const emptyAdminTournamentForm: AdminTournamentForm = {
   capacity: 32,
   minTeamSize: 2,
   maxTeamSize: 16,
+  minAge: 18,
+  maxAge: 45,
   image: "/assets/cricket-stadium.png",
+  poster: "/assets/poster.jpeg",
   accent: "emerald",
   address: "",
   sportDescription: "",
@@ -181,7 +187,10 @@ function adminFormFromTournament(item?: Record<string, any>): AdminTournamentFor
     capacity: Number(item.capacity ?? 32),
     minTeamSize: Number(item.min_team_size ?? 2),
     maxTeamSize: Number(item.max_team_size ?? item.team_size ?? 16),
+    minAge: Number(item.min_age ?? 18),
+    maxAge: Number(item.max_age ?? 45),
     image: item.image ?? "/assets/cricket-stadium.png",
+    poster: item.poster ?? item.image ?? "/assets/poster.jpeg",
     accent: item.accent ?? "emerald",
     address: item.address ?? "",
     sportDescription: item.sport_description ?? "",
@@ -294,7 +303,7 @@ function AdminTournamentsDbPanel() {
   async function loadTournaments() {
     setError("");
     try {
-      const data = await apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token);
+      const data = await apiRequest<Array<Record<string, any>>>("/admin/tournaments", {}, token);
       setRecords(data);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load tournaments from database.");
@@ -363,8 +372,11 @@ function AdminTournamentsDbPanel() {
       team_size: form.maxTeamSize,
       min_team_size: form.minTeamSize,
       max_team_size: form.maxTeamSize,
+      min_age: form.minAge,
+      max_age: form.maxAge,
       prize: `INR ${prizeTotal.toLocaleString("en-IN")}`,
       image: form.image,
+      poster: form.poster,
       accent: form.accent,
       address: form.address,
       sport_description: form.sportDescription,
@@ -378,7 +390,7 @@ function AdminTournamentsDbPanel() {
     };
     try {
       const saved = await apiRequest<Record<string, any>>(
-        editing ? `/management/tournaments/${editing.slug}` : "/management/tournaments",
+        editing ? `/admin/tournaments/${editing.slug}` : "/admin/tournaments",
         { method: editing ? "PATCH" : "POST", body: JSON.stringify(payload) },
         token,
       );
@@ -436,7 +448,7 @@ function AdminTournamentsDbPanel() {
         { block_type: "paragraph", content: section.description },
         ...(section.image ? [{ block_type: "image", content: section.image }] : []),
       ]).filter((block) => block.content.trim());
-      await apiRequest("/management/news", {
+      await apiRequest("/admin/cms", {
         method: "POST",
         body: JSON.stringify({
           title: newsDraft.title,
@@ -503,7 +515,7 @@ function AdminTournamentsDbPanel() {
     if (!deleteCandidate) return;
     setError("");
     try {
-      await apiRequest(`/management/tournaments/${deleteCandidate.slug}`, { method: "DELETE" }, token);
+      await apiRequest(`/admin/tournaments/${deleteCandidate.slug}`, { method: "DELETE" }, token);
       setRecords((current) => current.filter((item) => item.slug !== deleteCandidate.slug));
       setMessage(`${deleteCandidate.name} deleted.`);
       setDeleteCandidate(null);
@@ -550,7 +562,7 @@ function AdminTournamentsDbPanel() {
                     </div>
                     <div className="manager-card-actions">
                       <Link to={`/tournaments/${item.slug}`}>Open</Link>
-                      <Link to={`/management/tournaments/${item.slug}/bracket`}>Rounds</Link>
+                      <Link to={`/admin/tournaments/${item.slug}/bracket`}>Rounds</Link>
                       <Link to={`/admin/tournaments/${item.slug}/edit`}>Edit</Link>
                       <button className="danger-link" type="button" onClick={() => setDeleteCandidate(item)}>Delete</button>
                     </div>
@@ -585,9 +597,15 @@ function AdminTournamentsDbPanel() {
               <label>Capacity<input type="number" value={form.capacity} onChange={(event) => patchForm({ capacity: Number(event.target.value) })} /></label>
               <label>Min members<input type="number" value={form.minTeamSize} onChange={(event) => patchForm({ minTeamSize: Number(event.target.value) })} /></label>
               <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
+              <label>Min age<input type="number" value={form.minAge} onChange={(event) => patchForm({ minAge: Number(event.target.value) })} /></label>
+              <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
               <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) patchForm({ image: `/assets/${file.name}` });
+              }} /></label>
+              <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) patchForm({ poster: `/assets/${file.name}` });
               }} /></label>
             </div>
             <section className="mini-table-card manager-allocation-card">
@@ -607,6 +625,7 @@ function AdminTournamentsDbPanel() {
               ) : <p className="empty-line">No manager accounts found. Create managers from Admin &gt; Managers first.</p>}
             </section>
             <label>Selected image path<input value={form.image} readOnly /></label>
+            <label>Selected poster path<input value={form.poster} readOnly /></label>
             <label>Full address<textarea value={form.address} onChange={(event) => patchForm({ address: event.target.value })} /></label>
             <div className="manager-form-split">
               <section className="mini-table-card">
@@ -929,7 +948,7 @@ export function AdminTournamentEditorPage() {
   useEffect(() => {
     let alive = true;
     Promise.all([
-      apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token),
+      apiRequest<Array<Record<string, any>>>("/admin/tournaments", {}, token),
       apiRequest<ManagerRow[]>("/admin/managers", {}, token),
     ])
       .then(([tournamentRows, managerRows]) => {
@@ -982,8 +1001,11 @@ export function AdminTournamentEditorPage() {
       team_size: form.maxTeamSize,
       min_team_size: form.minTeamSize,
       max_team_size: form.maxTeamSize,
+      min_age: form.minAge,
+      max_age: form.maxAge,
       prize: `INR ${prizeTotal.toLocaleString("en-IN")}`,
       image: form.image,
+      poster: form.poster,
       accent: form.accent,
       address: form.address,
       sport_description: form.sportDescription,
@@ -997,7 +1019,7 @@ export function AdminTournamentEditorPage() {
     };
     try {
       const saved = await apiRequest<Record<string, any>>(
-        isNew ? "/management/tournaments" : `/management/tournaments/${slug}`,
+        isNew ? "/admin/tournaments" : `/admin/tournaments/${slug}`,
         { method: isNew ? "POST" : "PATCH", body: JSON.stringify(payload) },
         token,
       );
@@ -1035,7 +1057,10 @@ export function AdminTournamentEditorPage() {
               <label>Capacity<input type="number" value={form.capacity} onChange={(event) => patchForm({ capacity: Number(event.target.value) })} /></label>
               <label>Min members<input type="number" value={form.minTeamSize} onChange={(event) => patchForm({ minTeamSize: Number(event.target.value) })} /></label>
               <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
+              <label>Min age<input type="number" value={form.minAge} onChange={(event) => patchForm({ minAge: Number(event.target.value) })} /></label>
+              <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
               <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ image: `/assets/${file.name}` }); }} /></label>
+              <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ poster: `/assets/${file.name}` }); }} /></label>
               <label>Manager allocation
                 <select multiple value={form.assignedManagerIds} onChange={(event) => patchForm({ assignedManagerIds: Array.from(event.target.selectedOptions).map((option) => option.value) })}>
                   {managers.map((manager) => <option value={manager.id} key={manager.id}>{manager.name} - {manager.email}</option>)}
@@ -1043,6 +1068,7 @@ export function AdminTournamentEditorPage() {
               </label>
             </div>
             <label>Selected image path<input value={form.image} readOnly /></label>
+            <label>Selected poster path<input value={form.poster} readOnly /></label>
             <label>Full address<textarea value={form.address} onChange={(event) => patchForm({ address: event.target.value })} /></label>
             <div className="manager-form-split">
               <section className="mini-table-card">
@@ -1082,8 +1108,8 @@ export function AdminTournamentEditorPage() {
             </div>
             <div className="registration-actions compact-actions">
               <button className="btn btn-primary" type="button" onClick={() => setMessage(`${roundCount} round workspace saved.`)}>Save Workspace</button>
-              <Link className="btn btn-secondary" to={`/management/tournaments/${savedTournament?.slug ?? slug}/bracket`}>Open Bracket</Link>
-              <Link className="btn btn-secondary" to="/management/news">Confirm / Add News</Link>
+              <Link className="btn btn-secondary" to={`/admin/tournaments/${savedTournament?.slug ?? slug}/bracket`}>Open Bracket</Link>
+              <Link className="btn btn-secondary" to="/admin/cms">Confirm / Add News</Link>
             </div>
           </section>
         )}
@@ -1410,6 +1436,13 @@ export function AdminTournamentPaymentsPage() {
   const { token } = useAuth();
   const [data, setData] = useState<{ tournament: Record<string, any>; summary: Record<string, number>; payments: Array<Record<string, any>> } | null>(null);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
+  const [actionPayment, setActionPayment] = useState<Record<string, any> | null>(null);
+  const [actionType, setActionType] = useState<"refund" | "cancel">("refund");
+  const [actionForm, setActionForm] = useState({ destination: "", reference: "", note: "" });
+  const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -1419,29 +1452,113 @@ export function AdminTournamentPaymentsPage() {
       .catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load tournament payments."));
   }, [slug, token]);
 
+  const tournamentOptions = data ? [data.tournament.name] : [];
+  const statusOptions = Array.from(new Set((data?.payments ?? []).map((payment) => String(payment.status || "pending"))));
+  const methodOptions = Array.from(new Set((data?.payments ?? []).map((payment) => String(payment.method || "unknown"))));
+  const filteredPayments = (data?.payments ?? []).filter((payment) => {
+    const haystack = [payment.team_name, payment.captain_name, payment.receipt_number, payment.method, payment.status, payment.city].join(" ").toLowerCase();
+    const matchesSearch = !search.trim() || haystack.includes(search.trim().toLowerCase());
+    const matchesStatus = statusFilter === "all" || payment.status === statusFilter;
+    const matchesMethod = methodFilter === "all" || payment.method === methodFilter;
+    return matchesSearch && matchesStatus && matchesMethod;
+  });
+
+  function openPaymentAction(payment: Record<string, any>, type: "refund" | "cancel") {
+    setActionPayment(payment);
+    setActionType(type);
+    setActionMessage("");
+    setActionForm({
+      destination: payment.method === "upi" ? String(payment.upi_id || "") : String(payment.card_reference || ""),
+      reference: "",
+      note: "",
+    });
+  }
+
+  async function submitPaymentAction() {
+    if (!actionPayment) return;
+    setActionMessage("");
+    try {
+      const updated = await apiRequest<{ tournament: Record<string, any>; summary: Record<string, number>; payments: Array<Record<string, any>> }>(
+        `/admin/payments/${actionPayment.id}/${actionType}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            refund_destination: actionForm.destination,
+            refund_reference: actionForm.reference,
+            note: actionForm.note,
+          }),
+        },
+        token,
+      );
+      setData(updated);
+      setActionPayment(null);
+    } catch (caught) {
+      setActionMessage(caught instanceof Error ? caught.message : "Payment action failed.");
+    }
+  }
+
   return (
     <Page>
       <PortalShell title={data?.tournament.name ?? "Tournament Payments"} subtitle="Payment totals and team payment records for this tournament." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/payments">All payment tournaments</Link>}>
         {error && <div className="form-alert">{error}</div>}
         {!data ? <section className="panel user-empty-state"><h2>Loading payments</h2><p>Fetching tournament payment records.</p></section> : (
           <>
-            <div className="mini-grid">
+            <div className="mini-grid admin-payment-metrics">
               <Metric label="Total Paid" value={formatAdminMoney(data.summary.total ?? 0)} />
               <Metric label="Paid Payments" value={String(data.summary.paidPayments ?? 0)} />
               <Metric label="Team Records" value={String(data.summary.teams ?? 0)} />
               <Metric label="Pending Payments" value={String(data.summary.pendingPayments ?? 0)} />
             </div>
+            <section className="panel admin-payment-tools">
+              <label>Search payments<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search team, captain, receipt, city..." /></label>
+              <label>Tournament<select value={data.tournament.name} disabled>{tournamentOptions.map((name) => <option key={name}>{name}</option>)}</select></label>
+              <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{statusOptions.map((status) => <option value={status} key={status}>{status}</option>)}</select></label>
+              <label>Method<select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">All methods</option>{methodOptions.map((method) => <option value={method} key={method}>{method}</option>)}</select></label>
+            </section>
             <DataTable
-              columns={["Team", "Captain", "Receipt", "Amount", "Method", "Status"]}
-              rows={data.payments.map((payment) => [
+              columns={["Team", "Captain", "Receipt", "Amount", "Method", "Status", "Action"]}
+              rows={filteredPayments.map((payment) => [
                 payment.team_name,
                 payment.captain_name,
                 payment.receipt_number,
                 formatAdminMoney(payment.amount),
                 payment.method,
-                <span className={`status ${payment.status === "paid" ? "emerald" : "orange"}`}>{payment.status}</span>,
+                <span className={`status ${payment.status === "paid" ? "emerald" : payment.status === "cancelled" ? "pink" : "orange"}`}>{payment.status}</span>,
+                <button className="btn btn-secondary tiny-btn" type="button" onClick={() => openPaymentAction(payment, "refund")}>Set</button>,
               ])}
             />
+            {actionPayment && (
+              <div className="rules-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="payment-action-title">
+                <article className="rules-modal payment-action-modal">
+                  <button className="rules-modal-close" type="button" onClick={() => setActionPayment(null)} aria-label="Close payment action">x</button>
+                  <p className="eyebrow">Payment Action</p>
+                  <h2 id="payment-action-title">{actionPayment.team_name}</h2>
+                  <div className="payment-action-summary">
+                    <span>{actionPayment.receipt_number}</span>
+                    <b>{formatAdminMoney(actionPayment.amount)}</b>
+                    <span>{actionPayment.method}</span>
+                  </div>
+                  {actionMessage && <div className="form-alert">{actionMessage}</div>}
+                  <div className="payment-action-tabs">
+                    <button className={actionType === "refund" ? "active" : ""} type="button" onClick={() => setActionType("refund")}>Refund</button>
+                    <button className={actionType === "cancel" ? "active" : ""} type="button" onClick={() => setActionType("cancel")}>Cancel</button>
+                  </div>
+                  <div className="form-grid">
+                    {actionType === "refund" && (
+                      <>
+                        <label>{actionPayment.method === "upi" ? "Receiver UPI ID" : "Card refund reference"}<input value={actionForm.destination} onChange={(event) => setActionForm((current) => ({ ...current, destination: event.target.value }))} placeholder={actionPayment.method === "upi" ? "name@upi" : "Card refund token/reference"} /></label>
+                        <label>Refund transaction/reference<input value={actionForm.reference} onChange={(event) => setActionForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Gateway refund id or bank reference" /></label>
+                      </>
+                    )}
+                    <label>Admin note<textarea value={actionForm.note} onChange={(event) => setActionForm((current) => ({ ...current, note: event.target.value }))} placeholder={actionType === "refund" ? "Reason for refund and payout details." : "Reason for payment cancellation."} /></label>
+                  </div>
+                  <div className="registration-actions compact-actions">
+                    <button className="btn btn-secondary" type="button" onClick={() => setActionPayment(null)}>Close</button>
+                    <button className="btn btn-primary" type="button" onClick={submitPaymentAction}>{actionType === "refund" ? "Record Refund" : "Cancel Payment"}</button>
+                  </div>
+                </article>
+              </div>
+            )}
           </>
         )}
       </PortalShell>

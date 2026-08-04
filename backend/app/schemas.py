@@ -47,8 +47,10 @@ class RefreshTokenRequest(BaseModel):
 class RegistrationMemberCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     role: str = Field(default="Player", max_length=40)
-    jersey: str | None = Field(default=None, max_length=20)
+    jersey: str | None = Field(default=None, max_length=1200)
     contact: str | None = Field(default=None, max_length=40)
+    age: int | None = Field(default=None, ge=0, le=120)
+    jersey_size: str | None = Field(default=None, max_length=20)
 
 
 class RegistrationDocumentCreate(BaseModel):
@@ -70,8 +72,7 @@ class RegistrationCreate(BaseModel):
     city: str = Field(min_length=2, max_length=80)
     district_state: str = Field(default="", max_length=120)
     team_logo: str = Field(default="", max_length=500)
-    primary_jersey_color: str = Field(default="#0b8852", max_length=20)
-    secondary_jersey_color: str = Field(default="#ffffff", max_length=20)
+    selected_jersey_image: str = Field(default="", max_length=1200)
     team_motto: str = Field(default="", max_length=180)
     category: str = Field(default="", max_length=80)
     members: list[RegistrationMemberCreate] = []
@@ -86,6 +87,8 @@ class BracketNodePayload(BaseModel):
     x: int
     y: int
     status: str = "empty"
+    bucket: str = Field(default="main", max_length=40)
+    scheduled_at: str = Field(default="", max_length=80)
 
 
 class BracketConnectionPayload(BaseModel):
@@ -94,9 +97,17 @@ class BracketConnectionPayload(BaseModel):
     target_id: str
 
 
+class BracketRoundSchedulePayload(BaseModel):
+    round: str
+    scheduled_at: str = Field(default="", max_length=80)
+    bucket: str = Field(default="all", max_length=40)
+
+
 class BracketSavePayload(BaseModel):
     nodes: list[BracketNodePayload]
     connections: list[BracketConnectionPayload]
+    round_schedules: list[BracketRoundSchedulePayload] = []
+    bucket_mode: str = Field(default="single", pattern="^(single|double)$")
     publish: bool = True
     audit_reason: str = Field(default="Manager saved bracket workspace", max_length=300)
 
@@ -127,6 +138,15 @@ class TournamentCitiesPayload(BaseModel):
     cities: list[str] = Field(min_length=1, max_length=12)
 
 
+class TournamentJerseyPayload(BaseModel):
+    label: str = Field(min_length=1, max_length=80)
+    image: str = Field(min_length=3, max_length=1200)
+
+
+class TournamentJerseysPayload(BaseModel):
+    jerseys: list[TournamentJerseyPayload] = Field(min_length=1, max_length=100)
+
+
 class TournamentFeeLinePayload(BaseModel):
     label: str = Field(min_length=2, max_length=80)
     value: int = Field(ge=0, le=100000000)
@@ -153,8 +173,11 @@ class TournamentUpsertPayload(BaseModel):
     team_size: int = Field(default=16, ge=2, le=60)
     min_team_size: int = Field(default=2, ge=2, le=60)
     max_team_size: int = Field(default=16, ge=2, le=60)
+    min_age: int = Field(default=18, ge=0, le=120)
+    max_age: int = Field(default=45, ge=0, le=120)
     prize: str = Field(default="INR 0", max_length=80)
     image: str = Field(default="/assets/cricket-stadium.png", max_length=500)
+    poster: str = Field(default="/assets/poster.jpeg", max_length=500)
     accent: str = Field(default="emerald", max_length=40)
     address: str = Field(default="", max_length=500)
     sport_description: str = Field(default="", max_length=1000)

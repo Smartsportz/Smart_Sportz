@@ -11,9 +11,10 @@ from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
+from app.services.notifications import send_sms_message, send_whatsapp_message
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -215,9 +216,9 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     computed_accent = accent_for_status(computed_status, payload.accent)
     execute(
         """INSERT INTO tournaments(slug, name, sport, status, location, date, registration_start, registration_end, teams, capacity, team_size,
-          min_team_size, max_team_size, prize, image, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home,
+          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home,
           block_repeat_registration)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             tournament_slug,
             payload.name,
@@ -232,8 +233,11 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
             payload.team_size,
             payload.min_team_size,
             payload.max_team_size,
+            payload.min_age,
+            payload.max_age,
             payload.prize,
             payload.image,
+            payload.poster,
             computed_accent,
             payload.address,
             payload.sport_description,
@@ -264,7 +268,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     computed_accent = accent_for_status(computed_status, payload.accent)
     execute(
         """UPDATE tournaments SET name = ?, sport = ?, status = ?, location = ?, date = ?, registration_start = ?, registration_end = ?,
-          teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, prize = ?, image = ?, accent = ?, address = ?,
+          teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, min_age = ?, max_age = ?, prize = ?, image = ?, poster = ?, accent = ?, address = ?,
           sport_description = ?, tournament_description = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
         (
             payload.name,
@@ -279,8 +283,11 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
             payload.team_size,
             payload.min_team_size,
             payload.max_team_size,
+            payload.min_age,
+            payload.max_age,
             payload.prize,
             payload.image,
+            payload.poster,
             computed_accent,
             payload.address,
             payload.sport_description,
@@ -462,6 +469,36 @@ def update_tournament_cities(tournament_slug: str, payload: TournamentCitiesPayl
     }, "Tournament cities updated")
 
 
+@router.patch("/tournaments/{tournament_slug}/jerseys")
+def update_tournament_jerseys(tournament_slug: str, payload: TournamentJerseysPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    capacity = int(item.get("capacity") or 0)
+    if len(payload.jerseys) != capacity:
+        raise HTTPException(status_code=422, detail=f"Upload exactly {capacity} jersey images for this tournament")
+    reserved_images = {
+        record["selected_jersey_image"]
+        for record in rows(
+            "SELECT selected_jersey_image FROM registrations WHERE tournament_slug = ? AND payment_status = 'paid' AND selected_jersey_image <> ''",
+            (tournament_slug,),
+        )
+    }
+    incoming_images = {jersey.image for jersey in payload.jerseys}
+    if reserved_images - incoming_images:
+        raise HTTPException(status_code=409, detail="Completed registrations already locked one or more jerseys")
+    execute("DELETE FROM tournament_jerseys WHERE tournament_slug = ?", (tournament_slug,))
+    timestamp = datetime.now(timezone.utc).isoformat()
+    for index, jersey in enumerate(payload.jerseys, start=1):
+        execute(
+            "INSERT INTO tournament_jerseys(id, tournament_slug, label, image, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (f"jersey_{uuid4().hex[:12]}", tournament_slug, jersey.label.strip(), jersey.image, index, timestamp),
+        )
+    log(user["email"], "tournament_jerseys_updated", "tournament", tournament_slug, f"Updated {len(payload.jerseys)} jerseys")
+    return ok(rows("SELECT id, label, image, sort_order FROM tournament_jerseys WHERE tournament_slug = ? ORDER BY sort_order", (tournament_slug,)), "Tournament jerseys updated")
+
+
 @router.post("/registrations/{registration_id}/approve")
 def approve_registration(registration_id: str, user: dict = Depends(require_roles("super_admin", "management"))):
     item = row("SELECT * FROM registrations WHERE id = ?", (registration_id,))
@@ -495,8 +532,9 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
         accepted = rows("SELECT slug AS id, name, sport AS captain_name, 'Accepted' AS status FROM teams ORDER BY rating DESC LIMIT 8")
     return ok({
         "acceptedTeams": accepted,
-        "nodes": rows("SELECT id, label, team, round, x, y, status FROM bracket_nodes WHERE tournament_slug = ? ORDER BY x, y", (tournament_slug,)),
+        "nodes": rows("SELECT id, label, team, round, x, y, status, bucket, scheduled_at FROM bracket_nodes WHERE tournament_slug = ? ORDER BY bucket, x, y", (tournament_slug,)),
         "connections": rows("SELECT id, source_id, target_id FROM bracket_connections WHERE tournament_slug = ?", (tournament_slug,)),
+        "roundSchedules": rows("SELECT round, bucket, scheduled_at FROM bracket_round_schedules WHERE tournament_slug = ? ORDER BY round, bucket", (tournament_slug,)),
         "notifications": rows("SELECT * FROM notification_events WHERE tournament_slug = ? ORDER BY created_at DESC LIMIT 10", (tournament_slug,)),
     })
 
@@ -505,19 +543,25 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
 def save_bracket(tournament_slug: str, payload: BracketSavePayload, user: dict = Depends(require_roles("super_admin", "management"))):
     execute("DELETE FROM bracket_connections WHERE tournament_slug = ?", (tournament_slug,))
     execute("DELETE FROM bracket_nodes WHERE tournament_slug = ?", (tournament_slug,))
+    execute("DELETE FROM bracket_round_schedules WHERE tournament_slug = ?", (tournament_slug,))
     statements: list[tuple[str, tuple]] = []
     for node in payload.nodes:
         statements.append((
-            "INSERT INTO bracket_nodes(id, tournament_slug, label, team, round, x, y, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (node.id, tournament_slug, node.label, node.team or "", node.round, node.x, node.y, node.status),
+            "INSERT INTO bracket_nodes(id, tournament_slug, label, team, round, x, y, status, bucket, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (node.id, tournament_slug, node.label, node.team or "", node.round, node.x, node.y, node.status, node.bucket, node.scheduled_at),
         ))
     for connection in payload.connections:
         statements.append((
             "INSERT INTO bracket_connections(id, tournament_slug, source_id, target_id) VALUES (?, ?, ?, ?)",
             (connection.id or f"conn_{uuid4().hex[:10]}", tournament_slug, connection.source_id, connection.target_id),
         ))
+    for schedule in payload.round_schedules:
+        statements.append((
+            "INSERT INTO bracket_round_schedules(id, tournament_slug, round, bucket, scheduled_at) VALUES (?, ?, ?, ?, ?)",
+            (f"brs_{uuid4().hex[:10]}", tournament_slug, schedule.round, schedule.bucket, schedule.scheduled_at),
+        ))
     execute_many(statements)
-    log(user["email"], "bracket_saved", "tournament", tournament_slug, payload.audit_reason)
+    log(user["email"], "bracket_saved", "tournament", tournament_slug, f"{payload.audit_reason} ({payload.bucket_mode} bucket mode)")
     return bracket_workspace(tournament_slug, user)
 
 
@@ -534,12 +578,20 @@ def advance_winner(tournament_slug: str, payload: WinnerAdvancePayload, user: di
 @router.post("/brackets/{tournament_slug}/notify")
 def notify_bracket(tournament_slug: str, payload: NotificationSendPayload, user: dict = Depends(require_roles("super_admin", "management"))):
     event_id = f"notify_{uuid4().hex[:12]}"
+    delivery_results = []
+    if "sms" in payload.channels:
+        delivery_results.append(send_sms_message(settings.twilio_default_to or "", payload.message))
+    if "whatsapp" in payload.channels:
+        delivery_results.append(send_whatsapp_message(settings.twilio_default_to or "", payload.message))
     execute(
         "INSERT INTO notification_events(id, tournament_slug, audience, channels, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (event_id, tournament_slug, payload.audience, ",".join(payload.channels), payload.message, "local_sent", datetime.now(timezone.utc).isoformat()),
     )
     log(user["email"], "manual_notification_sent", "notification", event_id, f"Sent bracket notification via {', '.join(payload.channels)}")
-    return ok(row("SELECT * FROM notification_events WHERE id = ?", (event_id,)), "Manual notification stored locally")
+    return ok({
+        "event": row("SELECT * FROM notification_events WHERE id = ?", (event_id,)),
+        "deliveries": [{"provider": item.provider, "ok": item.ok, "message": item.message} for item in delivery_results],
+    }, "Manual notification stored locally")
 
 
 @router.get("/matches")

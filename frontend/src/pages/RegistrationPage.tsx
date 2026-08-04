@@ -32,10 +32,11 @@ type SavedRegistration = {
   city: string;
   districtState: string;
   teamLogo: string;
-  primaryJerseyColor: string;
-  secondaryJerseyColor: string;
   teamMotto: string;
+  selectedJersey: string;
   members: string[];
+  memberAges: string[];
+  memberJerseySizes: string[];
   documents: SavedDocument[];
 };
 
@@ -79,18 +80,18 @@ type RegistrationDraft = {
     coachName: string;
     email: string;
     phone: string;
-    category: string;
     city: string;
     districtState: string;
     teamLogo: string;
-    primaryJerseyColor: string;
-    secondaryJerseyColor: string;
     teamMotto: string;
+    selectedJersey: string;
+    category: string;
   };
   members: string[];
+  memberAges: string[];
+  memberJerseySizes: string[];
   documents: SavedDocument[];
   tournamentAccepted: boolean;
-  categoryAccepted: boolean;
 };
 
 const currentUserKey = "smart-sportz-user";
@@ -170,6 +171,29 @@ function writeSavedPayment(slug: string, payload: SavedPayment) {
 function teamGroupImageDocument(restored: SavedDocument[] | undefined): SavedDocument[] {
   const match = restored?.find((item) => item.documentType === "Team Group Image");
   return [match ?? { documentType: "Team Group Image", fileName: "", filePath: "", status: "required" }];
+}
+
+function jerseySvg(label: string, color: string) {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
+      <rect width="320" height="220" rx="26" fill="#f5fbf6"/>
+      <path d="M111 31h98l22 18 34 12-17 35-25-8v96H77V88l-25 8-17-35 34-12 22-18z" fill="${color}" stroke="#0b1b33" stroke-width="6" />
+      <path d="M121 31c10 18 24 26 39 26s29-8 39-26" fill="none" stroke="#0b1b33" stroke-width="6" stroke-linecap="round"/>
+      <text x="160" y="188" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="700" fill="#0b1b33">${label}</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const jerseyOptions = [
+  { label: "Home", image: jerseySvg("Home", "#0b8852") },
+  { label: "Away", image: jerseySvg("Away", "#1d4ed8") },
+  { label: "Third", image: jerseySvg("Third", "#ea580c") },
+  { label: "Classic", image: jerseySvg("Classic", "#7c3aed") },
+];
+
+function jerseyDisplayName(value: string) {
+  return jerseyOptions.find((jersey) => jersey.image === value)?.label ?? "Selected team kit";
 }
 
 function completedRecordFromBackend(registration: BackendRegistration, tournament: any) {
@@ -286,8 +310,99 @@ function formatFileSize(size?: number) {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function tournamentAgeRange(tournament: (typeof tournaments)[number]) {
+  const minAge = Number((tournament as any).minAge ?? (tournament as any).min_age ?? 0);
+  const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
+  if (minAge && maxAge) return `${minAge} - ${maxAge} years`;
+  if (minAge) return `${minAge}+ years`;
+  if (maxAge) return `Up to ${maxAge} years`;
+  return "Open age category";
+}
+
+function tournamentRulesText(tournament: (typeof tournaments)[number]) {
+  const description = (tournament as any).tournamentDescription || `${tournament.name} follows SmartSportz registration, roster verification, payment, fair-play, and event operations rules.`;
+  return [
+    `${tournament.name} - Rules And Conditions`,
+    "",
+    description,
+    "",
+    `Sport: ${tournament.sport}`,
+    `Venue: ${tournament.location}`,
+    `Schedule: ${tournament.date}`,
+    `Registration Window: ${tournament.registrationStart || "To be announced"} to ${tournament.registrationEnd || "To be announced"}`,
+    `Roster Requirement: ${tournament.teamSize || "Manager configured"} members including captain and sub-captain`,
+    `Age Restriction: ${tournamentAgeRange(tournament)}`,
+    `Prize Pool: ${tournament.prize || "Announced by organizer"}`,
+    "",
+    "1. Team captains must submit accurate team, contact, player, and city details.",
+    "2. Players must satisfy the tournament age restriction and any category eligibility rules.",
+    "3. Duplicate or intentionally incorrect registrations can be rejected by the manager.",
+    "4. Tournament managers may verify team identity, roster, and player eligibility before approval.",
+    "5. Registration is confirmed only after successful payment and SmartSportz verification.",
+    "6. Fixtures, rounds, match timing, live scores, and results are controlled by assigned tournament managers.",
+    "7. Any score correction, cancellation, rematch, or bracket override is recorded for audit visibility.",
+    "8. Participants must follow fair-play, venue, safety, and sportsmanship instructions.",
+    "9. Documents, images, and registration details may be used for verification and tournament records.",
+    "10. The organizer can update schedules or operational rules when required and will communicate important changes.",
+  ].join("\n");
+}
+
+function escapePdfText(value: string) {
+  return value.replace(/[^\x20-\x7E]/g, " ").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function buildRulesPdf(tournament: (typeof tournaments)[number]) {
+  const rawLines = tournamentRulesText(tournament).split("\n");
+  const wrappedLines = rawLines.flatMap((line) => {
+    if (!line) return [""];
+    const chunks: string[] = [];
+    for (let index = 0; index < line.length; index += 82) chunks.push(line.slice(index, index + 82));
+    return chunks;
+  }).slice(0, 44);
+  const content = [
+    "BT",
+    "/F1 11 Tf",
+    "50 790 Td",
+    ...wrappedLines.map((line, index) => `${index === 0 ? "" : "0 -15 Td "}${line ? `(${escapePdfText(line)}) Tj` : ""}`),
+    "ET",
+  ].join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+}
+
+function downloadRulesFile(tournament: (typeof tournaments)[number]) {
+  if (typeof document === "undefined") return;
+  const blob = new Blob([buildRulesPdf(tournament)], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${tournament.slug}-rules-and-conditions.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 300);
+}
+
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
-  const wizard = ["Tournament", "Category", "Team Details", "Players", "Payment", "Confirmation"];
+  const wizard = ["Tournament", "Team Details", "Players", "Payment", "Confirmation"];
   return (
     <div className="registration-stepper" aria-label="Registration progress">
       {wizard.map((step, index) => (
@@ -364,6 +479,27 @@ function RegistrationSummary({ tournament, amount, showTimeline = false }: { tou
   );
 }
 
+function TournamentPosterPanel({ tournament }: { tournament: (typeof tournaments)[number] }) {
+  const poster = tournament.poster || "/assets/poster.jpeg";
+  return (
+    <aside className="registration-side poster-side">
+      <section className="registration-poster-card">
+        <div className="registration-summary-head">
+          <h2>Tournament Poster</h2>
+          <small>Visible on the first step only</small>
+        </div>
+        <div className="registration-poster-frame">
+          <img src={poster} alt={`${tournament.name} poster`} />
+        </div>
+        <div className="registration-poster-meta">
+          <strong>{tournament.name}</strong>
+          <span>{tournament.sport} - {tournament.location}</span>
+        </div>
+      </section>
+    </aside>
+  );
+}
+
 function scrollRegistrationTop() {
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
@@ -388,16 +524,23 @@ export function RegistrationPage() {
     coachName: "",
     email: "",
     phone: "",
-    category: `${tournament.sport} League`,
     city: tournament.cities[0] ?? "",
     districtState: tournament.cities[0] ?? tournament.location,
     teamLogo: "",
-    primaryJerseyColor: "#0b8852",
-    secondaryJerseyColor: "#ffffff",
     teamMotto: "",
+    selectedJersey: savedDraft?.teamDetails?.selectedJersey ?? tournament.poster ?? tournament.image,
+    category: `${tournament.sport} League`,
   });
   const [members, setMembers] = useState(() => {
     const restored = savedDraft?.members ?? [];
+    return memberSlots.map((_, index) => restored[index] ?? "");
+  });
+  const [memberAges, setMemberAges] = useState(() => {
+    const restored = savedDraft?.memberAges ?? [];
+    return memberSlots.map((_, index) => restored[index] ?? "");
+  });
+  const [memberJerseySizes, setMemberJerseySizes] = useState(() => {
+    const restored = savedDraft?.memberJerseySizes ?? [];
     return memberSlots.map((_, index) => restored[index] ?? "");
   });
   const [documents, setDocuments] = useState<SavedDocument[]>(() => teamGroupImageDocument(savedDraft?.documents));
@@ -405,19 +548,22 @@ export function RegistrationPage() {
   const [saving, setSaving] = useState(false);
   const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 3));
   const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
-  const [categoryAccepted, setCategoryAccepted] = useState(() => savedDraft?.categoryAccepted ?? false);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
+  const [rulesScrolled, setRulesScrolled] = useState(false);
+  const [jerseyPickerOpen, setJerseyPickerOpen] = useState(false);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
       activeStep,
       teamDetails,
       members,
+      memberAges,
+      memberJerseySizes,
       documents,
       tournamentAccepted,
-      categoryAccepted,
     };
     localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify(draft));
-  }, [activeStep, teamDetails, members, documents, tournamentAccepted, categoryAccepted, tournament.slug]);
+  }, [activeStep, teamDetails, members, memberAges, memberJerseySizes, documents, tournamentAccepted, tournament.slug]);
 
   function showMissing(message: string) {
     setError(message);
@@ -438,6 +584,11 @@ export function RegistrationPage() {
     });
   }
 
+  function chooseJersey(value: string) {
+    updateTeamDetails("selectedJersey", value);
+    setJerseyPickerOpen(false);
+  }
+
   function updateDocument(index: number, file?: File) {
     const fileName = file?.name ?? "";
     setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
@@ -449,8 +600,21 @@ export function RegistrationPage() {
     } : item));
   }
 
+  function openRulesModal() {
+    setRulesScrolled(false);
+    setRulesModalOpen(true);
+    downloadRulesFile(tournament);
+  }
+
+  function handleRulesScroll(event: React.UIEvent<HTMLDivElement>) {
+    const target = event.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 8) {
+      setRulesScrolled(true);
+    }
+  }
+
   async function continueToRoster() {
-    const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
+    const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
     const missingMemberLabels = members
       .map((name, index) => ({ name: name.trim(), label: memberSlots[index] }))
@@ -482,15 +646,16 @@ export function RegistrationPage() {
           city: teamDetails.city,
           district_state: teamDetails.districtState,
           team_logo: teamDetails.teamLogo,
-          primary_jersey_color: teamDetails.primaryJerseyColor,
-          secondary_jersey_color: teamDetails.secondaryJerseyColor,
           team_motto: teamDetails.teamMotto,
-          category: teamDetails.category,
+          category: `${tournament.sport} League`,
+          selected_jersey_image: teamDetails.selectedJersey,
           members: members.map((name, index) => ({
             name: name.trim(),
             role: index === 0 ? "Captain" : index === 1 ? "Sub-captain" : "Player",
-            jersey: "",
+            jersey: teamDetails.selectedJersey,
             contact: index === 0 ? teamDetails.phone : "",
+            age: memberAges[index] ? Number(memberAges[index]) : null,
+            jersey_size: memberJerseySizes[index] ?? "",
           })),
           documents: uploadedDocuments.map((item) => ({
             document_type: item.documentType,
@@ -507,6 +672,8 @@ export function RegistrationPage() {
         ...teamDetails,
         teamCode: "",
         members,
+        memberAges,
+        memberJerseySizes,
         documents,
       };
       writeSavedRegistration(tournament.slug, payload);
@@ -514,9 +681,10 @@ export function RegistrationPage() {
         activeStep: 3,
         teamDetails: { ...teamDetails, teamCode: "" },
         members,
+        memberAges,
+        memberJerseySizes,
         documents,
         tournamentAccepted,
-        categoryAccepted,
       } satisfies RegistrationDraft));
       navigate(`/tournaments/${tournament.slug}/register/roster`);
     } catch (caught) {
@@ -532,7 +700,7 @@ export function RegistrationPage() {
     setError("");
     if (activeStep === 0) {
       if (!tournamentAccepted) {
-        showMissing("Please accept the tournament rules and conditions before moving to category.");
+        showMissing("Please accept the tournament rules and conditions before moving on.");
         return;
       }
       setActiveStep(1);
@@ -540,8 +708,8 @@ export function RegistrationPage() {
       return;
     }
     if (activeStep === 1) {
-      if (!teamDetails.category.trim() || !categoryAccepted) {
-        showMissing("Please select and accept the category rules before moving to team details.");
+      if (!teamDetails.teamName.trim() || !teamDetails.captainName.trim() || !teamDetails.subCaptainName.trim()) {
+        showMissing("Please complete the basic team details before moving to player details.");
         return;
       }
       setActiveStep(2);
@@ -549,10 +717,12 @@ export function RegistrationPage() {
       return;
     }
     if (activeStep === 2) {
-      const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "category", "city"] as const;
-      const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
-      if (missingTeamFields.length) {
-        showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
+      const missingPlayers = members.map((name, index) => ({ name, label: memberSlots[index] })).filter((item) => !item.name.trim()).map((item) => item.label);
+      const missingAges = memberAges.map((value, index) => ({ value, label: memberSlots[index] })).filter((item) => !item.value.trim()).map((item) => `${item.label} age`);
+      const missingSizes = memberJerseySizes.map((value, index) => ({ value, label: memberSlots[index] })).filter((item) => !item.value.trim()).map((item) => `${item.label} jersey size`);
+      const missing = [...missingPlayers, ...missingAges, ...missingSizes];
+      if (missing.length) {
+        showMissing(`Please complete these roster fields: ${missing.join(", ")}.`);
         return;
       }
       setActiveStep(3);
@@ -560,11 +730,6 @@ export function RegistrationPage() {
       return;
     }
     if (activeStep === 3) {
-      const missingMembers = members.map((name, index) => ({ name, label: memberSlots[index] })).filter((item) => !item.name.trim()).map((item) => item.label);
-      if (missingMembers.length) {
-        showMissing(`Please complete these player entries: ${missingMembers.join(", ")}.`);
-        return;
-      }
       void continueToRoster();
       return;
     }
@@ -591,7 +756,7 @@ export function RegistrationPage() {
           <p>Complete accurate team, player, and payment details to secure your tournament spot and avoid verification delays.</p>
         </section>
         <RegistrationStepper activeIndex={activeStep} />
-        <div className="registration-reference-layout">
+        <div className={`registration-reference-layout ${activeStep === 0 ? "registration-reference-layout-intro" : "registration-reference-layout-centered"}`}>
           <main className="registration-main">
             {error && <div className="form-alert">{error}</div>}
             {activeStep === 0 && (
@@ -613,59 +778,81 @@ export function RegistrationPage() {
                       <span>Registration: {tournament.registrationStart} to {tournament.registrationEnd}</span>
                       <span>Prize pool: {tournament.prize}</span>
                       <span>Slots: {tournament.teams}/{tournament.capacity} filled</span>
+                      <span>Age restriction: {tournamentAgeRange(tournament)}</span>
                     </div>
                   </div>
                 </div>
+                <div className="registration-choice-card compact-card age-rule-card">
+                  <ShieldCheck />
+                  <div>
+                    <h3>Age restrictions</h3>
+                    <p>{tournamentAgeRange(tournament)}. Player age eligibility is checked during manager verification and final team approval.</p>
+                  </div>
+                </div>
                 <label className="acceptance-box">
-                  <input type="checkbox" checked={tournamentAccepted} onChange={(event) => setTournamentAccepted(event.target.checked)} />
-                  <span>I have read and accept the tournament rules, eligibility, schedule, document verification, and fair-play conditions.</span>
+                  <input
+                    type="checkbox"
+                    checked={tournamentAccepted}
+                    readOnly
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (tournamentAccepted) {
+                        setTournamentAccepted(false);
+                        return;
+                      }
+                      openRulesModal();
+                    }}
+                  />
+                  <span>I have read and accept the tournament rules, eligibility, age restriction, schedule, document verification, and fair-play conditions.</span>
                 </label>
               </section>
             )}
 
             {activeStep === 1 && (
               <section className="registration-form-section">
-                <h2>Category Selection</h2>
-                <p>Select the category for this tournament and accept category-specific conditions.</p>
-                <div className="form-grid">
-                  <label>Selected category<select value={teamDetails.category} onChange={(event) => updateTeamDetails("category", event.target.value)}><option>{tournament.sport} League</option><option>Professional League</option><option>Corporate League</option><option>Youth League</option></select></label>
-                  <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
-                </div>
-                <div className="registration-choice-card compact-card">
-                  <Trophy />
+                <div className="section-head-inline">
                   <div>
-                    <h3>{teamDetails.category}</h3>
-                    <p>This category uses the tournament team-size limit, city eligibility, score verification, and manager approval workflow.</p>
+                    <h2>Team Information</h2>
+                    <p>Enter the core team details and select a jersey style for this tournament.</p>
                   </div>
+                  <span className="autosave-pill">Draft saved locally</span>
+                </div>
+                <div className="form-grid">
+                  <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
+                  <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
+                  <label>Home district/state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
+                  <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit" /></label>
+                </div>
+                <div className="team-logo-row">
+                  <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
+                  <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing.</small></p>
+                </div>
+                <div className="jersey-row">
+                  <div>
+                    <h3>Select your jersey</h3>
+                    <p>Choose one jersey image for this team. After registration it stays tied to this team record.</p>
+                  </div>
+                  <button className="btn btn-secondary" type="button" onClick={() => setJerseyPickerOpen(true)}>
+                    {teamDetails.selectedJersey ? "Change jersey" : "Select jersey"}
+                  </button>
+                </div>
+                <div className="registration-choice-card compact-card jersey-preview-card">
+                  <img src={teamDetails.selectedJersey} alt="Selected jersey" />
+                  <div className="jersey-preview-copy">
+                    <h3>Selected jersey</h3>
+                    <p>{jerseyDisplayName(teamDetails.selectedJersey)} kit is selected for this registration.</p>
+                    <small>You can change it until the registration is paid and confirmed.</small>
+                  </div>
+                  <button className="btn btn-secondary jersey-preview-action" type="button" onClick={() => setJerseyPickerOpen(true)}>Change</button>
                 </div>
                 <label className="acceptance-box">
-                  <input type="checkbox" checked={categoryAccepted} onChange={(event) => setCategoryAccepted(event.target.checked)} />
-                  <span>I accept the selected category rules, roster size, city eligibility, and registration approval conditions.</span>
+                  <input type="checkbox" checked={tournamentAccepted} readOnly onClick={(event) => { event.preventDefault(); openRulesModal(); }} />
+                  <span>I accept the selected tournament rules, roster size, city eligibility, and registration approval conditions.</span>
                 </label>
               </section>
             )}
 
             {activeStep === 2 && (
-              <>
-                <section className="registration-form-section">
-                  <div className="section-head-inline">
-                    <h2>Team Information</h2>
-                    <span className="autosave-pill">Draft saved locally</span>
-                  </div>
-                  <div className="form-grid">
-                    <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
-                  </div>
-                  <div className="team-logo-row">
-                    <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
-                    <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing.</small></p>
-                  </div>
-                  <div className="form-grid">
-                    <label>Primary jersey color<input type="color" value={teamDetails.primaryJerseyColor} onChange={(event) => updateTeamDetails("primaryJerseyColor", event.target.value)} /></label>
-                    <label>Secondary jersey color<input type="color" value={teamDetails.secondaryJerseyColor} onChange={(event) => updateTeamDetails("secondaryJerseyColor", event.target.value)} /></label>
-                    <label>Home district/state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
-                    <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit" /></label>
-                  </div>
-                </section>
                 <section className="registration-form-section">
                   <h2>Team Management</h2>
                   <div className="form-grid">
@@ -675,8 +862,14 @@ export function RegistrationPage() {
                     <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="captain@team.com" /></label>
                     <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91 98765 43210" /></label>
                   </div>
+                  <div className="registration-choice-card compact-card">
+                    <ShieldCheck />
+                    <div>
+                      <h3>Team jersey selection locked to this registration</h3>
+                      <p>The selected jersey image is reserved for this team once the registration is completed.</p>
+                    </div>
+                  </div>
                 </section>
-              </>
             )}
 
             {activeStep === 3 && (
@@ -697,6 +890,10 @@ export function RegistrationPage() {
                       <span>{index + 1}</span>
                       <b>{role}</b>
                       <input value={members[index]} onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} placeholder={index === 0 ? "Captain name" : index === 1 ? "Sub-captain name" : `Player ${index + 1}`} />
+                      <div className="player-entry-meta">
+                        <input value={memberAges[index]} onChange={(event) => setMemberAges((current) => current.map((value, i) => i === index ? event.target.value : value))} placeholder="Age" inputMode="numeric" />
+                        <input value={memberJerseySizes[index]} onChange={(event) => setMemberJerseySizes((current) => current.map((value, i) => i === index ? event.target.value : value))} placeholder="Jersey size" />
+                      </div>
                     </label>
                   ))}
                 </div>
@@ -729,8 +926,56 @@ export function RegistrationPage() {
               <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>{saving ? "Saving..." : "Continue"}<ArrowRight size={16} /></button>
             </div>
           </main>
-          <RegistrationSummary tournament={tournament} amount={amount} showTimeline={activeStep === 0} />
+          {activeStep === 0 ? <TournamentPosterPanel tournament={tournament} /> : null}
         </div>
+        {jerseyPickerOpen && (
+          <div className="rules-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="jersey-picker-title">
+            <article className="rules-modal jersey-picker-modal">
+              <button className="rules-modal-close" type="button" onClick={() => setJerseyPickerOpen(false)} aria-label="Close jersey picker">x</button>
+              <p className="eyebrow">Jersey selection</p>
+              <h2 id="jersey-picker-title">Choose your jersey image</h2>
+              <div className="jersey-picker-grid">
+                {jerseyOptions.map((jersey) => (
+                  <button key={jersey.label} type="button" className={`jersey-option ${teamDetails.selectedJersey === jersey.image ? "selected" : ""}`} onClick={() => chooseJersey(jersey.image)}>
+                    <img src={jersey.image} alt={jersey.label} />
+                    <strong>{jersey.label}</strong>
+                  </button>
+                ))}
+              </div>
+              <div className="rules-modal-actions">
+                <button className="btn btn-secondary" type="button" onClick={() => setJerseyPickerOpen(false)}>Close</button>
+              </div>
+            </article>
+          </div>
+        )}
+        {rulesModalOpen && (
+          <div className="rules-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title">
+            <article className="rules-modal">
+              <button className="rules-modal-close" type="button" onClick={() => setRulesModalOpen(false)} aria-label="Close rules popup">x</button>
+              <p className="eyebrow">Rules and conditions</p>
+              <h2 id="rules-modal-title">{tournament.name}</h2>
+              <div className="rules-modal-scroll" onScroll={handleRulesScroll}>
+                {tournamentRulesText(tournament).split("\n").map((line, index) => (
+                  line ? <p key={`${line}-${index}`}>{line}</p> : <br key={index} />
+                ))}
+              </div>
+              <div className="rules-modal-actions">
+                <small>{rulesScrolled ? "Rules reviewed. You can agree now." : "Scroll to the bottom to enable Agree."}</small>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={!rulesScrolled}
+                  onClick={() => {
+                    setTournamentAccepted(true);
+                    setRulesModalOpen(false);
+                  }}
+                >
+                  I Agree
+                </button>
+              </div>
+            </article>
+          </div>
+        )}
       </Page>
     </RegistrationShell>
   );
