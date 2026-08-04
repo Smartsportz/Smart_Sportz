@@ -5,6 +5,7 @@ import { DataTable, Page, PortalShell } from "../components/UI";
 import { managementSidebar, newsPosts, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
+import { AnnouncementManagerPanel } from "./AdminPage";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
@@ -570,6 +571,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     ) : (
       <DataTable columns={["Player", "Team", "Status"]} rows={sectionRecords.map((item) => [item.name, item.team, <span className="status emerald">{item.status}</span>])} />
     )
+  ) : section === "announcements" ? (
+    <AnnouncementManagerPanel role="manager" />
   ) : section === "reports" ? (
     sectionRecords.length === 0 ? (
       <section className="panel user-empty-state"><h2>No reports available</h2><p>Reports will appear after registrations, payments, and live scoring generate records.</p></section>

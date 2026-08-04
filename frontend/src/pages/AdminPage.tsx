@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, ImagePlus, FileText, MapPin } from "lucide-react";
+import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
@@ -12,6 +12,33 @@ import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 
 const noticeStorageKey = "smart-sportz-tournament-notices";
+const announcementStorageKey = "smart-sportz-announcements";
+
+type AnnouncementRecord = {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  dateFrom?: string;
+  dateTo?: string;
+  published: boolean;
+  updatedBy?: string;
+  updatedAt?: string;
+};
+
+function readAnnouncements(): AnnouncementRecord[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(announcementStorageKey) || "[]") as AnnouncementRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function writeAnnouncements(records: AnnouncementRecord[]) {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(announcementStorageKey, JSON.stringify(records));
+}
 
 export function NoticeBuilder({ role = "admin" }: { role?: "admin" | "manager" }) {
   const [selectedSlug, setSelectedSlug] = useState(tournaments[0]?.slug ?? "");
@@ -928,6 +955,143 @@ function AdminCmsDbPanel() {
         ))}
       </section>
     </div>
+  );
+}
+
+export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | "manager" }) {
+  const [items, setItems] = useState<AnnouncementRecord[]>(() => readAnnouncements());
+  const [draft, setDraft] = useState<AnnouncementRecord>({
+    id: "",
+    title: "",
+    description: "",
+    image: "",
+    dateFrom: "",
+    dateTo: "",
+    published: true,
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    setItems(readAnnouncements());
+  }, []);
+
+  function openDraft(item?: AnnouncementRecord) {
+    if (item) {
+      setDraft(item);
+      setEditingId(item.id);
+    } else {
+      setDraft({
+        id: "",
+        title: "",
+        description: "",
+        image: "",
+        dateFrom: "",
+        dateTo: "",
+        published: true,
+      });
+      setEditingId(null);
+    }
+    setIsOpen(true);
+  }
+
+  function saveDraft() {
+    const next: AnnouncementRecord = {
+      ...draft,
+      id: draft.id || `announcement_${Date.now()}`,
+      title: draft.title.trim() || "Tournament announcement",
+      description: draft.description.trim() || "Tournament operations update.",
+      image: draft.image.trim() || "/assets/poster.jpeg",
+      published: draft.published,
+      updatedBy: role,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextItems = [next, ...items.filter((item) => item.id !== editingId && item.id !== next.id)];
+    setItems(nextItems);
+    writeAnnouncements(nextItems);
+    setIsOpen(false);
+  }
+
+  function toggleVisibility(id: string) {
+    const nextItems = items.map((item) => item.id === id ? { ...item, published: !item.published, updatedAt: new Date().toISOString() } : item);
+    setItems(nextItems);
+    writeAnnouncements(nextItems);
+  }
+
+  function removeItem(id: string) {
+    const nextItems = items.filter((item) => item.id !== id);
+    setItems(nextItems);
+    writeAnnouncements(nextItems);
+  }
+
+  return (
+    <section className="panel admin-flow-panel">
+      <div className="admin-list-head">
+        <div>
+          <span className="status emerald">Announcements</span>
+          <h2>Announcement board</h2>
+          <p>Create, publish, hide, edit, and delete tournament announcements.</p>
+        </div>
+        <button className="btn btn-primary" type="button" onClick={() => openDraft()}>
+          <Plus size={16} />Add New Announcement
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <div className="user-empty-state">
+          <h2>No announcements yet</h2>
+          <p>Use Add New Announcement to create the first entry.</p>
+        </div>
+      ) : (
+        <div className="carousel-shell">
+          <div className="carousel-row wheel-horizontal">
+            {items.map((item) => (
+              <article className="panel news-card" key={item.id}>
+                <img src={item.image || "/assets/poster.jpeg"} alt="" className="news-card-media" style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 16 }} />
+                <span className={`status ${item.published ? "emerald" : "slate"}`}>{item.published ? "Displayed" : "Hidden"}</span>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+                <div className="registration-actions compact-actions">
+                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => toggleVisibility(item.id)}>
+                    {item.published ? "Not display" : "Display"}
+                  </button>
+                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => openDraft(item)}>Edit</button>
+                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => removeItem(item.id)}>Delete</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      )}
+      {isOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal panel" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
+            <div className="modal-head">
+              <div>
+                <span className="status emerald">Announcement popup</span>
+                <h2 id="announcement-title">{editingId ? "Edit announcement" : "Add new announcement"}</h2>
+                <p>Title, description, and image are required. Date range is optional.</p>
+              </div>
+              <button className="icon-btn" type="button" aria-label="Close announcement popup" onClick={() => setIsOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="form-grid">
+              <label>Title<input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} /></label>
+              <label>Image URL<input value={draft.image} onChange={(event) => setDraft((current) => ({ ...current, image: event.target.value }))} /></label>
+              <label>Date from<input type="date" value={draft.dateFrom || ""} onChange={(event) => setDraft((current) => ({ ...current, dateFrom: event.target.value }))} /></label>
+              <label>Date to<input type="date" value={draft.dateTo || ""} onChange={(event) => setDraft((current) => ({ ...current, dateTo: event.target.value }))} /></label>
+            </div>
+            <label>Description<textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
+            <label className="visibility-row">
+              <span><b>Display announcement</b><small>Turn on to show this announcement on user pages.</small></span>
+              <input type="checkbox" checked={draft.published} onChange={(event) => setDraft((current) => ({ ...current, published: event.target.checked }))} />
+            </label>
+            <div className="registration-actions compact-actions">
+              <button className="btn btn-primary" type="button" onClick={saveDraft}>Save Announcement</button>
+              <button className="btn btn-secondary" type="button" onClick={() => setIsOpen(false)}>Cancel</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -2061,6 +2225,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
         {section === "players" && <AthleteProfile />}
         {section === "payments" && <AdminTournamentPickerPanel mode="payments" />}
         {section === "cms" && <AdminCmsDbPanel />}
+        {section === "announcements" && <AnnouncementManagerPanel role="admin" />}
         {section === "reports" && <ListPanel title="Reports Center" items={reports} to="/admin/reports/detail" />}
         {section === "logs" && <ListPanel title="Audit and Event Logs" items={logRows} to="/admin/logs/detail" />}
         {section === "settings" && <ListPanel title="System Settings" items={["RBAC policy", "Password policy", "Local storage", "Audit retention"]} to="/settings" />}

@@ -171,6 +171,7 @@ export default function App() {
           <Route path="/admin/tournaments/:slug/edit" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentEditorPage /></ProtectedRoute>} />
           <Route path="/admin/tournaments/:slug/bracket" element={<ProtectedRoute roles={["super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
           <Route path="/admin/tournaments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/admin/announcements" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="announcements" /></ProtectedRoute>} />
           <Route path="/admin/users/add" element={<ProtectedRoute roles={["super_admin"]}><AdminUserCreatePage /></ProtectedRoute>} />
           <Route path="/admin/users/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminUserDetailPage /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="users" /></ProtectedRoute>} />

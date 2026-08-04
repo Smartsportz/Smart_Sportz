@@ -149,18 +149,16 @@ export function PortalShell({
     .toUpperCase() || "U";
   return (
     <div className={`portal-shell ${isUserPortal ? "user-portal-shell" : ""} ${portalMenuOpen ? "portal-menu-open" : ""}`}>
-      {isUserPortal && (
-        <header className="user-portal-mobile-header">
-          <BrandLogo compact />
-          <button className="icon-btn" type="button" aria-label={portalMenuOpen ? "Close dashboard menu" : "Open dashboard menu"} onClick={() => setPortalMenuOpen((value) => !value)}>
-            <span className={`menu-glyph ${portalMenuOpen ? "is-open" : ""}`} aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
-        </header>
-      )}
+      <header className={`portal-mobile-header ${isUserPortal ? "user-portal-mobile-header" : ""}`}>
+        <BrandLogo compact />
+        <button className="icon-btn" type="button" aria-label={portalMenuOpen ? "Close dashboard menu" : "Open dashboard menu"} onClick={() => setPortalMenuOpen((value) => !value)}>
+          <span className={`menu-glyph ${portalMenuOpen ? "is-open" : ""}`} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        </button>
+      </header>
       <aside className="portal-sidebar">
         <BrandLogo />
         <nav>

@@ -417,21 +417,7 @@ function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
 
 function RegistrationShell({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      {children}
-      <footer className="registration-footer">
-        <div>
-          <h3>SmartSportz.in Sports Management</h3>
-          <p>Empowering Indian athletes through world-class tournament infrastructure and digital verification.</p>
-        </div>
-        <nav>
-          <Link to="/about">Privacy Policy</Link>
-          <Link to="/faq">Cookie Policy</Link>
-          <Link to="/contact">Contact Us</Link>
-        </nav>
-        <small>(c) 2026 SmartSportz.in. All rights reserved.</small>
-      </footer>
-    </>
+    <>{children}</>
   );
 }
 
@@ -824,8 +810,8 @@ export function RegistrationPage() {
                   <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit" /></label>
                 </div>
                 <div className="team-logo-row">
-                  <label className="logo-upload-tile">Team logo<input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
-                  <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing.</small></p>
+                  <label className="logo-upload-tile">Team logo <small>(optional)</small><input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
+                  <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing. Optional for this registration.</small></p>
                 </div>
                 <div className="jersey-row">
                   <div>
