@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { BarChart3, CheckCircle2, MapPin, Radio, ShieldCheck, Trophy, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
 import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
@@ -137,6 +137,8 @@ const sportStoryCopy: Record<string, { title: string; date: string; sponsor: str
 export function HomePage() {
   useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
+  const discoveryQueueRef = useRef<HTMLDivElement>(null);
+  const sponsorQueueRef = useRef<HTMLDivElement>(null);
   const leaderboardFilterRef = useRef<HTMLDivElement>(null);
   const upcomingTournamentsRef = useRef<HTMLDivElement>(null);
   const registrationOpenRef = useRef<HTMLDivElement>(null);
@@ -231,6 +233,13 @@ export function HomePage() {
         : (current + 1) % organizerTools.length;
       return next;
     });
+  };
+
+  const scrollQueue = (ref: RefObject<HTMLDivElement | null>, direction: "left" | "right") => {
+    const element = ref.current;
+    if (!element) return;
+    const amount = Math.max(260, Math.floor(element.clientWidth * 0.72));
+    element.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -369,7 +378,13 @@ export function HomePage() {
           <Link className="inline-link" to="/sports">View All Sports</Link>
         </div>
         <div className="queue-shell discovery-queue-shell">
-          <div className="queue-track discovery-queue-track wheel-horizontal">
+          <div className="queue-controls left">
+            <button type="button" aria-label="Scroll sports left" onClick={() => scrollQueue(discoveryQueueRef, "left")}>‹</button>
+          </div>
+          <div className="queue-controls right">
+            <button type="button" aria-label="Scroll sports right" onClick={() => scrollQueue(discoveryQueueRef, "right")}>›</button>
+          </div>
+          <div className="queue-track discovery-queue-track wheel-horizontal" ref={discoveryQueueRef}>
           {discoveryQueue.map((card, index) => {
             return (
               <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
@@ -457,6 +472,12 @@ export function HomePage() {
             <p>All-in-one suite of professional tools to run world-class sports competitions.</p>
           </div>        </div>
         <div className="queue-shell organizer-shell">
+          <div className="queue-controls left">
+            <button type="button" aria-label="Scroll organizer tools left" onClick={() => scrollQueue(organizerRef, "left")}>‹</button>
+          </div>
+          <div className="queue-controls right">
+            <button type="button" aria-label="Scroll organizer tools right" onClick={() => scrollQueue(organizerRef, "right")}>›</button>
+          </div>
           <div className="queue-track organizer-grid wheel-horizontal" ref={organizerRef}>
           {[...organizerTools, ...organizerTools].map((tool, index) => (
             <div
@@ -560,7 +581,13 @@ export function HomePage() {
       <section className="section sponsor-logo-section">
         <SectionTitle eyebrow="Partner Network" title="Sponsor Companies" text="Official platform, technology, experience, and archive partners connected to Smart Sportz." />
         <div className="queue-shell sponsor-logo-shell">
-          <div className="queue-track sponsor-logo-grid wheel-horizontal">
+          <div className="queue-controls left">
+            <button type="button" aria-label="Scroll sponsor logos left" onClick={() => scrollQueue(sponsorQueueRef, "left")}>‹</button>
+          </div>
+          <div className="queue-controls right">
+            <button type="button" aria-label="Scroll sponsor logos right" onClick={() => scrollQueue(sponsorQueueRef, "right")}>›</button>
+          </div>
+          <div className="queue-track sponsor-logo-grid wheel-horizontal" ref={sponsorQueueRef}>
           {sponsorQueue.map((sponsor, index) => (
             <a className="sponsor-logo-card" href={externalUrl(sponsor.link_url)} target="_blank" rel="noreferrer" key={`${sponsor.slug}-${index}`} aria-label={sponsor.name}>
               <img src={assetUrl(sponsor.image)} alt="" />

@@ -694,7 +694,7 @@ export function RegistrationPage() {
       return;
     }
     if (activeStep === 1) {
-      if (!teamDetails.teamName.trim() || !teamDetails.captainName.trim() || !teamDetails.subCaptainName.trim()) {
+      if (!teamDetails.teamName.trim() || !teamDetails.city.trim() || !teamDetails.districtState.trim()) {
         showMissing("Please complete the basic team details before moving to player details.");
         return;
       }
@@ -808,10 +808,6 @@ export function RegistrationPage() {
                   <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
                   <label>Home district/state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
                   <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit" /></label>
-                </div>
-                <div className="team-logo-row">
-                  <label className="logo-upload-tile">Team logo <small>(optional)</small><input type="file" accept="image/png,image/jpeg,image/svg+xml" onChange={(event) => updateTeamDetails("teamLogo", event.target.files?.[0]?.name ?? "")} /><ImagePlus /><span>Upload</span></label>
-                  <p><b>{teamDetails.teamLogo || "PNG, JPG or SVG up to 5MB"}</b><small>Minimum 400x400px recommended for clear printing. Optional for this registration.</small></p>
                 </div>
                 <div className="jersey-row">
                   <div>

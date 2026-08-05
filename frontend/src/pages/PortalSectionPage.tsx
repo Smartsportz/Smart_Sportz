@@ -243,6 +243,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
   const [tournamentForm, setTournamentForm] = useState<TournamentFormState>(emptyTournamentForm);
   const [editingTournament, setEditingTournament] = useState<Record<string, any> | null>(null);
   const [showTournamentForm, setShowTournamentForm] = useState(false);
+  const [quickFeatureMode, setQuickFeatureMode] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<Record<string, any> | null>(null);
   const [confirmNextStep, setConfirmNextStep] = useState<"news" | "announcements" | null>(null);
 
@@ -320,6 +321,23 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     setEditingTournament(item ?? null);
     setTournamentForm(nextForm);
     setShowTournamentForm(true);
+    setQuickFeatureMode(false);
+    setManagerMessage("");
+  }
+
+  function openFeaturedTournamentForm() {
+    setEditingTournament(null);
+    setTournamentForm({
+      ...emptyTournamentForm,
+      name: "",
+      status: "Featured",
+      showOnHome: true,
+      image: "/assets/poster.jpeg",
+      tournamentDescription: "",
+      sportDescription: "",
+    });
+    setShowTournamentForm(true);
+    setQuickFeatureMode(true);
     setManagerMessage("");
   }
 
@@ -480,7 +498,10 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
             <h2>Assigned tournaments</h2>
             <p>Grouped by runtime status: upcoming, open registration, live, then old/completed.</p>
           </div>
-          <button className="btn btn-primary" type="button" onClick={() => openTournamentForm()}>Add New Tournament</button>
+          <div className="hero-actions">
+            <button className="btn btn-secondary" type="button" onClick={() => openTournamentForm()}>Add New Tournament</button>
+            <button className="btn btn-primary" type="button" onClick={openFeaturedTournamentForm}>Add Featured Tournament</button>
+          </div>
         </div>
         {Object.entries(managedTournamentGroups).map(([group, items]) => (
           <section className="manager-tournament-group" key={group}>
@@ -501,7 +522,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                     <div className="manager-card-actions">
                       <Link to={`/tournaments/${item.slug}`}>Open</Link>
                       <Link to={`/management/tournaments/${item.slug}/bracket`}>Rounds</Link>
-                      <button type="button" onClick={() => openTournamentForm(item)}>Edit</button>
+                      <button type="button" onClick={() => openTournamentForm(item)}>{item.status === "Featured" ? "Update" : "Edit"}</button>
                       <button className="danger-link" type="button" onClick={() => setDeleteCandidate(item)}>Delete</button>
                     </div>
                   </article>
@@ -596,75 +617,92 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
             <section className="manager-tournament-modal">
               <div className="modal-head">
                 <div>
-                  <p className="eyebrow">{editingTournament ? "Edit Tournament" : "New Tournament"}</p>
-                  <h2>{editingTournament ? tournamentForm.name : "Create tournament"}</h2>
+                  <p className="eyebrow">{quickFeatureMode ? "Featured Tournament" : editingTournament ? "Edit Tournament" : "New Tournament"}</p>
+                  <h2>{quickFeatureMode ? "Create featured tournament" : editingTournament ? tournamentForm.name : "Create tournament"}</h2>
                 </div>
                 <button className="icon-btn" type="button" onClick={() => setShowTournamentForm(false)}>x</button>
               </div>
-              <div className="form-grid">
-                <label>Tournament name<input value={tournamentForm.name} onChange={(event) => patchTournamentForm({ name: event.target.value })} /></label>
-                <label>Sport
-                  <select value={tournamentForm.sport} onChange={(event) => patchTournamentForm({ sport: event.target.value })}>
-                    {sportOptions.map((sport) => <option key={sport}>{sport}</option>)}
-                    <option value="__new__">Add new sport</option>
-                  </select>
-                </label>
-                {tournamentForm.sport === "__new__" && <label>New sport name<input value={tournamentForm.newSportName} onChange={(event) => patchTournamentForm({ newSportName: event.target.value })} placeholder="e.g. Hockey" /></label>}
-                <label>Status<select value={tournamentForm.status} onChange={(event) => patchTournamentForm({ status: event.target.value })}><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
-                <label>Primary place
-                  <select value={tournamentForm.location} onChange={(event) => patchTournamentForm({ location: event.target.value, cities: Array.from(new Set([...tournamentForm.cities, event.target.value])) })}>
-                    {cityOptions.map((city) => <option key={city}>{city}</option>)}
-                    <option value="__new_city__">Add new place</option>
-                  </select>
-                </label>
-                {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={() => tournamentForm.newCity && patchTournamentForm({ location: tournamentForm.newCity, cities: Array.from(new Set([...tournamentForm.cities, tournamentForm.newCity])) })} /></label>}
-                <label>Tournament date<input value={tournamentForm.date} onChange={(event) => patchTournamentForm({ date: event.target.value })} placeholder="Aug 14 - Sep 02" /></label>
-                <label>Registration opens<input value={tournamentForm.registrationStart} onChange={(event) => patchTournamentForm({ registrationStart: event.target.value })} placeholder="Aug 01, 2026" /></label>
-                <label>Registration closes<input value={tournamentForm.registrationEnd} onChange={(event) => patchTournamentForm({ registrationEnd: event.target.value })} placeholder="Aug 10, 2026" /></label>
-                <label>Capacity<input type="number" value={tournamentForm.capacity} onChange={(event) => patchTournamentForm({ capacity: Number(event.target.value) })} /></label>
-                <label>Min members<input type="number" value={tournamentForm.minTeamSize} onChange={(event) => patchTournamentForm({ minTeamSize: Number(event.target.value) })} /></label>
-                <label>Max members<input type="number" value={tournamentForm.maxTeamSize} onChange={(event) => patchTournamentForm({ maxTeamSize: Number(event.target.value) })} /></label>
-                <label>Image
-                  <select value={imageOptions.includes(tournamentForm.image) ? tournamentForm.image : "__custom__"} onChange={(event) => patchTournamentForm({ image: event.target.value === "__custom__" ? "" : event.target.value })}>
-                    {imageOptions.map((image) => <option key={image} value={image}>{image.replace("/assets/", "")}</option>)}
-                    <option value="__custom__">Custom text path</option>
-                  </select>
-                </label>
-                <label>Image text path<input type="text" value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/cricket-stadium.png" /></label>
-              </div>
-              <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
-              <div className="manager-form-split">
-                <section className="mini-table-card">
-                  <div className="section-head-inline"><h3>Payment lines</h3><button type="button" onClick={() => patchTournamentForm({ feeBreakdown: [...tournamentForm.feeBreakdown, { label: "Fee", value: 0 }] })}>Add</button></div>
-                  {tournamentForm.feeBreakdown.map((line, index) => (
-                    <div className="money-row" key={index}>
-                      <input value={line.label} onChange={(event) => setMoneyLine(index, { label: event.target.value })} />
-                      <input type="number" value={line.value} onChange={(event) => setMoneyLine(index, { value: Number(event.target.value) })} />
-                    </div>
-                  ))}
-                  <b>Total - {feeTotal.toLocaleString("en-IN")}</b>
-                </section>
-                <section className="mini-table-card">
-                  <div className="section-head-inline"><h3>Prize money</h3><button type="button" onClick={() => patchTournamentForm({ prizes: [...tournamentForm.prizes, { position: tournamentForm.prizes.length + 1, label: `${tournamentForm.prizes.length + 1}th Prize`, amount: 0 }] })}>Add</button></div>
-                  {tournamentForm.prizes.map((line, index) => (
-                    <div className="money-row" key={index}>
-                      <input type="number" value={line.position} onChange={(event) => setPrizeLine(index, { position: Number(event.target.value) })} />
-                      <input value={line.label} onChange={(event) => setPrizeLine(index, { label: event.target.value })} />
-                      <input type="number" value={line.amount} onChange={(event) => setPrizeLine(index, { amount: Number(event.target.value) })} />
-                    </div>
-                  ))}
-                  <b>Total prize - {prizeTotal.toLocaleString("en-IN")}</b>
-                </section>
-              </div>
-              <div className="form-grid">
-                <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
-                <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
-              </div>
-              <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
-              <div className="registration-actions compact-actions">
-                <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save</button>
-                <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>
-              </div>
+              {quickFeatureMode ? (
+                <>
+                  <div className="form-grid">
+                    <label>Title<input value={tournamentForm.name} onChange={(event) => patchTournamentForm({ name: event.target.value })} placeholder="Featured tournament title" /></label>
+                    <label>Image<input value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/poster.jpeg" /></label>
+                    <label>Description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} placeholder="Short description for the featured card" /></label>
+                  </div>
+                  <div className="registration-actions compact-actions">
+                    <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save featured tournament</button>
+                    <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>
+                  </div>
+                  <p className="form-note">This creates a featured card only. Use Update later to complete the full tournament setup.</p>
+                </>
+              ) : (
+                <>
+                  <div className="form-grid">
+                    <label>Tournament name<input value={tournamentForm.name} onChange={(event) => patchTournamentForm({ name: event.target.value })} /></label>
+                    <label>Sport
+                      <select value={tournamentForm.sport} onChange={(event) => patchTournamentForm({ sport: event.target.value })}>
+                        {sportOptions.map((sport) => <option key={sport}>{sport}</option>)}
+                        <option value="__new__">Add new sport</option>
+                      </select>
+                    </label>
+                    {tournamentForm.sport === "__new__" && <label>New sport name<input value={tournamentForm.newSportName} onChange={(event) => patchTournamentForm({ newSportName: event.target.value })} placeholder="e.g. Hockey" /></label>}
+                    <label>Status<select value={tournamentForm.status} onChange={(event) => patchTournamentForm({ status: event.target.value })}><option>Featured</option><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
+                    <label>Primary place
+                      <select value={tournamentForm.location} onChange={(event) => patchTournamentForm({ location: event.target.value, cities: Array.from(new Set([...tournamentForm.cities, event.target.value])) })}>
+                        {cityOptions.map((city) => <option key={city}>{city}</option>)}
+                        <option value="__new_city__">Add new place</option>
+                      </select>
+                    </label>
+                    {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={() => tournamentForm.newCity && patchTournamentForm({ location: tournamentForm.newCity, cities: Array.from(new Set([...tournamentForm.cities, tournamentForm.newCity])) })} /></label>}
+                    <label>Tournament date<input value={tournamentForm.date} onChange={(event) => patchTournamentForm({ date: event.target.value })} placeholder="Aug 14 - Sep 02" /></label>
+                    <label>Registration opens<input value={tournamentForm.registrationStart} onChange={(event) => patchTournamentForm({ registrationStart: event.target.value })} placeholder="Aug 01, 2026" /></label>
+                    <label>Registration closes<input value={tournamentForm.registrationEnd} onChange={(event) => patchTournamentForm({ registrationEnd: event.target.value })} placeholder="Aug 10, 2026" /></label>
+                    <label>Capacity<input type="number" value={tournamentForm.capacity} onChange={(event) => patchTournamentForm({ capacity: Number(event.target.value) })} /></label>
+                    <label>Min members<input type="number" value={tournamentForm.minTeamSize} onChange={(event) => patchTournamentForm({ minTeamSize: Number(event.target.value) })} /></label>
+                    <label>Max members<input type="number" value={tournamentForm.maxTeamSize} onChange={(event) => patchTournamentForm({ maxTeamSize: Number(event.target.value) })} /></label>
+                    <label>Image
+                      <select value={imageOptions.includes(tournamentForm.image) ? tournamentForm.image : "__custom__"} onChange={(event) => patchTournamentForm({ image: event.target.value === "__custom__" ? "" : event.target.value })}>
+                        {imageOptions.map((image) => <option key={image} value={image}>{image.replace("/assets/", "")}</option>)}
+                        <option value="__custom__">Custom text path</option>
+                      </select>
+                    </label>
+                    <label>Image text path<input type="text" value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/cricket-stadium.png" /></label>
+                  </div>
+                  <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
+                  <div className="manager-form-split">
+                    <section className="mini-table-card">
+                      <div className="section-head-inline"><h3>Payment lines</h3><button type="button" onClick={() => patchTournamentForm({ feeBreakdown: [...tournamentForm.feeBreakdown, { label: "Fee", value: 0 }] })}>Add</button></div>
+                      {tournamentForm.feeBreakdown.map((line, index) => (
+                        <div className="money-row" key={index}>
+                          <input value={line.label} onChange={(event) => setMoneyLine(index, { label: event.target.value })} />
+                          <input type="number" value={line.value} onChange={(event) => setMoneyLine(index, { value: Number(event.target.value) })} />
+                        </div>
+                      ))}
+                      <b>Total - {feeTotal.toLocaleString("en-IN")}</b>
+                    </section>
+                    <section className="mini-table-card">
+                      <div className="section-head-inline"><h3>Prize money</h3><button type="button" onClick={() => patchTournamentForm({ prizes: [...tournamentForm.prizes, { position: tournamentForm.prizes.length + 1, label: `${tournamentForm.prizes.length + 1}th Prize`, amount: 0 }] })}>Add</button></div>
+                      {tournamentForm.prizes.map((line, index) => (
+                        <div className="money-row" key={index}>
+                          <input type="number" value={line.position} onChange={(event) => setPrizeLine(index, { position: Number(event.target.value) })} />
+                          <input value={line.label} onChange={(event) => setPrizeLine(index, { label: event.target.value })} />
+                          <input type="number" value={line.amount} onChange={(event) => setPrizeLine(index, { amount: Number(event.target.value) })} />
+                        </div>
+                      ))}
+                      <b>Total prize - {prizeTotal.toLocaleString("en-IN")}</b>
+                    </section>
+                  </div>
+                  <div className="form-grid">
+                    <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
+                    <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
+                  </div>
+                  <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
+                  <div className="registration-actions compact-actions">
+                    <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save</button>
+                    <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>
+                  </div>
+                </>
+              )}
             </section>
           </div>
         )}

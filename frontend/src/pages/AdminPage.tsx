@@ -569,7 +569,10 @@ function AdminTournamentsDbPanel() {
       <div className="manager-tournament-board">
         <div className="manager-board-head">
           <div />
-          <Link className="btn btn-primary" to="/admin/tournaments/new">Add New Tournament</Link>
+          <div className="hero-actions">
+            <Link className="btn btn-secondary" to="/admin/tournaments/new">Add New Tournament</Link>
+            <Link className="btn btn-primary" to="/admin/tournaments/new?featured=1">Add Featured Tournament</Link>
+          </div>
         </div>
         {Object.entries(groups).map(([group, items]) => (
           <section className="manager-tournament-group" key={group}>
@@ -590,7 +593,7 @@ function AdminTournamentsDbPanel() {
                     <div className="manager-card-actions">
                       <Link to={`/tournaments/${item.slug}`}>Open</Link>
                       <Link to={`/admin/tournaments/${item.slug}/bracket`}>Rounds</Link>
-                      <Link to={`/admin/tournaments/${item.slug}/edit`}>Edit</Link>
+                      <Link to={`/admin/tournaments/${item.slug}/edit`}>{item.status === "Featured" ? "Update" : "Edit"}</Link>
                       <button className="danger-link" type="button" onClick={() => setDeleteCandidate(item)}>Delete</button>
                     </div>
                   </article>
@@ -1100,6 +1103,7 @@ export function AdminTournamentEditorPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const isNew = !slug;
+  const featuredQuickStart = isNew && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("featured") === "1";
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
   const [managers, setManagers] = useState<ManagerRow[]>([]);
   const [form, setForm] = useState<AdminTournamentForm>(() => adminFormFromTournament());
@@ -1209,55 +1213,72 @@ export function AdminTournamentEditorPage() {
         {error && <div className="form-alert">{error}</div>}
         {flowStage === "form" ? (
           <section className="panel tournament-create-panel">
-            <div className="form-grid">
-              <label>Tournament name<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} /></label>
-              <label>Sport<select value={form.sport} onChange={(event) => patchForm({ sport: event.target.value })}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}<option value="__new__">Add new sport</option></select></label>
-              {form.sport === "__new__" && <label>New sport name<input value={form.newSportName} onChange={(event) => patchForm({ newSportName: event.target.value })} /></label>}
-              <label>Status<select value={form.status} onChange={(event) => patchForm({ status: event.target.value })}><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
-              <label>Primary place<select value={form.location} onChange={(event) => patchForm({ location: event.target.value, cities: Array.from(new Set([...form.cities, event.target.value])) })}>{cityOptions.map((city) => <option key={city}>{city}</option>)}</select></label>
-              <label>Tournament date<input type="date" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
-              <label>Registration opens<input type="date" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
-              <label>Registration closes<input type="date" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
-              <label>Capacity<input type="number" value={form.capacity} onChange={(event) => patchForm({ capacity: Number(event.target.value) })} /></label>
-              <label>Min members<input type="number" value={form.minTeamSize} onChange={(event) => patchForm({ minTeamSize: Number(event.target.value) })} /></label>
-              <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
-              <label>Min age<input type="number" value={form.minAge} onChange={(event) => patchForm({ minAge: Number(event.target.value) })} /></label>
-              <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
-              <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ image: `/assets/${file.name}` }); }} /></label>
-              <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ poster: `/assets/${file.name}` }); }} /></label>
-              <label>Manager allocation
-                <select multiple value={form.assignedManagerIds} onChange={(event) => patchForm({ assignedManagerIds: Array.from(event.target.selectedOptions).map((option) => option.value) })}>
-                  {managers.map((manager) => <option value={manager.id} key={manager.id}>{manager.name} - {manager.email}</option>)}
-                </select>
-              </label>
-            </div>
-            <label>Selected image path<input value={form.image} readOnly /></label>
-            <label>Selected poster path<input value={form.poster} readOnly /></label>
-            <label>Full address<textarea value={form.address} onChange={(event) => patchForm({ address: event.target.value })} /></label>
-            <div className="manager-form-split">
-              <section className="mini-table-card">
-                <div className="section-head-inline"><h3>Payment lines</h3><button type="button" onClick={() => patchForm({ feeBreakdown: [...form.feeBreakdown, { label: "Fee", value: 0 }] })}>Add</button></div>
-                {form.feeBreakdown.map((line, index) => <div className="money-row" key={index}><input value={line.label} onChange={(event) => updateMoneyLine(index, { label: event.target.value })} /><input type="number" value={line.value} onChange={(event) => updateMoneyLine(index, { value: Number(event.target.value) })} /></div>)}
-                <b>Total - {feeTotal.toLocaleString("en-IN")}</b>
-              </section>
-              <section className="mini-table-card">
-                <div className="section-head-inline"><h3>Prize money</h3><button type="button" onClick={() => patchForm({ prizes: [...form.prizes, { position: form.prizes.length + 1, label: `${form.prizes.length + 1}th Prize`, amount: 0 }] })}>Add</button></div>
-                {form.prizes.map((line, index) => <div className="money-row" key={index}><input type="number" value={line.position} onChange={(event) => updatePrizeLine(index, { position: Number(event.target.value) })} /><input value={line.label} onChange={(event) => updatePrizeLine(index, { label: event.target.value })} /><input type="number" value={line.amount} onChange={(event) => updatePrizeLine(index, { amount: Number(event.target.value) })} /></div>)}
-                <b>Total prize - {prizeTotal.toLocaleString("en-IN")}</b>
-              </section>
-            </div>
-            <div className="form-grid">
-              <label>Sport description<textarea value={form.sportDescription} onChange={(event) => patchForm({ sportDescription: event.target.value })} /></label>
-              <label>Tournament description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} /></label>
-            </div>
-            <div className="admin-flow-checks">
-              <label className="visibility-row"><span><b>Add featured tournament</b><small>Show in featured row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
-              <label className="visibility-row"><span><b>Block repeat registration</b><small>On means same user cannot register this tournament again.</small></span><input type="checkbox" checked={form.blockRepeatRegistration} onChange={(event) => patchForm({ blockRepeatRegistration: event.target.checked })} /></label>
-            </div>
-            <div className="registration-actions compact-actions">
-              <button className="btn btn-primary" type="button" onClick={saveTournament}>{isNew ? "Create tournament" : "Save changes"}</button>
-              <Link className="btn btn-secondary" to="/admin/tournaments">Cancel</Link>
-            </div>
+            {featuredQuickStart ? (
+              <>
+                <div className="form-grid">
+                  <label>Title<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Featured tournament title" /></label>
+                  <label>Image<input value={form.image} onChange={(event) => patchForm({ image: event.target.value })} placeholder="/assets/poster.jpeg" /></label>
+                  <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short featured tournament description" /></label>
+                </div>
+                <div className="registration-actions compact-actions">
+                  <button className="btn btn-primary" type="button" onClick={saveTournament}>Save featured tournament</button>
+                  <Link className="btn btn-secondary" to="/admin/tournaments">Cancel</Link>
+                </div>
+                <p className="form-note">This saves a minimal featured tournament first. Open Update later to finish the full tournament setup.</p>
+              </>
+            ) : (
+              <>
+                <div className="form-grid">
+                  <label>Tournament name<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} /></label>
+                  <label>Sport<select value={form.sport} onChange={(event) => patchForm({ sport: event.target.value })}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}<option value="__new__">Add new sport</option></select></label>
+                  {form.sport === "__new__" && <label>New sport name<input value={form.newSportName} onChange={(event) => patchForm({ newSportName: event.target.value })} /></label>}
+                  <label>Status<select value={form.status} onChange={(event) => patchForm({ status: event.target.value })}><option>Featured</option><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
+                  <label>Primary place<select value={form.location} onChange={(event) => patchForm({ location: event.target.value, cities: Array.from(new Set([...form.cities, event.target.value])) })}>{cityOptions.map((city) => <option key={city}>{city}</option>)}</select></label>
+                  <label>Tournament date<input type="date" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
+                  <label>Registration opens<input type="date" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
+                  <label>Registration closes<input type="date" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
+                  <label>Capacity<input type="number" value={form.capacity} onChange={(event) => patchForm({ capacity: Number(event.target.value) })} /></label>
+                  <label>Min members<input type="number" value={form.minTeamSize} onChange={(event) => patchForm({ minTeamSize: Number(event.target.value) })} /></label>
+                  <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
+                  <label>Min age<input type="number" value={form.minAge} onChange={(event) => patchForm({ minAge: Number(event.target.value) })} /></label>
+                  <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
+                  <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ image: `/assets/${file.name}` }); }} /></label>
+                  <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ poster: `/assets/${file.name}` }); }} /></label>
+                  <label>Manager allocation
+                    <select multiple value={form.assignedManagerIds} onChange={(event) => patchForm({ assignedManagerIds: Array.from(event.target.selectedOptions).map((option) => option.value) })}>
+                      {managers.map((manager) => <option value={manager.id} key={manager.id}>{manager.name} - {manager.email}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label>Selected image path<input value={form.image} readOnly /></label>
+                <label>Selected poster path<input value={form.poster} readOnly /></label>
+                <label>Full address<textarea value={form.address} onChange={(event) => patchForm({ address: event.target.value })} /></label>
+                <div className="manager-form-split">
+                  <section className="mini-table-card">
+                    <div className="section-head-inline"><h3>Payment lines</h3><button type="button" onClick={() => patchForm({ feeBreakdown: [...form.feeBreakdown, { label: "Fee", value: 0 }] })}>Add</button></div>
+                    {form.feeBreakdown.map((line, index) => <div className="money-row" key={index}><input value={line.label} onChange={(event) => updateMoneyLine(index, { label: event.target.value })} /><input type="number" value={line.value} onChange={(event) => updateMoneyLine(index, { value: Number(event.target.value) })} /></div>)}
+                    <b>Total - {feeTotal.toLocaleString("en-IN")}</b>
+                  </section>
+                  <section className="mini-table-card">
+                    <div className="section-head-inline"><h3>Prize money</h3><button type="button" onClick={() => patchForm({ prizes: [...form.prizes, { position: form.prizes.length + 1, label: `${form.prizes.length + 1}th Prize`, amount: 0 }] })}>Add</button></div>
+                    {form.prizes.map((line, index) => <div className="money-row" key={index}><input type="number" value={line.position} onChange={(event) => updatePrizeLine(index, { position: Number(event.target.value) })} /><input value={line.label} onChange={(event) => updatePrizeLine(index, { label: event.target.value })} /><input type="number" value={line.amount} onChange={(event) => updatePrizeLine(index, { amount: Number(event.target.value) })} /></div>)}
+                    <b>Total prize - {prizeTotal.toLocaleString("en-IN")}</b>
+                  </section>
+                </div>
+                <div className="form-grid">
+                  <label>Sport description<textarea value={form.sportDescription} onChange={(event) => patchForm({ sportDescription: event.target.value })} /></label>
+                  <label>Tournament description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} /></label>
+                </div>
+                <div className="admin-flow-checks">
+                  <label className="visibility-row"><span><b>Add featured tournament</b><small>Show in featured row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
+                  <label className="visibility-row"><span><b>Block repeat registration</b><small>On means same user cannot register this tournament again.</small></span><input type="checkbox" checked={form.blockRepeatRegistration} onChange={(event) => patchForm({ blockRepeatRegistration: event.target.checked })} /></label>
+                </div>
+                <div className="registration-actions compact-actions">
+                  <button className="btn btn-primary" type="button" onClick={saveTournament}>{isNew ? "Create tournament" : "Save changes"}</button>
+                  <Link className="btn btn-secondary" to="/admin/tournaments">Cancel</Link>
+                </div>
+              </>
+            )}
           </section>
         ) : (
           <section className="panel admin-flow-panel">
