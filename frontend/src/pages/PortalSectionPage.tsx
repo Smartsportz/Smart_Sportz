@@ -318,6 +318,10 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
 
   function openTournamentForm(item?: Record<string, any>) {
     const nextForm = formFromTournament(item);
+    if (item && (item.status === "Featured" || item.show_on_home === true)) {
+      nextForm.status = "Upcoming";
+      nextForm.showOnHome = false;
+    }
     setEditingTournament(item ?? null);
     setTournamentForm(nextForm);
     setShowTournamentForm(true);
@@ -426,6 +430,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
   });
   const managedTournamentGroups = useMemo(() => {
     const groups: Record<string, Array<Record<string, any>>> = {
+      Featured: [],
       Upcoming: [],
       "Registration Open": [],
       Live: [],
@@ -433,7 +438,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     };
     assignedTournaments.forEach((entry) => {
       const status = String(entry.status ?? "");
-      if (status === "Upcoming") groups.Upcoming.push(entry);
+      if (status === "Featured" || entry.show_on_home === true) groups.Featured.push(entry);
+      else if (status === "Upcoming") groups.Upcoming.push(entry);
       else if (status === "Registration Open") groups["Registration Open"].push(entry);
       else if (status === "Live") groups.Live.push(entry);
       else groups["Old / Completed"].push(entry);

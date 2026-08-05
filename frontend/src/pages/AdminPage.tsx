@@ -552,10 +552,11 @@ function AdminTournamentsDbPanel() {
   }
 
   const groups = {
+    Featured: records.filter((item) => item.status === "Featured" || item.show_on_home === true),
     Upcoming: records.filter((item) => item.status === "Upcoming"),
     "Registration Open": records.filter((item) => item.status === "Registration Open"),
     Live: records.filter((item) => item.status === "Live"),
-    "Old / Completed": records.filter((item) => !["Upcoming", "Registration Open", "Live"].includes(String(item.status))),
+    "Old / Completed": records.filter((item) => !["Featured", "Upcoming", "Registration Open", "Live"].includes(String(item.status))),
   };
   const sportOptions = Array.from(new Set([...sports.map((sport) => sport.name), ...records.map((item) => item.sport).filter(Boolean)]));
   const cityOptions = Array.from(new Set(["Mumbai", "Bengaluru", "Mysuru", "Delhi", "Chennai", ...records.map((item) => item.location).filter(Boolean), ...form.cities]));
@@ -593,7 +594,7 @@ function AdminTournamentsDbPanel() {
                     <div className="manager-card-actions">
                       <Link to={`/tournaments/${item.slug}`}>Open</Link>
                       <Link to={`/admin/tournaments/${item.slug}/bracket`}>Rounds</Link>
-                      <Link to={`/admin/tournaments/${item.slug}/edit`}>{item.status === "Featured" ? "Update" : "Edit"}</Link>
+                      <Link to={`/admin/tournaments/${item.slug}/edit${item.status === "Featured" ? "?complete=1" : ""}`}>{item.status === "Featured" ? "Update" : "Edit"}</Link>
                       <button className="danger-link" type="button" onClick={() => setDeleteCandidate(item)}>Delete</button>
                     </div>
                   </article>
@@ -1104,6 +1105,7 @@ export function AdminTournamentEditorPage() {
   const navigate = useNavigate();
   const isNew = !slug;
   const featuredQuickStart = isNew && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("featured") === "1";
+  const featuredCompleteMode = !isNew && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("complete") === "1";
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
   const [managers, setManagers] = useState<ManagerRow[]>([]);
   const [form, setForm] = useState<AdminTournamentForm>(() => adminFormFromTournament());
@@ -1126,7 +1128,12 @@ export function AdminTournamentEditorPage() {
         if (slug) {
           const existing = tournamentRows.find((item) => item.slug === slug);
           if (existing) {
-            setForm(adminFormFromTournament(existing));
+            const loaded = adminFormFromTournament(existing);
+            if (featuredCompleteMode && String(existing.status) === "Featured") {
+              loaded.status = "Upcoming";
+              loaded.showOnHome = false;
+            }
+            setForm(loaded);
             setSavedTournament(existing);
           }
         }
@@ -1193,7 +1200,7 @@ export function AdminTournamentEditorPage() {
       );
       setSavedTournament(saved);
       setForm(adminFormFromTournament(saved));
-      setMessage(`${saved.name} saved. Create or update the rounds workspace next.`);
+      setMessage(featuredCompleteMode ? `${saved.name} updated from featured mode. Continue with the remaining tournament details.` : `${saved.name} saved. Create or update the rounds workspace next.`);
       setFlowStage("workspace");
       if (isNew) window.history.replaceState(null, "", `/Smart_Sportz/admin/tournaments/${saved.slug}/edit`);
     } catch (caught) {
