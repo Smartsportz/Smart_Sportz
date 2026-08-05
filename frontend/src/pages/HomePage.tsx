@@ -204,7 +204,7 @@ export function HomePage() {
       image: sportStoryImages[sport.slug] ?? assets.cricket,
     };
   });
-  const discoveryQueue = discoveryCards.length > 1 ? [...discoveryCards, ...discoveryCards] : discoveryCards;
+  const discoveryQueue = discoveryCards;
   const sponsorLogos = homeContent.sponsorLogos?.length ? homeContent.sponsorLogos : [
     { slug: "smartsportz", name: "SmartSportz", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/" },
     { slug: "brillaris", name: "Brillaris", image: "https://brillaris.pro/assets/img/Logo1.png", link_url: "https://brillaris.pro" },
@@ -473,10 +473,10 @@ export function HomePage() {
           </div>        </div>
         <div className="queue-shell organizer-shell">
           <div className="queue-controls left">
-            <button type="button" aria-label="Scroll organizer tools left" onClick={() => scrollQueue(organizerRef, "left")}>‹</button>
+            <button type="button" aria-label="Scroll organizer tools left" onClick={() => moveOrganizer("left")}>‹</button>
           </div>
           <div className="queue-controls right">
-            <button type="button" aria-label="Scroll organizer tools right" onClick={() => scrollQueue(organizerRef, "right")}>›</button>
+            <button type="button" aria-label="Scroll organizer tools right" onClick={() => moveOrganizer("right")}>›</button>
           </div>
           <div className="queue-track organizer-grid wheel-horizontal" ref={organizerRef}>
           {[...organizerTools, ...organizerTools].map((tool, index) => (

@@ -1,4 +1,4 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap");
 
 :root {
   color-scheme: light;
@@ -240,7 +240,7 @@ img { max-width: 100%; display: block; }
 .carousel-row.wheel-horizontal > * { transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease, opacity .24s ease; transform-origin: center; }
 .carousel-row.wheel-horizontal > *:hover { transform: translateY(-5px) scale(1.025); z-index: 2; }
 .queue-shell { position: relative; width: 100%; max-width: 100%; overflow: hidden; }
-.queue-track { display: flex; width: max-content; min-width: 100%; gap: 20px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; will-change: transform; animation: queueMoveLeft 34s linear infinite; }
+.queue-track { display: flex; width: max-content; min-width: 100%; gap: 20px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; will-change: transform; }
 .queue-track::-webkit-scrollbar { display: none; }
 .queue-shell:hover .queue-track { animation-play-state: paused; }
 .queue-track > * { flex: 0 0 auto; transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
@@ -277,7 +277,7 @@ img { max-width: 100%; display: block; }
 .tournaments-page { overflow-x: hidden; }
 .tournaments-page .page-hero h1 { max-width: 100%; overflow-wrap: anywhere; }
 .sport-home-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.discovery-queue-track { animation-duration: 42s; padding: 4px 0 16px; }
+.discovery-queue-track { padding: 4px 0 16px; }
 .discovery-queue-track .sport-home-card { width: min(330px, 78vw); }
 .sport-home-card { overflow: hidden; display: grid; align-content: start; min-height: 320px; border: 1px solid rgba(11, 136, 82, .14); border-radius: 20px; background: rgba(255, 255, 255, .82); box-shadow: 0 16px 40px rgba(15, 23, 42, .07); color: #0b1c30; }
 .sport-home-card img { width: 100%; height: 154px; display: block; object-fit: cover; }
