@@ -148,6 +148,10 @@ export function HomePage() {
   const organizerRef = useRef<HTMLDivElement>(null);
   const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [organizerIndex, setOrganizerIndex] = useState(0);
+  const [isOrganizerHovered, setIsOrganizerHovered] = useState(false);
+  const [discoveryIndex, setDiscoveryIndex] = useState(0);
+  const discoveryCardRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+  const [isDiscoveryHovered, setIsDiscoveryHovered] = useState(false);
   const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
   const [homeContent, setHomeContent] = useState<{
     discoveryCards?: Array<Record<string, any>>;
@@ -235,6 +239,15 @@ export function HomePage() {
     });
   };
 
+  const moveDiscovery = (direction: "left" | "right") => {
+    setDiscoveryIndex((current) => {
+      const next = direction === "left"
+        ? (current - 1 + discoveryQueue.length) % discoveryQueue.length
+        : (current + 1) % discoveryQueue.length;
+      return next;
+    });
+  };
+
   const scrollQueue = (ref: RefObject<HTMLDivElement | null>, direction: "left" | "right") => {
     const element = ref.current;
     if (!element) return;
@@ -243,9 +256,26 @@ export function HomePage() {
   };
 
   useEffect(() => {
+    if (isOrganizerHovered) return;
     const timer = window.setInterval(() => moveOrganizer("right"), 3200);
     return () => window.clearInterval(timer);
-  }, [organizerTools.length]);
+  }, [organizerTools.length, isOrganizerHovered]);
+
+  useEffect(() => {
+    if (isDiscoveryHovered) return;
+    const timer = window.setInterval(() => moveDiscovery("right"), 3200);
+    return () => window.clearInterval(timer);
+  }, [discoveryQueue.length, isDiscoveryHovered]);
+
+  useEffect(() => {
+    const container = discoveryQueueRef.current;
+    const card = discoveryCardRefs.current[discoveryIndex];
+    if (!container || !card) return;
+    container.scrollTo({
+      left: card.offsetLeft - (container.clientWidth - card.clientWidth) / 2,
+      behavior: "smooth",
+    });
+  }, [discoveryIndex]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("screenshot") === "1") return;
@@ -377,17 +407,17 @@ export function HomePage() {
           </div>
           <Link className="inline-link" to="/sports">View All Sports</Link>
         </div>
-        <div className="queue-shell discovery-queue-shell">
+        <div className="queue-shell discovery-queue-shell" onMouseEnter={() => setIsDiscoveryHovered(true)} onMouseLeave={() => setIsDiscoveryHovered(false)}>
           <div className="queue-controls left">
-            <button type="button" aria-label="Scroll sports left" onClick={() => scrollQueue(discoveryQueueRef, "left")}>‹</button>
+            <button type="button" aria-label="Scroll sports left" onClick={() => moveDiscovery("left")}>‹</button>
           </div>
           <div className="queue-controls right">
-            <button type="button" aria-label="Scroll sports right" onClick={() => scrollQueue(discoveryQueueRef, "right")}>›</button>
+            <button type="button" aria-label="Scroll sports right" onClick={() => moveDiscovery("right")}>›</button>
           </div>
           <div className="queue-track discovery-queue-track wheel-horizontal" ref={discoveryQueueRef}>
           {discoveryQueue.map((card, index) => {
             return (
-              <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
+              <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`} ref={(el) => { discoveryCardRefs.current[index] = el; }}>
                 <img src={assetUrl(card.image || assets.cricket)} alt="" />
                 <div className="sport-home-card-body">
                   <span className="status emerald">{card.label}</span>
@@ -471,7 +501,7 @@ export function HomePage() {
             <h2>Empowering Tournament Organizers</h2>
             <p>All-in-one suite of professional tools to run world-class sports competitions.</p>
           </div>        </div>
-        <div className="queue-shell organizer-shell">
+        <div className="queue-shell organizer-shell" onMouseEnter={() => setIsOrganizerHovered(true)} onMouseLeave={() => setIsOrganizerHovered(false)}>
           <div className="queue-controls left">
             <button type="button" aria-label="Scroll organizer tools left" onClick={() => moveOrganizer("left")}>‹</button>
           </div>
