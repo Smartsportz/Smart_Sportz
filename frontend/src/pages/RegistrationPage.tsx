@@ -232,6 +232,7 @@ function completedRecordFromBackend(registration: BackendRegistration, tournamen
     documents: (registration.documents || []).map((document) => ({
       documentType: document.document_type,
       fileName: document.file_name,
+      filePath: document.file_path,
       status: document.status,
     })),
     payment: {
@@ -402,11 +403,17 @@ function downloadRulesFile(tournament: (typeof tournaments)[number]) {
 }
 
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
-  const wizard = ["Tournament", "Team Details", "Players", "Payment", "Confirmation"];
+  const wizard = ["Tournament", "Team Details", "Payment", "Confirmation"];
+  // Map index for custom 4-step wizard
+  let displayIndex = activeIndex;
+  if (activeIndex >= 1) displayIndex = 1; // Team & Players
+  if (activeIndex === 4) displayIndex = 2; // Payment
+  if (activeIndex === 5) displayIndex = 3; // Confirmation
+
   return (
     <div className="registration-stepper" aria-label="Registration progress">
       {wizard.map((step, index) => (
-        <div className={`registration-step ${index <= activeIndex ? "active" : ""}`} key={step}>
+        <div className={`registration-step ${index <= displayIndex ? "active" : ""}`} key={step}>
           <span>{index + 1}</span>
           {step}
         </div>
@@ -532,7 +539,8 @@ export function RegistrationPage() {
   const [documents, setDocuments] = useState<SavedDocument[]>(() => teamGroupImageDocument(savedDraft?.documents));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 3));
+  // steps 2 and 3 are now hidden/merged into step 1
+  const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 1));
   const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [rulesScrolled, setRulesScrolled] = useState(false);
@@ -600,20 +608,27 @@ export function RegistrationPage() {
   }
 
   async function continueToRoster() {
+    // Validate everything combined
     const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
+    
     const missingMemberLabels = members
       .map((name, index) => ({ name: name.trim(), label: memberSlots[index] }))
       .filter((item) => item.name.length < 2)
       .map((item) => item.label);
+
+    const missingAges = memberAges.filter(a => !a.trim()).length;
+    const missingSizes = memberJerseySizes.filter(s => !s.trim()).length;
+
     if (missingTeamFields.length) {
-      showMissing(`Please complete these team fields: ${missingTeamFields.join(", ")}.`);
+      showMissing(`Please complete these fields: ${missingTeamFields.join(", ")}.`);
       return;
     }
-    if (missingMemberLabels.length) {
-      showMissing(`Please complete these player names with at least 2 characters: ${missingMemberLabels.join(", ")}.`);
+    if (missingMemberLabels.length || missingAges || missingSizes) {
+      showMissing(`Please complete all player names, ages, and jersey sizes.`);
       return;
     }
+
     setSaving(true);
     setError("");
     try {
@@ -664,7 +679,7 @@ export function RegistrationPage() {
       };
       writeSavedRegistration(tournament.slug, payload);
       localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify({
-        activeStep: 3,
+        activeStep: 1,
         teamDetails: { ...teamDetails, teamCode: "" },
         members,
         memberAges,
@@ -694,32 +709,9 @@ export function RegistrationPage() {
       return;
     }
     if (activeStep === 1) {
-      if (!teamDetails.teamName.trim() || !teamDetails.city.trim() || !teamDetails.districtState.trim()) {
-        showMissing("Please complete the basic team details before moving to player details.");
-        return;
-      }
-      setActiveStep(2);
-      scrollRegistrationTop();
-      return;
-    }
-    if (activeStep === 2) {
-      const missingPlayers = members.map((name, index) => ({ name, label: memberSlots[index] })).filter((item) => !item.name.trim()).map((item) => item.label);
-      const missingAges = memberAges.map((value, index) => ({ value, label: memberSlots[index] })).filter((item) => !item.value.trim()).map((item) => `${item.label} age`);
-      const missingSizes = memberJerseySizes.map((value, index) => ({ value, label: memberSlots[index] })).filter((item) => !item.value.trim()).map((item) => `${item.label} jersey size`);
-      const missing = [...missingPlayers, ...missingAges, ...missingSizes];
-      if (missing.length) {
-        showMissing(`Please complete these roster fields: ${missing.join(", ")}.`);
-        return;
-      }
-      setActiveStep(3);
-      scrollRegistrationTop();
-      return;
-    }
-    if (activeStep === 3) {
       void continueToRoster();
       return;
     }
-    void continueToRoster();
   }
 
   function goBack() {
@@ -728,7 +720,7 @@ export function RegistrationPage() {
       navigate(`/tournaments/${tournament.slug}`);
       return;
     }
-    setActiveStep((step) => Math.max(0, step - 1));
+    setActiveStep(0);
     scrollRegistrationTop();
   }
 
@@ -739,7 +731,7 @@ export function RegistrationPage() {
           <p className="eyebrow">SmartSportz</p>
           <h1>Tournament Registration</h1>
           <h2>Compete. Perform. Become a Champion.</h2>
-          <p>Complete accurate team, player, and payment details to secure your tournament spot and avoid verification delays.</p>
+          <p>Complete accurate team, player, and payment details to secure your tournament spot.</p>
         </section>
         <RegistrationStepper activeIndex={activeStep} />
         <div className={`registration-reference-layout ${activeStep === 0 ? "registration-reference-layout-intro" : "registration-reference-layout-centered"}`}>
@@ -750,7 +742,7 @@ export function RegistrationPage() {
                 <div className="section-head-inline">
                   <div>
                     <h2>About Tournament</h2>
-                    <p>Review tournament details before selecting a category or entering team data.</p>
+                    <p>Review tournament details before entering team data.</p>
                   </div>
                   <span className={`status ${tournament.accent}`}>{tournament.status}</span>
                 </div>
@@ -760,19 +752,11 @@ export function RegistrationPage() {
                     <h3>{tournament.name}</h3>
                     <p>{tournament.sport} - {tournament.location} - {tournament.date}</p>
                     <div className="rules-list">
-                      <span>Team size: {tournament.teamSize} members including captain and sub-captain</span>
-                      <span>Registration: {tournament.registrationStart} to {tournament.registrationEnd}</span>
+                      <span>Team size: {tournament.teamSize} members</span>
                       <span>Prize pool: {tournament.prize}</span>
                       <span>Slots: {tournament.teams}/{tournament.capacity} filled</span>
                       <span>Age restriction: {tournamentAgeRange(tournament)}</span>
                     </div>
-                  </div>
-                </div>
-                <div className="registration-choice-card compact-card age-rule-card">
-                  <ShieldCheck />
-                  <div>
-                    <h3>Age restrictions</h3>
-                    <p>{tournamentAgeRange(tournament)}. Player age eligibility is checked during manager verification and final team approval.</p>
                   </div>
                 </div>
                 <label className="acceptance-box">
@@ -789,7 +773,7 @@ export function RegistrationPage() {
                       openRulesModal();
                     }}
                   />
-                  <span>I have read and accept the tournament rules, eligibility, age restriction, schedule, document verification, and fair-play conditions.</span>
+                  <span>I have read and accept the tournament rules, eligibility, age restriction, and fair-play conditions.</span>
                 </label>
               </section>
             )}
@@ -798,124 +782,99 @@ export function RegistrationPage() {
               <section className="registration-form-section">
                 <div className="section-head-inline">
                   <div>
-                    <h2>Team Information</h2>
-                    <p>Enter the core team details and select a jersey style for this tournament.</p>
+                    <h2>Team & Player Details</h2>
+                    <p>Enter your team information and roster members below.</p>
                   </div>
                   <span className="autosave-pill">Draft saved locally</span>
                 </div>
-                <div className="form-grid">
-                  <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
-                  <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
-                  <label>Home district/state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
-                  <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Describe your team's spirit" /></label>
-                </div>
-                <div className="jersey-row">
-                  <div>
-                    <h3>Select your jersey</h3>
-                    <p>Choose one jersey image for this team. After registration it stays tied to this team record.</p>
-                  </div>
-                  <button className="btn btn-secondary" type="button" onClick={() => setJerseyPickerOpen(true)}>
-                    {teamDetails.selectedJersey ? "Change jersey" : "Select jersey"}
-                  </button>
-                </div>
-                <div className="registration-choice-card compact-card jersey-preview-card">
-                  <img src={teamDetails.selectedJersey} alt="Selected jersey" />
-                  <div className="jersey-preview-copy">
-                    <h3>Selected jersey</h3>
-                    <p>{jerseyDisplayName(teamDetails.selectedJersey)} kit is selected for this registration.</p>
-                    <small>You can change it until the registration is paid and confirmed.</small>
-                  </div>
-                  <button className="btn btn-secondary jersey-preview-action" type="button" onClick={() => setJerseyPickerOpen(true)}>Change</button>
-                </div>
-                <label className="acceptance-box">
-                  <input type="checkbox" checked={tournamentAccepted} readOnly onClick={(event) => { event.preventDefault(); openRulesModal(); }} />
-                  <span>I accept the selected tournament rules, roster size, city eligibility, and registration approval conditions.</span>
-                </label>
-              </section>
-            )}
 
-            {activeStep === 2 && (
-                <section className="registration-form-section">
-                  <h2>Team Management</h2>
+                <div className="form-group-box">
+                  <h3>Basic Team Info</h3>
                   <div className="form-grid">
-                    <label>Captain name<input value={teamDetails.captainName} onChange={(event) => updateTeamDetails("captainName", event.target.value)} placeholder="Arjun Sharma" /></label>
-                    <label>Sub-captain name<input value={teamDetails.subCaptainName} onChange={(event) => updateTeamDetails("subCaptainName", event.target.value)} placeholder="Rohan Sharma" /></label>
-                    <label>Coach name<input value={teamDetails.coachName} onChange={(event) => updateTeamDetails("coachName", event.target.value)} placeholder="Naveen Rao" /></label>
-                    <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="captain@team.com" /></label>
-                    <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91 98765 43210" /></label>
+                    <label>Team name<input value={teamDetails.teamName} onChange={(event) => updateTeamDetails("teamName", event.target.value)} placeholder="e.g. Mumbai Mavericks" /></label>
+                    <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
+                    <label>Home state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
+                    <label>Team motto<input value={teamDetails.teamMotto} onChange={(event) => updateTeamDetails("teamMotto", event.target.value)} placeholder="Team spirit" /></label>
                   </div>
-                  <div className="registration-choice-card compact-card">
-                    <ShieldCheck />
-                    <div>
-                      <h3>Team jersey selection locked to this registration</h3>
-                      <p>The selected jersey image is reserved for this team once the registration is completed.</p>
+                </div>
+
+                <div className="form-group-box" style={{ marginTop: "2rem" }}>
+                  <h3>Management Contact</h3>
+                  <div className="form-grid">
+                    <label>Captain name<input value={teamDetails.captainName} onChange={(event) => updateTeamDetails("captainName", event.target.value)} placeholder="Full Name" /></label>
+                    <label>Sub-captain name<input value={teamDetails.subCaptainName} onChange={(event) => updateTeamDetails("subCaptainName", event.target.value)} placeholder="Full Name" /></label>
+                    <label>Coach name<input value={teamDetails.coachName} onChange={(event) => updateTeamDetails("coachName", event.target.value)} placeholder="Optional" /></label>
+                    <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="contact@team.com" /></label>
+                    <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91" /></label>
+                  </div>
+                </div>
+
+                <div className="form-group-box" style={{ marginTop: "2rem" }}>
+                  <div className="section-head-inline">
+                    <h3>Player Roster</h3>
+                    <div className="section-actions">
+                      <button className="btn btn-secondary btn-sm" type="button"><Upload size={14} /> Import</button>
                     </div>
                   </div>
-                </section>
-            )}
-
-            {activeStep === 3 && (
-              <section className="registration-form-section">
-                <div className="section-head-inline">
-                  <div>
-                    <h2>Player Details</h2>
-                    <p>Minimum and maximum: {tournament.teamSize} players. Captain and sub-captain are included.</p>
-                  </div>
-                  <div className="section-actions">
-                    <button className="btn btn-secondary" type="button"><Upload size={16} />Import Excel</button>
-                    <button className="btn btn-primary" type="button"><UserPlus size={16} />Add Player</button>
-                  </div>
-                </div>
-                <div className="player-roster-grid">
-                  {memberSlots.map((role, index) => (
-                    <label className="player-entry-card" key={role}>
-                      <span>{index + 1}</span>
-                      <b>{role}</b>
-                      <input value={members[index]} onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} placeholder={index === 0 ? "Captain name" : index === 1 ? "Sub-captain name" : `Player ${index + 1}`} />
-                      <div className="player-entry-meta">
-                        <input value={memberAges[index]} onChange={(event) => setMemberAges((current) => current.map((value, i) => i === index ? event.target.value : value))} placeholder="Age" inputMode="numeric" />
-                        <input value={memberJerseySizes[index]} onChange={(event) => setMemberJerseySizes((current) => current.map((value, i) => i === index ? event.target.value : value))} placeholder="Jersey size" />
+                  <div className="player-roster-rows" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {memberSlots.map((role, index) => (
+                      <div key={role} className="player-row-input" style={{ display: "grid", gridTemplateColumns: "40px 1fr 80px 120px", gap: "10px", alignItems: "center" }}>
+                        <span style={{ fontWeight: "bold", color: "#666" }}>{index + 1}</span>
+                        <input 
+                          value={members[index]} 
+                          onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} 
+                          placeholder={`${role} Name`} 
+                        />
+                        <input 
+                          value={memberAges[index]} 
+                          onChange={(event) => setMemberAges((current) => current.map((v, i) => i === index ? event.target.value : v))} 
+                          placeholder="Age" 
+                          inputMode="numeric" 
+                        />
+                        <input 
+                          value={memberJerseySizes[index]} 
+                          onChange={(event) => setMemberJerseySizes((current) => current.map((v, i) => i === index ? event.target.value : v))} 
+                          placeholder="Size (S/M/L)" 
+                        />
                       </div>
-                    </label>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </section>
-            )}
 
-            {false && activeStep === 4 && (
-              <section className="registration-form-section">
-                <h2>Team Group Image</h2>
-                <p>Upload one clear team group photo. This image is used for manager verification and team records.</p>
-                <div className="document-list">
-              {documents.map((document, index) => (
-                <label className="document-row" key={document.documentType}>
-                  <ImagePlus />
-                      <span>
-                        <b>{document.documentType}</b>
-                        <small>{document.fileName ? `${document.fileName}${document.fileSize ? ` - ${formatFileSize(document.fileSize)}` : ""}` : "Upload one JPG or PNG team group image"}</small>
-                      </span>
-                  <strong>{document.status === "uploaded" ? "Uploaded" : "Upload"}</strong>
-                      <input type="file" accept="image/png,image/jpeg" onChange={(event) => updateDocument(index, event.target.files?.[0])} />
-                </label>
-              ))}
+                <div className="jersey-row" style={{ marginTop: "2rem" }}>
+                  <div>
+                    <h3>Team Jersey</h3>
+                    <p>Select the kit style for your team.</p>
+                  </div>
+                  <div className="registration-choice-card compact-card jersey-preview-card" style={{ margin: "10px 0" }}>
+                    <img src={teamDetails.selectedJersey} alt="Selected jersey" style={{ width: "80px", height: "auto" }} />
+                    <div className="jersey-preview-copy">
+                      <p><strong>{jerseyDisplayName(teamDetails.selectedJersey)}</strong></p>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => setJerseyPickerOpen(true)}>Change Kit</button>
+                    </div>
+                  </div>
                 </div>
-                <p className="secure-note">Maximum file size: 10MB. Supported formats: JPG and PNG. The old document step remains hidden in code for future use.</p>
+
+                <label className="acceptance-box">
+                  <input type="checkbox" checked={tournamentAccepted} readOnly onClick={(event) => { event.preventDefault(); openRulesModal(); }} />
+                  <span>I accept the tournament rules and verify that all player ages are accurate.</span>
+                </label>
               </section>
             )}
 
             <div className="registration-actions">
-              <button className="btn btn-secondary" type="button" onClick={goBack}><ArrowLeft size={16} />{activeStep === 0 ? "Back to tournament" : "Back"}</button>
+              <button className="btn btn-secondary" type="button" onClick={goBack}><ArrowLeft size={16} />{activeStep === 0 ? "Back" : "Back"}</button>
               <button className="btn btn-primary" type="button" onClick={goNext} disabled={saving}>{saving ? "Saving..." : "Continue"}<ArrowRight size={16} /></button>
             </div>
           </main>
           {activeStep === 0 ? <TournamentPosterPanel tournament={tournament} /> : null}
         </div>
+        
         {jerseyPickerOpen && (
-          <div className="rules-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="jersey-picker-title">
+          <div className="rules-modal-backdrop" role="dialog" aria-modal="true">
             <article className="rules-modal jersey-picker-modal">
-              <button className="rules-modal-close" type="button" onClick={() => setJerseyPickerOpen(false)} aria-label="Close jersey picker">x</button>
-              <p className="eyebrow">Jersey selection</p>
-              <h2 id="jersey-picker-title">Choose your jersey image</h2>
+              <button className="rules-modal-close" type="button" onClick={() => setJerseyPickerOpen(false)}>x</button>
+              <h2>Choose your jersey</h2>
               <div className="jersey-picker-grid">
                 {jerseyOptions.map((jersey) => (
                   <button key={jersey.label} type="button" className={`jersey-option ${teamDetails.selectedJersey === jersey.image ? "selected" : ""}`} onClick={() => chooseJersey(jersey.image)}>
@@ -924,36 +883,22 @@ export function RegistrationPage() {
                   </button>
                 ))}
               </div>
-              <div className="rules-modal-actions">
-                <button className="btn btn-secondary" type="button" onClick={() => setJerseyPickerOpen(false)}>Close</button>
-              </div>
             </article>
           </div>
         )}
+
         {rulesModalOpen && (
-          <div className="rules-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title">
+          <div className="rules-modal-backdrop" role="dialog" aria-modal="true">
             <article className="rules-modal">
-              <button className="rules-modal-close" type="button" onClick={() => setRulesModalOpen(false)} aria-label="Close rules popup">x</button>
-              <p className="eyebrow">Rules and conditions</p>
-              <h2 id="rules-modal-title">{tournament.name}</h2>
+              <button className="rules-modal-close" type="button" onClick={() => setRulesModalOpen(false)}>x</button>
+              <h2>Rules and conditions</h2>
               <div className="rules-modal-scroll" onScroll={handleRulesScroll}>
                 {tournamentRulesText(tournament).split("\n").map((line, index) => (
-                  line ? <p key={`${line}-${index}`}>{line}</p> : <br key={index} />
+                  line ? <p key={index}>{line}</p> : <br key={index} />
                 ))}
               </div>
               <div className="rules-modal-actions">
-                <small>{rulesScrolled ? "Rules reviewed. You can agree now." : "Scroll to the bottom to enable Agree."}</small>
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  disabled={!rulesScrolled}
-                  onClick={() => {
-                    setTournamentAccepted(true);
-                    setRulesModalOpen(false);
-                  }}
-                >
-                  I Agree
-                </button>
+                <button className="btn btn-primary" type="button" disabled={!rulesScrolled} onClick={() => { setTournamentAccepted(true); setRulesModalOpen(false); }}>I Agree</button>
               </div>
             </article>
           </div>
@@ -972,36 +917,31 @@ export function RegistrationRosterPage() {
     <RegistrationShell>
     <Page className="registration-reference-page">
       <section className="registration-hero-copy compact">
-        <p className="eyebrow">Roster Review</p>
+        <p className="eyebrow">Review</p>
         <h1>{tournament.name}</h1>
-        <p>Confirm player names and captain details before payment.</p>
       </section>
-      <RegistrationStepper activeIndex={3} />
+      <RegistrationStepper activeIndex={1} />
       {!saved ? (
         <section className="panel">
-          <h2>Registration details required</h2>
-          <p>Please complete team details and team member details before opening roster review.</p>
           <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back to registration</Link>
         </section>
       ) : (
         <div className="detail-grid">
           <section className="panel review-summary">
-            <span className="status emerald">Team verified</span>
+            <span className="status emerald">Details captured</span>
             <h2>{saved.teamName}</h2>
             <div className="review-list">
               <p><b>Captain</b><span>{saved.captainName}</span></p>
-              <p><b>Sub-captain</b><span>{saved.subCaptainName}</span></p>
-              <p><b>Coach</b><span>{saved.coachName || "Not assigned"}</span></p>
+              <p><b>Email</b><span>{saved.email}</span></p>
               <p><b>City</b><span>{saved.city}</span></p>
-              {saved.documents.length > 0 && <p><b>Team Image</b><span>{saved.documents.filter((item) => item.status === "uploaded").length}/{saved.documents.length} uploaded</span></p>}
             </div>
             <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register/payment`}>Continue to payment</Link>
           </section>
           <section className="panel">
-            <h2>Roster Members</h2>
+            <h2>Roster</h2>
             <div className="roster-list">
               {saved.members.map((member, index) => (
-                <p key={`${member}-${index}`}><b>{index + 1}</b><span>{member}</span>{index === 0 && <small>Captain</small>}{index === 1 && <small>Sub-captain</small>}</p>
+                <p key={index}><b>{index + 1}</b><span>{member} ({saved.memberAges[index]} yrs) - Size: {saved.memberJerseySizes[index]}</span></p>
               ))}
             </div>
           </section>
@@ -1038,175 +978,79 @@ export function RegistrationPaymentPage() {
     try {
       const intent = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi"; status: string }>("/payments/local-intent", {
         method: "POST",
-        body: JSON.stringify({
-          tournament_slug: tournament.slug,
-          team_name: saved.teamName,
-          amount: totalPayable,
-          method: selectedMethod,
-          contact,
-        }),
+        body: JSON.stringify({ tournament_slug: tournament.slug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
       });
-      await new Promise((resolve) => setTimeout(resolve, selectedMethod === "upi" ? 1600 : 1200));
-      await apiRequest(`/payments/local-intent/${intent.id}/confirm`, {
-        method: "POST",
-        body: JSON.stringify({ status: "paid", method: selectedMethod }),
-      });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await apiRequest(`/payments/local-intent/${intent.id}/confirm`, { method: "POST", body: JSON.stringify({ status: "paid", method: selectedMethod }) });
       const registrationPayment = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi" }>(`/registrations/${saved.registrationId}/local-payment`, {
-        method: "POST",
-        body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable }),
+        method: "POST", body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable }),
       });
       const updatedRegistration = await apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`);
-      writeSavedRegistration(tournament.slug, {
-        ...saved,
-        teamCode: updatedRegistration.team_code || saved.teamCode || "",
-      });
-      const payment: SavedPayment = {
-        id: registrationPayment.id,
-        receiptNumber: registrationPayment.receipt_number,
-        amount: registrationPayment.amount,
-        method: registrationPayment.method,
-        status: "paid",
-        paidAt: new Date().toISOString(),
-      };
+      writeSavedRegistration(tournament.slug, { ...saved, teamCode: updatedRegistration.team_code || "" });
+      const payment: SavedPayment = { id: registrationPayment.id, receiptNumber: registrationPayment.receipt_number, amount: registrationPayment.amount, method: registrationPayment.method, status: "paid", paidAt: new Date().toISOString() };
       writeSavedPayment(tournament.slug, payment);
       navigate(`/tournaments/${tournament.slug}/register/review`);
     } catch (caught) {
       setStatus("idle");
-      setError(caught instanceof Error ? caught.message : "Payment could not be completed");
+      setError("Payment failed. Please try again.");
     }
   }
 
-  function startUpiFlow() {
-    if (!contact.trim()) {
-      setError("Enter the payer mobile number or UPI ID before generating the QR.");
-      return;
-    }
-    setQrGenerated(true);
-    void completePayment("upi");
-  }
-
-  function openUpiApps() {
-    if (!contact.trim()) {
-      setError("Enter the payer mobile number or UPI ID before opening UPI apps.");
-      return;
-    }
-    if (!upiIntent || status === "checking") return;
-    setQrGenerated(true);
-    setUpiChooserOpen(true);
-  }
-
-  function launchUpiApp(href: string) {
-    if (status === "checking") return;
-    setQrGenerated(true);
-    setUpiChooserOpen(false);
-    window.location.href = href;
-    window.setTimeout(() => {
-      void completePayment("upi");
-    }, 1200);
-  }
-
-  function startCardFlow() {
-    const cleanNumber = card.number.replace(/\s/g, "");
-    if (!contact.trim() || !card.name.trim() || cleanNumber.length < 12 || !card.expiry.trim() || card.cvv.length < 3) {
-      setError("Enter contact, card name, card number, expiry, and CVV to continue.");
-      return;
-    }
-    void completePayment("card");
-  }
-
-  async function copyUpiLink() {
-    if (!upiIntent) return;
-    try {
-      await navigator.clipboard.writeText(upiIntent);
-      setError("");
-    } catch {
-      setError("Copy is blocked by this browser. Long press the UPI QR or use Open UPI Apps.");
-    }
-  }
+  function startUpiFlow() { setQrGenerated(true); completePayment("upi"); }
+  function openUpiApps() { setQrGenerated(true); setUpiChooserOpen(true); }
+  function launchUpiApp(href: string) { setUpiChooserOpen(false); window.location.href = href; setTimeout(() => completePayment("upi"), 1200); }
 
   return (
     <RegistrationShell>
     <Page className="registration-reference-page">
       <section className="registration-hero-copy compact">
-        <p className="eyebrow">Secure Payment</p>
-        <h1>Complete Payment</h1>
-        <p>Use the local Razorpay-style payment flow. Live card PIN and bank OTP stay inside Razorpay in production.</p>
+        <h1>Payment</h1>
       </section>
       <RegistrationStepper activeIndex={4} />
       {!saved ? (
-        <section className="panel">
-          <h2>Registration details required</h2>
-          <p>Please complete registration and roster review before payment.</p>
-          <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back to registration</Link>
-        </section>
+        <section className="panel"><Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back</Link></section>
       ) : (
         <div className="payment-layout">
           <section className="panel payment-panel">
             <div className="selected-tournament-label">
-              <span className={`status ${tournament.accent}`}>Selected tournament</span>
               <strong>{saved.teamName}</strong>
-              <small>{tournament.name} - {saved.city} - {saved.members.length} members - Code generated after payment</small>
+              <small>{tournament.name} - {formatInr(totalPayable)}</small>
             </div>
             {error && <div className="form-alert">{error}</div>}
-            <label>Pay number / UPI contact<input value={contact} onChange={(event) => setContact(event.target.value)} placeholder="+91 98765 43210 or team@upi" /></label>
-            <div className="payment-method-tabs" role="tablist" aria-label="Payment method">
-              <button className={method === "upi" ? "active" : ""} type="button" onClick={() => setMethod("upi")}>UPI QR</button>
-              <button className={method === "card" ? "active" : ""} type="button" onClick={() => setMethod("card")}>Card</button>
+            <div className="payment-method-tabs">
+              <button className={method === "upi" ? "active" : ""} onClick={() => setMethod("upi")}>UPI</button>
+              <button className={method === "card" ? "active" : ""} onClick={() => setMethod("card")}>Card</button>
             </div>
             {method === "upi" ? (
               <div className="upi-payment-box">
-                <div className="qr-shell">
-                  <QRCodeSVG value={upiIntent} size={154} />
-                  <p>{qrGenerated ? "UPI request opened. Checking payment receipt..." : `Scan or open a UPI app to pay ${formatInr(totalPayable)}.`}</p>
-                </div>
-                <button className="btn btn-primary upi-open-button" type="button" onClick={openUpiApps} disabled={status === "checking"}>
-                  <Smartphone size={17} />{status === "checking" ? "Checking payment..." : "Open UPI Apps"}
-                </button>
-                <div className="upi-fallback-row">
-                  <span>Desktop users can scan the QR from a phone UPI app.</span>
-                  <button type="button" onClick={copyUpiLink}><Copy size={14} />Copy UPI link</button>
-                </div>
-                <button className="btn btn-secondary" type="button" onClick={startUpiFlow} disabled={status === "checking"}>{status === "checking" ? "Checking payment..." : "I have paid, check payment"}</button>
+                <div className="qr-shell"><QRCodeSVG value={upiIntent} size={150} /></div>
+                <button className="btn btn-primary wide" onClick={openUpiApps} disabled={status === "checking"}>Open UPI Apps</button>
+                <button className="btn btn-secondary wide" onClick={startUpiFlow} disabled={status === "checking"}>Check Payment Status</button>
                 {upiChooserOpen && (
-                  <div className="upi-app-sheet" role="dialog" aria-modal="true" aria-label="Choose UPI app">
+                  <div className="upi-app-sheet">
                     <div className="upi-app-sheet-card">
-                      <div className="upi-sheet-head">
-                        <div>
-                          <span>Payable amount</span>
-                          <strong>{formatInr(totalPayable)}</strong>
-                        </div>
-                        <button type="button" onClick={() => setUpiChooserOpen(false)} aria-label="Close UPI app chooser">×</button>
-                      </div>
-                      <p>Select a UPI app. On mobile, your device will show installed payment apps. On PC, use the QR fallback if no app opens.</p>
-                      <div className="upi-app-grid" aria-label="UPI app choices">
+                      <div className="upi-app-grid">
                         {upiAppLinks.map((app) => (
-                          <button type="button" onClick={() => launchUpiApp(app.href)} key={app.label}>
-                            <span>{app.label}</span>
-                            <ExternalLink size={13} />
-                          </button>
+                          <button key={app.label} onClick={() => launchUpiApp(app.href)}>{app.label}</button>
                         ))}
                       </div>
-                      <button className="btn btn-secondary wide" type="button" onClick={() => launchUpiApp(upiIntent)}>
-                        Use device app chooser
-                      </button>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
               <div className="form-grid single">
-                <label>Name on card<input value={card.name} onChange={(event) => setCard((current) => ({ ...current, name: event.target.value }))} placeholder="Arjun Sharma" /></label>
-                <label>Card number<input inputMode="numeric" value={card.number} onChange={(event) => setCard((current) => ({ ...current, number: event.target.value }))} placeholder="4111 1111 1111 1111" /></label>
+                <input placeholder="Cardholder Name" value={card.name} onChange={e => setCard({...card, name: e.target.value})} />
+                <input placeholder="Card Number" value={card.number} onChange={e => setCard({...card, number: e.target.value})} />
                 <div className="form-grid">
-                  <label>Expiry<input value={card.expiry} onChange={(event) => setCard((current) => ({ ...current, expiry: event.target.value }))} placeholder="MM/YY" /></label>
-                  <label>CVV<input inputMode="numeric" value={card.cvv} onChange={(event) => setCard((current) => ({ ...current, cvv: event.target.value }))} placeholder="123" /></label>
+                  <input placeholder="MM/YY" value={card.expiry} onChange={e => setCard({...card, expiry: e.target.value})} />
+                  <input placeholder="CVV" value={card.cvv} onChange={e => setCard({...card, cvv: e.target.value})} />
                 </div>
-                <p className="secure-note">Card PIN/OTP authentication is handled by Razorpay and the issuer bank in the live payment window.</p>
-                <button className="btn btn-primary" type="button" onClick={startCardFlow} disabled={status === "checking"}>{status === "checking" ? "Processing payment..." : "Pay securely with Razorpay"}</button>
+                <button className="btn btn-primary" onClick={() => completePayment("card")} disabled={status === "checking"}>Pay Now</button>
               </div>
             )}
           </section>
-        <RegistrationSummary tournament={tournament} amount={amount} />
+          <RegistrationSummary tournament={tournament} amount={amount} />
         </div>
       )}
     </Page>
@@ -1220,105 +1064,66 @@ export function RegistrationReviewPage() {
   const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
   const payment = useMemo(() => readSavedPayment(tournament.slug), [tournament.slug]);
   const [backendRegistration, setBackendRegistration] = useState<BackendRegistration | null>(null);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!saved || loaded) return;
-    setLoaded(true);
-    apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`)
-      .then(setBackendRegistration)
-      .catch(() => setBackendRegistration(null));
-  }, [saved, loaded]);
+    if (saved) {
+      apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`)
+        .then(setBackendRegistration)
+        .catch(() => {});
+    }
+  }, [saved]);
 
   const finalTeamCode = backendRegistration?.team_code || saved?.teamCode || "";
   const confirmationCode = backendRegistration?.confirmation_code || (finalTeamCode ? `SS-${finalTeamCode}` : "");
-  const qrPayload = backendRegistration?.confirmation_qr_payload || JSON.stringify({
-    type: "SmartSportzTeamVerification",
-    registrationId: saved?.registrationId,
-    confirmationCode,
-    teamCode: finalTeamCode,
-    teamName: saved?.teamName,
-    tournamentSlug: tournament.slug,
-    tournamentName: tournament.name,
-    captainName: saved?.captainName,
-    city: saved?.city,
-    paymentReceipt: payment?.receiptNumber,
-    receiptNumber: payment?.receiptNumber,
-    verificationPath: saved ? `/registrations/${saved.registrationId}` : "",
-  });
+  const qrPayload = JSON.stringify({ registrationId: saved?.registrationId, teamCode: finalTeamCode, tournament: tournament.name });
 
   useEffect(() => {
-    if (!saved || !payment) return;
-    saveCompletedRegistration({
-      tournamentSlug: tournament.slug,
-      tournamentName: tournament.name,
-      registrationId: saved.registrationId,
-      confirmationCode,
-      qrPayload,
-      teamName: saved.teamName,
-      teamCode: finalTeamCode,
-      captainName: saved.captainName,
-      subCaptainName: saved.subCaptainName,
-      coachName: saved.coachName,
-      email: saved.email,
-      phone: saved.phone,
-      city: saved.city,
-      category: saved.category,
-      members: saved.members,
-      documents: saved.documents,
-      payment,
-      completedAt: new Date().toISOString(),
-    });
-  }, [saved, payment, tournament.slug, tournament.name, confirmationCode, qrPayload, finalTeamCode]);
+    if (saved && payment) {
+      saveCompletedRegistration({
+        tournamentSlug: tournament.slug,
+        tournamentName: tournament.name,
+        registrationId: saved.registrationId,
+        confirmationCode,
+        qrPayload,
+        teamName: saved.teamName,
+        teamCode: finalTeamCode,
+        captainName: saved.captainName,
+        subCaptainName: saved.subCaptainName,
+        coachName: saved.coachName,
+        email: saved.email,
+        phone: saved.phone,
+        city: saved.city,
+        category: saved.category,
+        members: saved.members,
+        documents: saved.documents,
+        payment,
+        completedAt: new Date().toISOString(),
+      });
+    }
+  }, [saved, payment, confirmationCode, finalTeamCode]);
 
   return (
     <RegistrationShell>
     <Page className="registration-reference-page">
       <section className="registration-hero-copy compact">
-        <p className="eyebrow">Confirmation</p>
-        <h1>Team Verification Pass</h1>
-        <p>Your QR code is generated after payment and can be used for check-in, manager verification, and document lookup.</p>
+        <h1>Registration Confirmed</h1>
       </section>
       <RegistrationStepper activeIndex={5} />
-      {!saved || !payment ? (
-        <section className="panel">
-          <h2>Payment confirmation required</h2>
-          <p>Please complete payment before opening the final review.</p>
-          <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register/payment`}>Back to payment</Link>
-        </section>
-      ) : (
+      {saved && payment && (
         <div className="confirmation-layout">
           <section className="verification-pass">
-            <div className="pass-head">
-              <ShieldCheck />
-              <span>SmartSportz Verification</span>
-            </div>
-            <QRCodeSVG value={qrPayload} size={210} level="M" includeMargin />
+            <QRCodeSVG value={qrPayload} size={200} />
             <h2>{confirmationCode}</h2>
-            <p>{saved.teamName} - {tournament.name}</p>
-            <div className="pass-actions">
-              <button className="btn btn-secondary" type="button"><Download size={16} />Download QR Pass</button>
-              <button className="btn btn-secondary" type="button" onClick={() => window.print()}><Printer size={16} />Print Confirmation</button>
-            </div>
+            <p>{saved.teamName}</p>
+            <button className="btn btn-secondary" onClick={() => window.print()}>Print Pass</button>
           </section>
           <section className="panel review-summary">
-            <span className="status emerald"><CheckCircle2 size={14} />Submitted for approval</span>
-            <h2>{saved.teamName}</h2>
             <div className="review-list">
-              <p><b>Registration ID</b><span>{saved.registrationId}</span></p>
               <p><b>Team Code</b><span>{finalTeamCode}</span></p>
               <p><b>Tournament</b><span>{tournament.name}</span></p>
               <p><b>Captain</b><span>{saved.captainName}</span></p>
-              <p><b>Sub-captain</b><span>{saved.subCaptainName}</span></p>
-              <p><b>Contact</b><span>{saved.email} / {saved.phone}</span></p>
-              <p><b>City</b><span>{saved.city}</span></p>
-              <p><b>Members</b><span>{saved.members.length}</span></p>
-              <p><b>Payment</b><span>{payment.receiptNumber}</span></p>
             </div>
-            <div className="registration-actions compact-actions">
-              <Link className="btn btn-primary" to="/user/registrations"><Users size={16} />Open my registrations</Link>
-              <Link className="btn btn-secondary" to={`/payments/${payment.id}/receipt`}><Trophy size={16} />View Receipt</Link>
-            </div>
+            <Link className="btn btn-primary" to="/user/registrations">View All Registrations</Link>
           </section>
         </div>
       )}
@@ -1332,103 +1137,39 @@ export function RegistrationPassPage() {
   const { token } = useAuth();
   const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
   const [completed, setCompleted] = useState(() => getCompletedRegistration(tournament.slug));
-  const [loadingCompleted, setLoadingCompleted] = useState(() => Boolean(token && !getCompletedRegistration(tournament.slug)));
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const stored = getCompletedRegistration(tournament.slug);
-    if (stored) {
-      setCompleted(stored);
-      setLoadingCompleted(false);
-      return;
+    if (!completed && token) {
+      setLoading(true);
+      apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`)
+        .then((reg) => {
+          const rec = completedRecordFromBackend(reg, tournament);
+          if (rec) { saveCompletedRegistration(rec); setCompleted(rec); }
+        })
+        .finally(() => setLoading(false));
     }
-    if (!token) {
-      setLoadingCompleted(false);
-      return;
-    }
-    setLoadingCompleted(true);
-    apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`)
-      .then((registration) => {
-        const record = completedRecordFromBackend(registration, tournament);
-        if (record) {
-          saveCompletedRegistration(record);
-          setCompleted(record);
-        }
-      })
-      .catch(() => setCompleted(null))
-      .finally(() => setLoadingCompleted(false));
   }, [token, tournament.slug]);
 
   return (
     <RegistrationShell>
       <Page className="registration-reference-page">
-        <section className="registration-hero-copy compact">
-          <p className="eyebrow">Already Registered</p>
-          <h1>Your Tournament Registration</h1>
-          <p>This page is read-only after successful payment. Team, payment, unique ID, and QR verification details cannot be edited.</p>
-        </section>
-        {loadingCompleted ? (
-          <section className="panel">
-            <h2>Loading registration pass</h2>
-            <p>Checking your completed payment and registration details.</p>
-          </section>
-        ) : !completed ? (
-          <section className="panel">
-            <h2>No completed registration found</h2>
-            <p>Complete registration and payment first to generate your read-only verification pass.</p>
-            <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Register team</Link>
-          </section>
-        ) : (
+        <h1>Team Pass</h1>
+        {completed ? (
           <div className="registration-pass-layout">
             <section className="verification-pass">
-              <div className="pass-head">
-                <ShieldCheck />
-                <span>Unique Team Pass</span>
-              </div>
-              <QRCodeSVG value={completed.qrPayload} size={220} level="M" includeMargin />
+              <QRCodeSVG value={completed.qrPayload} size={200} />
               <h2>{completed.confirmationCode}</h2>
-              <p>{completed.teamName} - {completed.tournamentName}</p>
-              <div className="pass-actions">
-                <button className="btn btn-secondary" type="button" onClick={() => window.print()}><Printer size={16} />Print pass</button>
-                <Link className="btn btn-secondary" to={`/payments/${completed.payment.id}/receipt`}><Download size={16} />View receipt</Link>
-              </div>
+              <p>{completed.teamName}</p>
             </section>
             <section className="panel review-summary">
-              <span className="status emerald">Registration locked</span>
-              <h2>{completed.teamName}</h2>
               <div className="review-list">
-                <p><b>Tournament</b><span>{completed.tournamentName}</span></p>
-                <p><b>Registration ID</b><span>{completed.registrationId}</span></p>
-                <p><b>Team Code</b><span>{completed.teamCode}</span></p>
                 <p><b>Captain</b><span>{completed.captainName}</span></p>
-                <p><b>Sub-captain</b><span>{completed.subCaptainName}</span></p>
-                <p><b>Coach</b><span>{completed.coachName || "Not assigned"}</span></p>
-                <p><b>City</b><span>{completed.city}</span></p>
-                <p><b>Category</b><span>{completed.category}</span></p>
-                <p><b>Payment</b><span>{completed.payment.receiptNumber} - {formatInr(completed.payment.amount)}</span></p>
-              </div>
-            </section>
-            <section className="panel registration-pass-wide">
-              <h2>Team Members</h2>
-              <div className="roster-list readonly-roster">
-                {completed.members.map((member, index) => (
-                  <p key={`${member}-${index}`}><b>{index + 1}</b><span>{member}</span>{index === 0 && <small>Captain</small>}{index === 1 && <small>Sub-captain</small>}</p>
-                ))}
-              </div>
-            </section>
-            <section className="panel registration-pass-wide">
-              <h2>Team Group Image</h2>
-              <div className="document-list">
-                {completed.documents.map((document) => (
-                  <div className="document-row readonly-document" key={document.documentType}>
-                    <FileText />
-                    <span><b>{document.documentType}</b><small>{document.fileName || "Uploaded team image"}</small></span>
-                    <strong>{document.status}</strong>
-                  </div>
-                ))}
+                <p><b>Status</b><span>Registration Locked</span></p>
               </div>
             </section>
           </div>
-        )}
+        ) : <p>No registration found.</p>}
       </Page>
     </RegistrationShell>
   );

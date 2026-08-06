@@ -142,13 +142,22 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
   const title = section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const [data, setData] = useState<UserDashboardData | null>(null);
   const [error, setError] = useState("");
+  
+  // State to track which tournament's members are being viewed
+  const [activeMemberRegId, setActiveMemberRegId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     setError("");
     apiRequest<UserDashboardData>("/user/dashboard", {}, token)
       .then((payload) => {
-        if (alive) setData(payload);
+        if (alive) {
+          setData(payload);
+          // Default to first registration if available for members section
+          if (payload.registrations.length > 0 && !activeMemberRegId) {
+            setActiveMemberRegId(payload.registrations[0].id);
+          }
+        }
       })
       .catch((caught) => {
         if (alive) setError(caught instanceof Error ? caught.message : "Could not load user data.");
@@ -162,6 +171,12 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
   const payments = data?.payments ?? [];
   const documents = data?.documents ?? [];
   const certificateRows = registrations.filter((item) => item.status === "approved" || item.status === "accepted");
+
+  // Filtering members based on the selected tournament registration container
+  const filteredMembers = (data?.members ?? []).filter(
+    (m) => !activeMemberRegId || m.registration_id === activeMemberRegId
+  );
+
   const rowsBySection: Record<keyof typeof userContent, Array<Array<React.ReactNode>>> = {
     profile: [[data?.profile.name ?? "Participant", data?.profile.email ?? "No email", data?.profile.role ?? "user"]],
     registrations: registrations.map((item) => [
@@ -178,7 +193,7 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
       <span className="status emerald">{item.status}</span>,
       <Link className="inline-link" to={`/payments/${item.id}/receipt`}>Receipt</Link>,
     ]),
-    members: (data?.members ?? []).map((item) => [
+    members: filteredMembers.map((item) => [
       item.name,
       item.role,
       item.contact || "-",
@@ -198,6 +213,7 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
     ]),
     settings: [[data?.profile.email ?? "No email", "Theme and session settings", <Link className="inline-link" to="/user/settings">Open settings</Link>]],
   };
+
   const columnsBySection: Record<keyof typeof userContent, string[]> = {
     profile: ["Name", "Email", "Role"],
     registrations: ["Tournament", "Team", "City", "Payment", "Action"],
@@ -208,6 +224,7 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
     documents: ["Document", "File", "Status"],
     settings: ["Account", "Preference", "Action"],
   };
+
   const sectionRows = rowsBySection[section];
 
   return (
@@ -216,10 +233,37 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
         {error && <div className="form-alert">{error}</div>}
         {!data ? (
           <section className="panel user-empty-state"><h2>Loading {title}</h2><p>Fetching your records from the database.</p></section>
-        ) : sectionRows.length === 0 ? (
+        ) : sectionRows.length === 0 && section !== "members" ? (
           <section className="panel user-empty-state"><h2>No {title.toLowerCase()} records</h2><p>This page will populate after your tournament registration data is saved in the database.</p><Link className="btn btn-primary" to="/tournaments">Open tournaments</Link></section>
         ) : (
-          <DataTable columns={columnsBySection[section]} rows={sectionRows} />
+          <>
+            {section === "members" && registrations.length > 0 && (
+              <div className="tournament-selector-tabs">
+                <p className="form-note">Select a tournament to view its specific roster:</p>
+                <div className="tab-container">
+                  {registrations.map((reg) => (
+                    <button 
+                      key={reg.id} 
+                      className={`tab-btn ${activeMemberRegId === reg.id ? "active" : ""}`}
+                      onClick={() => setActiveMemberRegId(reg.id)}
+                    >
+                      {reg.tournament_name} 
+                      <small>{reg.team_name}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {section === "members" && filteredMembers.length === 0 ? (
+               <section className="panel user-empty-state">
+                 <h2>No members found</h2>
+                 <p>No players are currently listed for the selected tournament registration.</p>
+               </section>
+            ) : (
+              <DataTable columns={columnsBySection[section]} rows={sectionRows} />
+            )}
+          </>
         )}
       </PortalShell>
     </Page>

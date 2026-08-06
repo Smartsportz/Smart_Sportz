@@ -181,43 +181,6 @@ export function GalleryPage() {
 
   useEffect(() => {
     let active = true;
-    apiRequest<Array<{
-      slug: string;
-      title: string;
-      sport: string;
-      city: string;
-      date_label: string;
-      month_label: string;
-      day_count: number;
-      cover: string;
-      summary: string;
-    }>>("/public/gallery/albums")
-      .then((remote) => {
-        if (!active || remote.length === 0) return;
-        setAlbumList(galleryAlbums.map((album) => {
-          const match = remote.find((item) => item.slug === album.slug);
-          if (!match) return album;
-          return {
-            ...album,
-            title: match.title,
-            city: match.city,
-            sport: match.sport,
-            date: match.date_label,
-            month: match.month_label,
-            days: `${match.day_count} tournament days`,
-            cover: match.cover,
-            summary: match.summary,
-          };
-        }));
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
     apiRequest<Record<string, { likes?: number; comments?: string[] }>>("/public/gallery/social")
       .then((remote) => {
         if (!active) return;
@@ -226,7 +189,7 @@ export function GalleryPage() {
           Object.entries(remote).forEach(([key, value]) => {
             merged[key] = {
               ...merged[key],
-              likes: value.likes,
+              likes: value.likes ?? 0,
               comments: value.comments ?? [],
             };
           });
@@ -246,6 +209,7 @@ export function GalleryPage() {
     const key = imageKey(album.slug, finalRound.id, finalImage.id);
     return { album, round: finalRound, image: finalImage, key };
   }), [albumList]);
+
   const selectedWinner = winnerItems.find((item) => item.key === selectedKey);
 
   useEffect(() => {
@@ -273,26 +237,27 @@ export function GalleryPage() {
   }
 
   function toggleGalleryLike(key: string) {
-    const current = social[key] ?? { likes: 24, comments: [] };
+    // Optimistic Update
+    const current = social[key] ?? { likes: 0, comments: [], liked: false };
     const liked = !current.liked;
     const next = {
       ...social,
       [key]: {
         ...current,
         liked,
-        likes: Math.max(0, (current.likes ?? 24) + (liked ? 1 : -1)),
+        likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)),
       },
     };
     persistGallerySocial(next);
+
     apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/like", {
       method: "POST",
       body: JSON.stringify({ image_key: key, liked }),
     }).then((remote) => {
-      setSocial((currentState) => {
-        const merged = { ...currentState, [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments } };
-        writeGalleryState(merged);
-        return merged;
-      });
+      setSocial((currentState) => ({
+        ...currentState,
+        [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments }
+      }));
     }).catch(() => undefined);
   }
 
@@ -300,57 +265,52 @@ export function GalleryPage() {
     event.preventDefault();
     if (!selectedWinner || !commentDraft.trim()) return;
     const key = selectedWinner.key;
-    const current = social[key] ?? { likes: 24, comments: [] };
+    const current = social[key] ?? { likes: 0, comments: [] };
     const comment = commentDraft.trim();
-    persistGallerySocial({ ...social, [key]: { ...current, comments: [...(current.comments ?? []), comment] } });
+
+    // Optimistic Update
+    persistGallerySocial({ 
+      ...social, 
+      [key]: { ...current, comments: [...(current.comments ?? []), comment] } 
+    });
     setCommentDraft("");
+
     apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/comment", {
       method: "POST",
       body: JSON.stringify({ image_key: key, comment }),
     }).then((remote) => {
-      setSocial((currentState) => {
-        const merged = { ...currentState, [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments } };
-        writeGalleryState(merged);
-        return merged;
-      });
+      setSocial((currentState) => ({
+        ...currentState,
+        [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments }
+      }));
     }).catch(() => undefined);
   }
 
   async function shareGalleryWinner(item: typeof winnerItems[number]) {
     const url = `${window.location.origin}${window.location.pathname}?image=${encodeURIComponent(item.key)}`;
-    const imageUrl = new URL(item.image.image, window.location.origin).toString();
-    const sharePayload = {
-      title: item.image.title,
-      text: `${item.image.title} - ${item.album.title}. Image: ${imageUrl}`,
-      url,
-    };
     if (navigator.share) {
-      await navigator.share(sharePayload);
-      return;
+      await navigator.share({ title: item.image.title, url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      window.alert("Link copied.");
     }
-    await navigator.clipboard.writeText(`${sharePayload.text}\n${url}`);
-    window.alert("Gallery image link copied.");
   }
 
   return (
     <Page className="gallery-page">
       <section className="gallery-section gallery-section-first">
-        <div className="gallery-simple-title">
-          <h1>Gallery</h1>
-        </div>
+        <div className="gallery-simple-title"><h1>Gallery</h1></div>
         <div className="gallery-feed-grid wheel-horizontal">
           {winnerItems.map((winner) => {
-            const state = social[winner.key] ?? { likes: 24, comments: [] };
+            const state = social[winner.key] ?? { likes: 0, comments: [] };
             return (
               <article className="gallery-feed-card" key={winner.key}>
                 <button className="gallery-image-open" type="button" onClick={() => openWinner(winner.key)}>
-                  <div className="gallery-winner-media">
-                    <img src={winner.image.image} alt="" />
-                  </div>
+                  <div className="gallery-winner-media"><img src={winner.image.image} alt="" /></div>
                   <h3>{winner.image.title}</h3>
                 </button>
                 <div className="gallery-social-row">
-                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleGalleryLike(winner.key)}><Heart size={15} />{state.likes ?? 24}</button>
+                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleGalleryLike(winner.key)}><Heart size={15} />{state.likes ?? 0}</button>
                   <button type="button" onClick={() => openWinner(winner.key)}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
                   <button type="button" onClick={() => void shareGalleryWinner(winner)}><Share2 size={15} />Share</button>
                 </div>
@@ -360,59 +320,31 @@ export function GalleryPage() {
         </div>
       </section>
 
-      <section className="gallery-section" hidden aria-hidden="true">
-        <div className="section-title gallery-future-title">
-          <div>
-            <p className="eyebrow">Future Events</p>
-            <h2>Upcoming media queues</h2>
-          </div>
-          <p>Future event galleries appear here after tournament completion, manager review, and media publish.</p>
-        </div>
-        <div className="gallery-future-list">
-          {futureEvents.map((item) => (
-            <Link className="gallery-future-card" to={`/tournaments/${item.slug}`} key={item.slug}>
-              <img src={item.image} alt="" />
-              <div>
-                <span className={`status ${item.accent}`}>{item.status}</span>
-                <h3>{item.name}</h3>
-                <p><Trophy size={14} /> {item.sport} - {item.location} - {item.date}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
       {selectedWinner && (
-        <div className="gallery-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${selectedWinner.image.title} gallery detail`}>
+        <div className="gallery-modal-backdrop" role="dialog" aria-modal="true">
           <article className={`gallery-modal-card gallery-home-modal ${modalFlipped ? "flipped" : ""}`}>
-            <button className="gallery-modal-close" type="button" onClick={closeWinner} aria-label="Close image detail"><X size={18} /></button>
-            <button className="gallery-modal-flipper" type="button" onClick={() => setModalFlipped((current) => !current)} aria-label="Flip gallery image detail">
+            <button className="gallery-modal-close" type="button" onClick={closeWinner}><X size={18} /></button>
+            <button className="gallery-modal-flipper" type="button" onClick={() => setModalFlipped((current) => !current)}>
               <div className="gallery-modal-face gallery-modal-front">
                 <img src={selectedWinner.image.image} alt="" />
-                <div>
-                  <span className="status emerald">{selectedWinner.round.name}</span>
-                  <h2>{selectedWinner.image.title}</h2>
-                  <p>{selectedWinner.image.caption}</p>
-                </div>
+                <div><span className="status emerald">{selectedWinner.round.name}</span><h2>{selectedWinner.image.title}</h2><p>{selectedWinner.image.caption}</p></div>
               </div>
               <div className="gallery-modal-face gallery-modal-back">
-                <span className="status emerald">{selectedWinner.album.sport}</span>
-                <h2>{selectedWinner.image.title}</h2>
-                <p>{selectedWinner.image.description}</p>
-                <small>{selectedWinner.album.title} - {selectedWinner.album.city} - {selectedWinner.album.date}</small>
+                <span className="status emerald">{selectedWinner.album.sport}</span><h2>{selectedWinner.image.title}</h2><p>{selectedWinner.image.description}</p>
+                <small>{selectedWinner.album.title} - {selectedWinner.album.city}</small>
               </div>
             </button>
             <div className="gallery-modal-actions">
-              <button type="button" className={social[selectedWinner.key]?.liked ? "active" : ""} onClick={() => toggleGalleryLike(selectedWinner.key)}><Heart size={16} />{social[selectedWinner.key]?.likes ?? 24}</button>
-              <button type="button" onClick={() => void shareGalleryWinner(selectedWinner)}><Share2 size={16} />Share image</button>
+              <button type="button" className={social[selectedWinner.key]?.liked ? "active" : ""} onClick={() => toggleGalleryLike(selectedWinner.key)}><Heart size={16} />{social[selectedWinner.key]?.likes ?? 0}</button>
+              <button type="button" onClick={() => void shareGalleryWinner(selectedWinner)}><Share2 size={16} />Share</button>
             </div>
             <form className="gallery-comment-form" onSubmit={addGalleryComment}>
-              <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a comment for this winner image..." />
-              <button type="submit"><Send size={16} />Post</button>
+              <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Comment..." />
+              <button type="submit"><Send size={16} /></button>
             </form>
             <div className="gallery-comment-list">
               {(social[selectedWinner.key]?.comments ?? []).map((comment, index) => (
-                <p key={`${comment}-${index}`}><b>Fan {index + 1}</b><span>{comment}</span></p>
+                <p key={index}><b>Fan</b> <span>{comment}</span></p>
               ))}
             </div>
           </article>
@@ -440,198 +372,102 @@ export function GalleryAlbumPage() {
         setSocial((current) => {
           const merged: GallerySocialState = { ...current };
           Object.entries(remote).forEach(([key, value]) => {
-            merged[key] = {
-              ...merged[key],
-              likes: value.likes,
-              comments: value.comments ?? [],
-            };
+            merged[key] = { ...merged[key], likes: value.likes ?? 0, comments: value.comments ?? [] };
           });
           writeGalleryState(merged);
           return merged;
         });
       })
       .catch(() => undefined);
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
     if (!album) return;
-    const nextRound = params.get("round") || album.rounds[0]?.id || "";
-    const nextImage = params.get("image") || "";
-    setActiveRoundId(nextRound);
-    setSelectedImageId(nextImage);
-    setFlipped(Boolean(nextImage));
+    setActiveRoundId(params.get("round") || album.rounds[0]?.id || "");
+    setSelectedImageId(params.get("image") || "");
+    setFlipped(Boolean(params.get("image")));
   }, [album, params]);
 
-  if (!album) {
-    return <Navigate to="/gallery" replace />;
-  }
+  if (!album) return <Navigate to="/gallery" replace />;
 
-  const currentAlbum = album;
-  const activeRound = currentAlbum.rounds.find((round) => round.id === activeRoundId) ?? currentAlbum.rounds[0];
+  const activeRound = album.rounds.find((round) => round.id === activeRoundId) ?? album.rounds[0];
   const selectedImage = activeRound?.images.find((image) => image.id === selectedImageId);
 
-  function persistSocial(next: typeof social) {
+  function toggleLike(roundId: string, imageId: string) {
+    const key = imageKey(album!.slug, roundId, imageId);
+    const current = social[key] ?? { likes: 0, comments: [], liked: false };
+    const liked = !current.liked;
+    
+    // Optimistic Update
+    const next = { ...social, [key]: { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) } };
     setSocial(next);
     writeGalleryState(next);
-  }
 
-  function openImage(roundId: string, imageId: string) {
-    setParams({ round: roundId, image: imageId });
-    setSelectedImageId(imageId);
-    setFlipped(true);
-  }
-
-  function closeImage() {
-    setSelectedImageId("");
-    setFlipped(false);
-    setParams({ round: activeRound.id });
-  }
-
-  function toggleLike(roundId: string, imageId: string) {
-    const key = imageKey(currentAlbum.slug, roundId, imageId);
-    const current = social[key] ?? { likes: 24, comments: [] };
-    const liked = !current.liked;
-    const next = {
-      ...social,
-      [key]: {
-        ...current,
-        liked,
-        likes: Math.max(0, (current.likes ?? 24) + (liked ? 1 : -1)),
-      },
-    };
-    persistSocial(next);
-    apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/like", {
+    apiRequest<{ likes: number; comments: string[] }>("/public/gallery/social/like", {
       method: "POST",
       body: JSON.stringify({ image_key: key, liked }),
-    })
-      .then((remote) => {
-        setSocial((currentState) => {
-          const merged = {
-            ...currentState,
-            [key]: {
-              ...currentState[key],
-              likes: remote.likes,
-              comments: remote.comments,
-            },
-          };
-          writeGalleryState(merged);
-          return merged;
-        });
-      })
-      .catch(() => undefined);
+    }).then((remote) => {
+      setSocial((prev) => ({ ...prev, [key]: { ...prev[key], likes: remote.likes, comments: remote.comments } }));
+    }).catch(() => undefined);
   }
 
   function addComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedImage || !commentDraft.trim()) return;
-    const key = imageKey(currentAlbum.slug, activeRound.id, selectedImage.id);
-    const current = social[key] ?? { likes: 24, comments: [] };
+    const key = imageKey(album!.slug, activeRound.id, selectedImage.id);
     const comment = commentDraft.trim();
-    persistSocial({
-      ...social,
-      [key]: { ...current, comments: [...(current.comments ?? []), comment] },
-    });
+
+    // Optimistic Update
+    const prev = social[key] ?? { likes: 0, comments: [] };
+    const next = { ...social, [key]: { ...prev, comments: [...(prev.comments ?? []), comment] } };
+    setSocial(next);
+    writeGalleryState(next);
     setCommentDraft("");
-    apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/comment", {
+
+    apiRequest<{ likes: number; comments: string[] }>("/public/gallery/social/comment", {
       method: "POST",
       body: JSON.stringify({ image_key: key, comment }),
-    })
-      .then((remote) => {
-        setSocial((currentState) => {
-          const merged = {
-            ...currentState,
-            [key]: {
-              ...currentState[key],
-              likes: remote.likes,
-              comments: remote.comments,
-            },
-          };
-          writeGalleryState(merged);
-          return merged;
-        });
-      })
-      .catch(() => undefined);
-  }
-
-  async function shareImage(roundId: string, image: GalleryImage) {
-    const url = `${window.location.origin}${window.location.pathname}?round=${roundId}&image=${image.id}`;
-    const sharePayload = {
-      title: image.title,
-      text: `${image.title} - ${image.caption}`,
-      url,
-    };
-    if (navigator.share) {
-      await navigator.share(sharePayload);
-      return;
-    }
-    await navigator.clipboard.writeText(url);
-    window.alert("Image link copied. Share it in any app.");
+    }).then((remote) => {
+      setSocial((prev) => ({ ...prev, [key]: { ...prev[key], likes: remote.likes, comments: remote.comments } }));
+    }).catch(() => undefined);
   }
 
   return (
     <Page className="gallery-page gallery-detail-page">
       <section className="gallery-detail-hero">
-        <img src={currentAlbum.cover} alt="" />
+        <img src={album.cover} alt="" />
         <div>
-          <Link className="inline-link" to="/gallery">Back to gallery</Link>
-          <p className="eyebrow">{currentAlbum.sport} Album</p>
-          <h1>{currentAlbum.title}</h1>
-          <p>{currentAlbum.summary}</p>
-          <small>{currentAlbum.days} <span /> <CalendarDays size={14} /> {currentAlbum.date}</small>
+          <Link className="inline-link" to="/gallery">Back</Link>
+          <h1>{album.title}</h1>
+          <p>{album.summary}</p>
         </div>
       </section>
 
       <section className="gallery-section">
-        <div className="section-title row-title gallery-title-row">
-          <div>
-            <p className="eyebrow">Tournament Rounds</p>
-            <h2>Select a round</h2>
-            <p>Each round opens its verified photo group. Open a photo card to flip it into a large detail view.</p>
-          </div>
-          <Link className="inline-link" to={`/tournaments/${currentAlbum.slug}`}>Open tournament</Link>
-        </div>
         <div className="gallery-round-grid">
-          {currentAlbum.rounds.map((round) => (
+          {album.rounds.map((round) => (
             <button className={`gallery-round-card ${round.id === activeRound.id ? "active" : ""}`} type="button" onClick={() => setParams({ round: round.id })} key={round.id}>
-              <span>{round.day}</span>
-              <h3>{round.name}</h3>
-              <p>{round.summary}</p>
-              <small>{round.date}</small>
-              <strong>{round.scoreline}</strong>
+              <h3>{round.name}</h3><small>{round.date}</small>
             </button>
           ))}
         </div>
       </section>
 
       <section className="gallery-section">
-        <div className="section-title row-title gallery-title-row">
-          <div>
-            <p className="eyebrow">Round Images</p>
-            <h2>{activeRound.name}</h2>
-            <p>{activeRound.summary}</p>
-          </div>
-        </div>
         <div className="gallery-image-grid interactive-gallery-grid">
-          {activeRound.images.map((item, index) => {
-            const key = imageKey(currentAlbum.slug, activeRound.id, item.id);
-            const state = social[key] ?? { likes: 24 + index * 3, comments: [] };
+          {activeRound.images.map((item) => {
+            const key = imageKey(album.slug, activeRound.id, item.id);
+            const state = social[key] ?? { likes: 0, comments: [] };
             return (
-              <article className="gallery-image-card gallery-flip-card" key={item.id}>
-                <button className="gallery-image-open" type="button" onClick={() => openImage(activeRound.id, item.id)}>
+              <article className="gallery-image-card" key={item.id}>
+                <button className="gallery-image-open" type="button" onClick={() => { setParams({ round: activeRound.id, image: item.id }); setFlipped(true); }}>
                   <img src={item.image} alt="" />
-                  <div>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <h3>{item.title}</h3>
-                    <p>{item.caption}</p>
-                  </div>
+                  <div><h3>{item.title}</h3><p>{item.caption}</p></div>
                 </button>
                 <div className="gallery-social-row">
-                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleLike(activeRound.id, item.id)}><Heart size={15} />{state.likes ?? 24}</button>
-                  <button type="button" onClick={() => openImage(activeRound.id, item.id)}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
-                  <button type="button" onClick={() => void shareImage(activeRound.id, item)}><Share2 size={15} />Share</button>
+                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleLike(activeRound.id, item.id)}><Heart size={15} />{state.likes ?? 0}</button>
+                  <button type="button" onClick={() => { setParams({ round: activeRound.id, image: item.id }); setFlipped(true); }}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
                 </div>
               </article>
             );
@@ -640,39 +476,25 @@ export function GalleryAlbumPage() {
       </section>
 
       {selectedImage && (
-        <div className="gallery-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${selectedImage.title} image detail`}>
+        <div className="gallery-modal-backdrop" role="dialog" aria-modal="true">
           <article className={`gallery-modal-card ${flipped ? "flipped" : ""}`}>
-            <button className="gallery-modal-close" type="button" onClick={closeImage} aria-label="Close image detail"><X size={18} /></button>
-            <button className="gallery-modal-flipper" type="button" onClick={() => setFlipped((value) => !value)}>
+            <button className="gallery-modal-close" type="button" onClick={() => { setParams({ round: activeRound.id }); setSelectedImageId(""); }}><X size={18} /></button>
+            <button className="gallery-modal-flipper" type="button" onClick={() => setFlipped(!flipped)}>
               <div className="gallery-modal-face gallery-modal-front">
                 <img src={selectedImage.image} alt="" />
-                <div>
-                  <span className="status emerald">{activeRound.name}</span>
-                  <h2>{selectedImage.title}</h2>
-                  <p>{selectedImage.caption}</p>
-                </div>
+                <div><h2>{selectedImage.title}</h2><p>{selectedImage.caption}</p></div>
               </div>
               <div className="gallery-modal-face gallery-modal-back">
-                <span className="status blue">Image Description</span>
-                <h2>{selectedImage.title}</h2>
-                <p>{selectedImage.description}</p>
-                <small>Photographer: {selectedImage.photographer}</small>
-                <small>Direct link opens this exact image card.</small>
+                <h2>{selectedImage.title}</h2><p>{selectedImage.description}</p>
               </div>
             </button>
             <div className="gallery-modal-actions">
-              <button type="button" className={social[imageKey(currentAlbum.slug, activeRound.id, selectedImage.id)]?.liked ? "active" : ""} onClick={() => toggleLike(activeRound.id, selectedImage.id)}><Heart size={16} />{social[imageKey(currentAlbum.slug, activeRound.id, selectedImage.id)]?.likes ?? 24}</button>
-              <button type="button" onClick={() => void shareImage(activeRound.id, selectedImage)}><Share2 size={16} />Share this image</button>
+              <button type="button" className={social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.liked ? "active" : ""} onClick={() => toggleLike(activeRound.id, selectedImage.id)}><Heart size={16} />{social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.likes ?? 0}</button>
             </div>
             <form className="gallery-comment-form" onSubmit={addComment}>
-              <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a comment for this image..." />
-              <button type="submit"><Send size={16} />Post</button>
+              <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} placeholder="Comment..." />
+              <button type="submit"><Send size={16} /></button>
             </form>
-            <div className="gallery-comment-list">
-              {(social[imageKey(currentAlbum.slug, activeRound.id, selectedImage.id)]?.comments ?? []).map((comment, index) => (
-                <p key={`${comment}-${index}`}><b>Fan {index + 1}</b><span>{comment}</span></p>
-              ))}
-            </div>
           </article>
         </div>
       )}

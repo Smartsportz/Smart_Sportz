@@ -134,10 +134,40 @@ const sportStoryCopy: Record<string, { title: string; date: string; sponsor: str
   },
 };
 
+function useAutoScroll(el: HTMLElement | null, isHovered: boolean, speed = 1) {
+  useEffect(() => {
+    if (!el || isHovered) return;
+    
+    let animationId: number;
+    let lastTimestamp = 0;
+
+    const loop = (timestamp: number) => {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const delta = timestamp - lastTimestamp;
+      
+      // Move approximately based on speed every frame
+      if (delta > 16) {
+        el.scrollLeft += speed;
+        lastTimestamp = timestamp;
+      }
+
+      // Loop back to start if reached the end
+      if (el.scrollLeft >= el.scrollWidth - el.clientWidth - 1) {
+        el.scrollLeft = 0;
+      }
+
+      animationId = requestAnimationFrame(loop);
+    };
+    
+    animationId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animationId);
+  }, [el, isHovered, speed]);
+}
+
 export function HomePage() {
   useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
-  const discoveryQueueRef = useRef<HTMLDivElement>(null);
+  const [discoveryEl, setDiscoveryEl] = useState<HTMLDivElement | null>(null);
   const sponsorQueueRef = useRef<HTMLDivElement>(null);
   const leaderboardFilterRef = useRef<HTMLDivElement>(null);
   const upcomingTournamentsRef = useRef<HTMLDivElement>(null);
@@ -145,12 +175,9 @@ export function HomePage() {
   const liveTournamentsRef = useRef<HTMLDivElement>(null);
   const oldTournamentsRef = useRef<HTMLDivElement>(null);
   const newsRef = useRef<HTMLDivElement>(null);
-  const organizerRef = useRef<HTMLDivElement>(null);
-  const organizerCardRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [organizerEl, setOrganizerEl] = useState<HTMLDivElement | null>(null);
   const [organizerIndex, setOrganizerIndex] = useState(0);
   const [isOrganizerHovered, setIsOrganizerHovered] = useState(false);
-  const [discoveryIndex, setDiscoveryIndex] = useState(0);
-  const discoveryCardRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const [isDiscoveryHovered, setIsDiscoveryHovered] = useState(false);
   const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
   const [homeContent, setHomeContent] = useState<{
@@ -158,6 +185,7 @@ export function HomePage() {
     liveHighlight?: Record<string, any> | null;
     sponsorLogos?: Array<Record<string, any>>;
   }>({});
+
   const runtimeTournaments = tournaments.map((item) => withRuntimeTournamentStatus(item));
   const featuredGroups = [
     {
@@ -190,13 +218,17 @@ export function HomePage() {
       items: runtimeTournaments.filter((item) => item.status === "Completed"),
     },
   ].filter((group) => group.items.length > 0);
+
   const visibleFeaturedGroups = featuredGroups.filter((group) => ["featured", "upcoming"].includes(group.key));
+
   const homeSports = sportHomeVisibility
     .filter((item) => item.showOnHome)
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((visibility) => sports.find((sport) => sport.slug === visibility.sportSlug))
     .filter(Boolean) as typeof sports;
+
   const oldMatchNews = newsPosts.filter((item) => item.category === "Winner Teams").slice(0, 3);
+
   const discoveryCards = homeContent.discoveryCards?.length ? homeContent.discoveryCards : homeSports.map((sport) => {
     const story = sportStoryCopy[sport.slug] ?? sportStoryCopy.cricket;
     return {
@@ -208,13 +240,17 @@ export function HomePage() {
       image: sportStoryImages[sport.slug] ?? assets.cricket,
     };
   });
-  const discoveryQueue = discoveryCards;
+
+  // Doubling cards to ensure smooth infinite scroll
+  const discoveryQueue = discoveryCards.length > 1 ? [...discoveryCards, ...discoveryCards] : discoveryCards;
+
   const sponsorLogos = homeContent.sponsorLogos?.length ? homeContent.sponsorLogos : [
     { slug: "smartsportz", name: "SmartSportz", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/" },
     { slug: "brillaris", name: "Brillaris", image: "https://brillaris.pro/assets/img/Logo1.png", link_url: "https://brillaris.pro" },
     { slug: "machaxi", name: "Machaxi", image: "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp", link_url: "https://machaxi.com" },
   ];
   const sponsorQueue = sponsorLogos.length > 1 ? [...sponsorLogos, ...sponsorLogos] : sponsorLogos;
+
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
   const organizerTools = [
     "Online Registration",
@@ -226,56 +262,20 @@ export function HomePage() {
     "Anti-Fraud Engine",
     "E-Certificates",
   ];
+
   const selectedLeaders = useMemo(
     () => leaderboardRecords.filter((record) => record.sport === leaderboardSport).sort((a, b) => a.rank - b.rank),
     [leaderboardSport],
   );
-  const moveOrganizer = (direction: "left" | "right") => {
-    setOrganizerIndex((current) => {
-      const next = direction === "left"
-        ? (current - 1 + organizerTools.length) % organizerTools.length
-        : (current + 1) % organizerTools.length;
-      return next;
-    });
-  };
 
-  const moveDiscovery = (direction: "left" | "right") => {
-    setDiscoveryIndex((current) => {
-      const next = direction === "left"
-        ? (current - 1 + discoveryQueue.length) % discoveryQueue.length
-        : (current + 1) % discoveryQueue.length;
-      return next;
-    });
-  };
-
-  const scrollQueue = (ref: RefObject<HTMLDivElement | null>, direction: "left" | "right") => {
-    const element = ref.current;
+  const scrollQueue = (element: HTMLDivElement | null, direction: "left" | "right") => {
     if (!element) return;
-    const amount = Math.max(260, Math.floor(element.clientWidth * 0.72));
+    const amount = Math.max(300, Math.floor(element.clientWidth * 0.8));
     element.scrollBy({ left: direction === "left" ? -amount : amount, behavior: "smooth" });
   };
 
-  useEffect(() => {
-    if (isOrganizerHovered) return;
-    const timer = window.setInterval(() => moveOrganizer("right"), 3200);
-    return () => window.clearInterval(timer);
-  }, [organizerTools.length, isOrganizerHovered]);
-
-  useEffect(() => {
-    if (isDiscoveryHovered) return;
-    const timer = window.setInterval(() => moveDiscovery("right"), 3200);
-    return () => window.clearInterval(timer);
-  }, [discoveryQueue.length, isDiscoveryHovered]);
-
-  useEffect(() => {
-    const container = discoveryQueueRef.current;
-    const card = discoveryCardRefs.current[discoveryIndex];
-    if (!container || !card) return;
-    container.scrollTo({
-      left: card.offsetLeft - (container.clientWidth - card.clientWidth) / 2,
-      behavior: "smooth",
-    });
-  }, [discoveryIndex]);
+  useAutoScroll(organizerEl, isOrganizerHovered, 1);
+  useAutoScroll(discoveryEl, isDiscoveryHovered, 1.2);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("screenshot") === "1") return;
@@ -307,16 +307,6 @@ export function HomePage() {
       .catch(() => setHomeContent({}));
   }, []);
 
-  useEffect(() => {
-    const container = organizerRef.current;
-    const card = organizerCardRefs.current[organizerIndex];
-    if (!container || !card) return;
-    container.scrollTo({
-      left: card.offsetLeft - (container.clientWidth - card.clientWidth) / 2,
-      behavior: "smooth",
-    });
-  }, [organizerIndex]);
-
   return (
     <Page className="home-reference-page">
       {activeNotice && (
@@ -333,6 +323,7 @@ export function HomePage() {
           </article>
         </div>
       )}
+
       <section className="reference-hero">
         <video className="reference-hero-video" autoPlay muted loop playsInline preload="auto">
           <source src={`${import.meta.env.BASE_URL}media/hero-video-short.mp4`} type="video/mp4" />
@@ -360,6 +351,7 @@ export function HomePage() {
           </motion.div>
         </motion.div>
       </section>
+
       <section className="hero-below-panel" aria-label="Live tournament scores">
         <div className="hero-score-strip">
           {[
@@ -375,6 +367,7 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
       <section className="trusted-section">
         <SectionTitle title="Trusted by the Sports Community" />
         <div className="trusted-grid">
@@ -398,6 +391,7 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
       <section className="section">
         <div className="section-title row-title">
           <div>
@@ -409,28 +403,27 @@ export function HomePage() {
         </div>
         <div className="queue-shell discovery-queue-shell" onMouseEnter={() => setIsDiscoveryHovered(true)} onMouseLeave={() => setIsDiscoveryHovered(false)}>
           <div className="queue-controls left">
-            <button type="button" aria-label="Scroll sports left" onClick={() => moveDiscovery("left")}>‹</button>
+            <button type="button" aria-label="Scroll sports left" onClick={() => scrollQueue(discoveryEl, "left")}>‹</button>
           </div>
           <div className="queue-controls right">
-            <button type="button" aria-label="Scroll sports right" onClick={() => moveDiscovery("right")}>›</button>
+            <button type="button" aria-label="Scroll sports right" onClick={() => scrollQueue(discoveryEl, "right")}>›</button>
           </div>
-          <div className="queue-track discovery-queue-track wheel-horizontal" ref={discoveryQueueRef}>
-          {discoveryQueue.map((card, index) => {
-            return (
-              <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`} ref={(el) => { discoveryCardRefs.current[index] = el; }}>
-                <img src={assetUrl(card.image || assets.cricket)} alt="" />
-                <div className="sport-home-card-body">
-                  <span className="status emerald">{card.label}</span>
-                  <h3>{card.title}</h3>
-                  <p><MapPin size={14} /> {card.sponsor_name}</p>
-                  <small>{card.event_date}</small>
-                </div>
-              </Link>
-            );
-          })}
+          <div className="queue-track discovery-queue-track wheel-horizontal" ref={setDiscoveryEl}>
+          {discoveryQueue.map((card, index) => (
+            <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
+              <img src={assetUrl(card.image || assets.cricket)} alt="" />
+              <div className="sport-home-card-body">
+                <span className="status emerald">{card.label}</span>
+                <h3>{card.title}</h3>
+                <p><MapPin size={14} /> {card.sponsor_name}</p>
+                <small>{card.event_date}</small>
+              </div>
+            </Link>
+          ))}
           </div>
         </div>
       </section>
+
       <section className="section">
         <div className="section-title row-title">
           <div>
@@ -460,6 +453,7 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
       <section className="section lifecycle-section">
         <SectionTitle title="The Tournament Lifecycle" text="A connected flow from registration to certificates." />
         <div className="lifecycle-row">
@@ -471,6 +465,7 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
       <section className="section split live-analytics-section">
         <motion.div className="live-video-card" {...fade}>
           <img src={homeContent.liveHighlight?.image || assets.football} alt="Live analytics match" />
@@ -495,25 +490,26 @@ export function HomePage() {
           </div>
         </motion.div>
       </section>
+
       <section className="section">
         <div className="section-title row-title">
           <div>
             <h2>Empowering Tournament Organizers</h2>
             <p>All-in-one suite of professional tools to run world-class sports competitions.</p>
-          </div>        </div>
+          </div>
+        </div>
         <div className="queue-shell organizer-shell" onMouseEnter={() => setIsOrganizerHovered(true)} onMouseLeave={() => setIsOrganizerHovered(false)}>
           <div className="queue-controls left">
-            <button type="button" aria-label="Scroll organizer tools left" onClick={() => moveOrganizer("left")}>‹</button>
+            <button type="button" aria-label="Scroll organizer tools left" onClick={() => scrollQueue(organizerEl, "left")}>‹</button>
           </div>
           <div className="queue-controls right">
-            <button type="button" aria-label="Scroll organizer tools right" onClick={() => moveOrganizer("right")}>›</button>
+            <button type="button" aria-label="Scroll organizer tools right" onClick={() => scrollQueue(organizerEl, "right")}>›</button>
           </div>
-          <div className="queue-track organizer-grid wheel-horizontal" ref={organizerRef}>
+          <div className="queue-track organizer-grid wheel-horizontal" ref={setOrganizerEl}>
           {[...organizerTools, ...organizerTools].map((tool, index) => (
             <div
               className={`panel organizer-card ${index === organizerIndex ? "is-active" : ""}`}
               key={`${tool}-${index}`}
-              ref={(element) => { organizerCardRefs.current[index] = element; }}
             >
               <ShieldCheck size={18} /><h3>{tool}</h3><p>Premium workflow controls for secure tournament operations.</p>
             </div>
@@ -521,6 +517,7 @@ export function HomePage() {
         </div>
         </div>
       </section>
+
       <section className="section">
         <div className="section-title row-title">
           <div>
@@ -549,34 +546,7 @@ export function HomePage() {
         </div>
         </div>
       </section>
-      <section className="section" id="home-leaderboards" hidden aria-hidden="true">
-        <div className="section-title row-title">
-          <div>
-            <p className="eyebrow">Rankings</p>
-            <h2>Sport Leaderboards</h2>
-            <p>Select any sport category here and inspect records by rank without leaving the homepage.</p>
-          </div>
-        </div>
-        <div className="leaderboard-filter-shell">
-          <div className="leaderboard-filter wheel-horizontal home-leaderboard-filter" ref={leaderboardFilterRef}>
-            {sports.map((sport) => (
-              <button className={sport.name === leaderboardSport ? "active" : ""} type="button" onClick={() => setLeaderboardSport(sport.name)} key={sport.slug}>{sport.name}</button>
-            ))}
-          </div>
-        </div>
-        <div className="leaderboard-preview panel">
-          {selectedLeaders.map((record) => (
-            <div className="leaderboard-preview-row" key={record.teamName}>
-              <span>{String(record.rank).padStart(2, "0")}</span>
-              <b>{record.teamName}</b>
-              <small><MapPin size={13} />{record.city}</small>
-              <em>{record.winRate}%</em>
-              <strong>{record.points.toLocaleString("en-IN")}</strong>
-              <i>{record.recordLabel}</i>
-            </div>
-          ))}
-        </div>
-      </section>
+
       <section className="section split">
         <motion.div {...fade}>
           <SectionTitle eyebrow="Platform Capability" title="Complete enterprise operations" text="Public website, participant portal, management portal, super admin, live score engine, CMS, reports, payments, and notifications are structured in one frontend." />
@@ -608,14 +578,15 @@ export function HomePage() {
           </div>
         </motion.div>
       </section>
+
       <section className="section sponsor-logo-section">
         <SectionTitle eyebrow="Partner Network" title="Sponsor Companies" text="Official platform, technology, experience, and archive partners connected to Smart Sportz." />
         <div className="queue-shell sponsor-logo-shell">
           <div className="queue-controls left">
-            <button type="button" aria-label="Scroll sponsor logos left" onClick={() => scrollQueue(sponsorQueueRef, "left")}>‹</button>
+            <button type="button" aria-label="Scroll sponsor logos left" onClick={() => scrollQueue(sponsorQueueRef.current, "left")}>‹</button>
           </div>
           <div className="queue-controls right">
-            <button type="button" aria-label="Scroll sponsor logos right" onClick={() => scrollQueue(sponsorQueueRef, "right")}>›</button>
+            <button type="button" aria-label="Scroll sponsor logos right" onClick={() => scrollQueue(sponsorQueueRef.current, "right")}>›</button>
           </div>
           <div className="queue-track sponsor-logo-grid wheel-horizontal" ref={sponsorQueueRef}>
           {sponsorQueue.map((sponsor, index) => (
@@ -629,4 +600,3 @@ export function HomePage() {
     </Page>
   );
 }
-

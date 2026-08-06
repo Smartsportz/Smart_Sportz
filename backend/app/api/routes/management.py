@@ -162,7 +162,7 @@ def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
         return {
             "assignedCities": cities,
             "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", tuple(tournament_params)),
-            "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval'){registration_filter}", cities),
+            "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval', 'waiting'){registration_filter}", cities),
             "liveMatches": rows("SELECT * FROM live_matches"),
         }
 
@@ -528,8 +528,6 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
            ORDER BY created_at""",
         (tournament_slug,),
     )
-    if not accepted:
-        accepted = rows("SELECT slug AS id, name, sport AS captain_name, 'Accepted' AS status FROM teams ORDER BY rating DESC LIMIT 8")
     return ok({
         "acceptedTeams": accepted,
         "nodes": rows("SELECT id, label, team, round, x, y, status, bucket, scheduled_at FROM bracket_nodes WHERE tournament_slug = ? ORDER BY bucket, x, y", (tournament_slug,)),

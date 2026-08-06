@@ -62,6 +62,15 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
         raise HTTPException(status_code=404, detail="Tournament not found")
     if not registration_is_open(tournament):
         raise HTTPException(status_code=409, detail="Registration is not open for this tournament")
+    registration_count = row(
+        """
+        SELECT COUNT(*) AS count
+        FROM registrations
+        WHERE tournament_slug = ? AND status NOT IN ('rejected', 'cancelled')
+        """,
+        (payload.tournament_slug,),
+    )
+    limit_reached = int(registration_count["count"] or 0) >= int(tournament.get("capacity") or 0)
     if int(tournament.get("block_repeat_registration") or 0):
         existing_user_registration = row(
             "SELECT id FROM registrations WHERE tournament_slug = ? AND user_id = ? LIMIT 1",
@@ -120,7 +129,7 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
             payload.category,
             "",
             "",
-            "pending_payment",
+            "waiting" if limit_reached else "pending_payment",
             "pending",
             amount,
             datetime.now(timezone.utc).isoformat(),
@@ -237,7 +246,14 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate, user: dict 
     )
     execute(
         "UPDATE registrations SET status = ?, payment_status = ?, team_code = ?, confirmation_code = ?, confirmation_qr_payload = ? WHERE id = ?",
-        ("pending_approval", "paid", team_code, confirmation_code, json.dumps(qr_payload, separators=(",", ":")), registration_id),
+        (
+            "waiting" if item.get("status") == "waiting" else "pending_approval",
+            "paid",
+            team_code,
+            confirmation_code,
+            json.dumps(qr_payload, separators=(",", ":")),
+            registration_id,
+        ),
     )
     members = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (registration_id,))
     delivery_results = send_registration_payment_success(

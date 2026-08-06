@@ -225,8 +225,26 @@ function BracketCanvas({
 
 export function TournamentRoundsPage() {
   const { slug } = useParams();
+  const [bracket, setBracket] = useState<{ nodes: BracketNode[]; connections: BracketConnection[]; roundSchedules: RoundSchedule[] }>({
+    nodes: [],
+    connections: [],
+    roundSchedules: [],
+  });
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
   const hideTeams = tournament.phase === "upcoming";
+
+  useEffect(() => {
+    if (!slug) return;
+    apiRequest<{ tournament: Record<string, any>; nodes: BracketNode[]; connections: BracketConnection[]; roundSchedules?: RoundSchedule[] }>(`/public/tournaments/${slug}/bracket`)
+      .then((payload) => {
+        setBracket({
+          nodes: payload.nodes ?? [],
+          connections: payload.connections ?? [],
+          roundSchedules: payload.roundSchedules ?? [],
+        });
+      })
+      .catch(() => setBracket({ nodes: [], connections: [], roundSchedules: [] }));
+  }, [slug]);
 
   return (
     <Page>
@@ -239,7 +257,7 @@ export function TournamentRoundsPage() {
           <Link className="btn btn-secondary" to="/live">Live hub</Link>
         </div>
       </section>
-      <BracketCanvas nodes={bracketNodes as BracketNode[]} publicMode hideTeams={hideTeams} />
+      <BracketCanvas nodes={bracket.nodes} connections={bracket.connections} publicMode hideTeams={hideTeams} roundSchedules={bracket.roundSchedules} />
       <div className="detail-grid">
         {hideTeams ? (
           <InfoPanel title="Upcoming Round Preview" items={["Round slots are visible before registration closes", "Teams appear after manager accepts registrations", "Seeding is published only after manager saves the bracket", "No editable plus controls are shown on the public page"]} highlight />
@@ -256,15 +274,15 @@ export function BracketWorkspacePage() {
   const { slug = "bangalore-corporate-t20" } = useParams();
   const { token } = useAuth();
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[1];
-  const [acceptedTeams, setAcceptedTeams] = useState<TeamSeed[]>(fallbackTeams);
+  const [acceptedTeams, setAcceptedTeams] = useState<TeamSeed[]>([]);
   const [bucketMode, setBucketMode] = useState<BucketMode>("single");
   const [roundCount, setRoundCount] = useState(5);
   const [teamCount, setTeamCount] = useState(20);
-  const initial = useMemo(() => generateBracketWorkspace(fallbackTeams, "single", 5, 20), []);
+  const initial = useMemo(() => ({ nodes: [] as BracketNode[], connections: [] as BracketConnection[] }), []);
   const [nodes, setNodes] = useState<BracketNode[]>(initial.nodes);
   const [connections, setConnections] = useState<BracketConnection[]>(initial.connections);
   const [roundSchedules, setRoundSchedules] = useState<RoundSchedule[]>([]);
-  const [selectedId, setSelectedId] = useState(nodes[0]?.id);
+  const [selectedId, setSelectedId] = useState<string | undefined>();
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -275,18 +293,29 @@ export function BracketWorkspacePage() {
 
   useEffect(() => {
     if (!token) return;
+    setAcceptedTeams([]);
+    setNodes([]);
+    setConnections([]);
+    setRoundSchedules([]);
+    setSelectedId(undefined);
     apiRequest<{ acceptedTeams: TeamSeed[]; nodes: BracketNode[]; connections: BracketConnection[]; roundSchedules?: RoundSchedule[] }>(`/management/brackets/${slug}`, {}, token)
       .then((payload) => {
-        const teams = payload.acceptedTeams?.length ? payload.acceptedTeams : fallbackTeams;
+        const teams = payload.acceptedTeams?.length ? payload.acceptedTeams : [];
         setAcceptedTeams(teams);
         if (payload.nodes?.length) {
           setNodes(payload.nodes);
           setConnections(payload.connections ?? []);
           setRoundSchedules(payload.roundSchedules ?? []);
+          setSelectedId(payload.nodes[0]?.id);
+        } else if (teams.length) {
+          const generated = generateBracketWorkspace(teams, bucketMode, roundCount, Math.max(teamCount, teams.length));
+          setNodes(generated.nodes);
+          setConnections(generated.connections);
+          setSelectedId(generated.nodes[0]?.id);
         }
       })
-      .catch(() => setNotice("Using local bracket preview. Backend workspace could not be loaded."));
-  }, [slug, token]);
+      .catch(() => setNotice(`Backend workspace for ${tournament.name} could not be loaded.`));
+  }, [slug, token, tournament.name]);
 
   function regenerate(mode = bucketMode, rounds = roundCount, count = teamCount) {
     const generated = generateBracketWorkspace(acceptedTeams, mode, rounds, count);

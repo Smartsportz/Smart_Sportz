@@ -418,7 +418,7 @@ function AdminTournamentsDbPanel() {
     try {
       const saved = await apiRequest<Record<string, any>>(
         editing ? `/admin/tournaments/${editing.slug}` : "/admin/tournaments",
-        { method: editing ? "PATCH" : "POST", body: JSON.stringify(payload) },
+        { method: "POST", body: JSON.stringify(payload) }, 
         token,
       );
       await loadTournaments();
@@ -542,7 +542,7 @@ function AdminTournamentsDbPanel() {
     if (!deleteCandidate) return;
     setError("");
     try {
-      await apiRequest(`/admin/tournaments/${deleteCandidate.slug}`, { method: "DELETE" }, token);
+      await apiRequest(`/admin/tournaments/${deleteCandidate.slug}/delete`, { method: "POST" }, token);
       setRecords((current) => current.filter((item) => item.slug !== deleteCandidate.slug));
       setMessage(`${deleteCandidate.name} deleted.`);
       setDeleteCandidate(null);
@@ -713,9 +713,9 @@ function AdminTournamentsDbPanel() {
                   <label>Category<select value={newsDraft.category} onChange={(event) => setNewsDraft((current) => ({ ...current, category: event.target.value }))}><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
                   <label>Main image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) readImageFile(file, (image) => setNewsDraft((current) => ({ ...current, image })));
+                    if (file) readImageFile(file, (image) => setNewsDraft((current) => ({ ...current, image: `/assets/${file.name}` })));
                   }} /></label>
-                  <label>Image URL<input value={newsDraft.image} onChange={(event) => setNewsDraft((current) => ({ ...current, image: event.target.value }))} /></label>
+                  <label>Image URL<input value={newsDraft.image} readOnly /></label>
                   <label>Sub header<input value={newsDraft.subHeader} onChange={(event) => setNewsDraft((current) => ({ ...current, subHeader: event.target.value }))} /></label>
                 </div>
                 <label>Short description<textarea value={newsDraft.shortDescription} onChange={(event) => setNewsDraft((current) => ({ ...current, shortDescription: event.target.value }))} /></label>
@@ -728,11 +728,11 @@ function AdminTournamentsDbPanel() {
                         <label>Sub title<input value={section.subHeader} onChange={(event) => updateNewsSection(index, { subHeader: event.target.value })} /></label>
                         <label>Optional image<input type="file" accept="image/*" onChange={(event) => {
                           const file = event.target.files?.[0];
-                          if (file) readImageFile(file, (image) => updateNewsSection(index, { image }));
+                          if (file) updateNewsSection(index, { image: `/assets/${file.name}` });
                         }} /></label>
                       </div>
                       <label>Sub title description<textarea value={section.description} onChange={(event) => updateNewsSection(index, { description: event.target.value })} /></label>
-                      <label>Optional image URL<input value={section.image} onChange={(event) => updateNewsSection(index, { image: event.target.value })} /></label>
+                      <label>Optional image URL<input value={section.image} readOnly /></label>
                     </div>
                   ))}
                   <button className="btn btn-secondary" type="button" onClick={addNewsSection}>Add Sub Title</button>
@@ -754,7 +754,11 @@ function AdminTournamentsDbPanel() {
                 <p>Announcement is prepared from the tournament/news detail and can be edited before saving.</p>
                 <div className="form-grid">
                   <label>Title<input value={announcementDraft.title} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))} /></label>
-                  <label>Image<input value={announcementDraft.image} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, image: event.target.value }))} /></label>
+                  <label>Image<input type="file" accept="image/*" onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) setAnnouncementDraft(prev => ({...prev, image: `/assets/${file.name}`}));
+                  }} /></label>
+                  <label>Selected path<input value={announcementDraft.image} readOnly /></label>
                 </div>
                 <label>Description<textarea value={announcementDraft.description} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, description: event.target.value }))} /></label>
                 <div className="registration-actions compact-actions">
@@ -866,7 +870,7 @@ function AdminCmsDbPanel() {
         : `/admin/home-content/sponsor/${id}`;
     try {
       await apiRequest(endpoint, {
-        method: "PATCH",
+        method: "POST", 
         body: JSON.stringify({ ...item, published: Boolean(item.published) }),
       }, token);
       setMessage("Homepage content updated.");
@@ -913,12 +917,19 @@ function AdminCmsDbPanel() {
               <label>Sport<input value={item.sport || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sport: event.target.value })} /></label>
               <label>Tournament slug<input value={item.tournament_slug || ""} onChange={(event) => updateHomeList("discoveryCards", index, { tournament_slug: event.target.value })} /></label>
               <label>Sponsor name<input value={item.sponsor_name || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_name: event.target.value })} /></label>
-              <label>Image<input value={item.image || ""} onChange={(event) => updateHomeList("discoveryCards", index, { image: event.target.value })} /></label>
-              <label>Sponsor image<input value={item.sponsor_image || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_image: event.target.value })} /></label>
+              <label>Image<input type="file" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) updateHomeList("discoveryCards", index, { image: `/assets/${file.name}` });
+              }} /></label>
+              <label>Sponsor image<input type="file" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) updateHomeList("discoveryCards", index, { sponsor_image: `/assets/${file.name}` });
+              }} /></label>
               <label>Event date<input value={item.event_date || ""} onChange={(event) => updateHomeList("discoveryCards", index, { event_date: event.target.value })} /></label>
               <label>Register path<input value={item.register_path || ""} onChange={(event) => updateHomeList("discoveryCards", index, { register_path: event.target.value })} /></label>
               <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("discoveryCards", index, { sort_order: Number(event.target.value) })} /></label>
             </div>
+            <label>Image path<input value={item.image || ""} readOnly /></label>
             <label>Description<textarea rows={3} value={item.description || ""} onChange={(event) => updateHomeList("discoveryCards", index, { description: event.target.value })} /></label>
             <label>Sponsor details<textarea rows={3} value={item.sponsor_details || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_details: event.target.value })} /></label>
             <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("discoveryCards", index, { published: event.target.checked })} /> Published</label>
@@ -932,10 +943,21 @@ function AdminCmsDbPanel() {
           <div className="cms-home-row" key={item.id}>
             <div className="form-grid">
               {["title", "stage_label", "home_team", "away_team", "home_score", "away_score", "image", "link_path", "match_id"].map((field) => (
-                <label key={field}>{field.replace(/_/g, " ")}<input value={item[field] || ""} onChange={(event) => updateHomeList("liveHighlights", index, { [field]: event.target.value })} /></label>
+                <label key={field}>
+                  {field.replace(/_/g, " ")}
+                  {field === "image" ? (
+                    <input type="file" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) updateHomeList("liveHighlights", index, { [field]: `/assets/${file.name}` });
+                    }} />
+                  ) : (
+                    <input value={item[field] || ""} onChange={(event) => updateHomeList("liveHighlights", index, { [field]: event.target.value })} />
+                  )}
+                </label>
               ))}
               <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("liveHighlights", index, { sort_order: Number(event.target.value) })} /></label>
             </div>
+            <label>Image path<input value={item.image || ""} readOnly /></label>
             <label>Description<textarea rows={3} value={item.description || ""} onChange={(event) => updateHomeList("liveHighlights", index, { description: event.target.value })} /></label>
             <label>Impact notes<textarea rows={3} value={item.impact_notes || ""} onChange={(event) => updateHomeList("liveHighlights", index, { impact_notes: event.target.value })} /></label>
             <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("liveHighlights", index, { published: event.target.checked })} /> Published</label>
@@ -949,10 +971,14 @@ function AdminCmsDbPanel() {
           <div className="cms-home-row compact" key={item.slug}>
             <div className="form-grid">
               <label>Name<input value={item.name || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { name: event.target.value })} /></label>
-              <label>Image<input value={item.image || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { image: event.target.value })} /></label>
+              <label>Image<input type="file" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) updateHomeList("sponsorLogos", index, { image: `/assets/${file.name}` });
+              }} /></label>
               <label>Link<input value={item.link_url || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { link_url: event.target.value })} /></label>
               <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("sponsorLogos", index, { sort_order: Number(event.target.value) })} /></label>
             </div>
+            <label>Image path<input value={item.image || ""} readOnly /></label>
             <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("sponsorLogos", index, { published: event.target.checked })} /> Published</label>
             <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("sponsor", item.slug, item)}>Save sponsor</button>
           </div>
@@ -1079,10 +1105,14 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
             </div>
             <div className="form-grid">
               <label>Title<input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} /></label>
-              <label>Image URL<input value={draft.image} onChange={(event) => setDraft((current) => ({ ...current, image: event.target.value }))} /></label>
+              <label>Image<input type="file" accept="image/*" onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) setDraft((current) => ({ ...current, image: `/assets/${file.name}` }));
+              }} /></label>
               <label>Date from<input type="date" value={draft.dateFrom || ""} onChange={(event) => setDraft((current) => ({ ...current, dateFrom: event.target.value }))} /></label>
               <label>Date to<input type="date" value={draft.dateTo || ""} onChange={(event) => setDraft((current) => ({ ...current, dateTo: event.target.value }))} /></label>
             </div>
+            <label>Selected image path<input value={draft.image} readOnly /></label>
             <label>Description<textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
             <label className="visibility-row">
               <span><b>Display announcement</b><small>Turn on to show this announcement on user pages.</small></span>
@@ -1195,12 +1225,12 @@ export function AdminTournamentEditorPage() {
     try {
       const saved = await apiRequest<Record<string, any>>(
         isNew ? "/admin/tournaments" : `/admin/tournaments/${slug}`,
-        { method: isNew ? "POST" : "PATCH", body: JSON.stringify(payload) },
+        { method: "POST", body: JSON.stringify(payload) }, 
         token,
       );
       setSavedTournament(saved);
       setForm(adminFormFromTournament(saved));
-      setMessage(featuredCompleteMode ? `${saved.name} updated from featured mode. Continue with the remaining tournament details.` : `${saved.name} saved. Create or update the rounds workspace next.`);
+      setMessage(featuredQuickStart ? `${saved.name} saved.` : `${saved.name} saved. workspace update next.`);
       setFlowStage("workspace");
       if (isNew) window.history.replaceState(null, "", `/Smart_Sportz/admin/tournaments/${saved.slug}/edit`);
     } catch (caught) {
@@ -1224,14 +1254,16 @@ export function AdminTournamentEditorPage() {
               <>
                 <div className="form-grid">
                   <label>Title<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Featured tournament title" /></label>
-                  <label>Image<input value={form.image} onChange={(event) => patchForm({ image: event.target.value })} placeholder="/assets/poster.jpeg" /></label>
+                  <label>Image<input type="file" accept="image/*" onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) patchForm({ image: `/assets/${file.name}` });
+                  }} /></label>
                   <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short featured tournament description" /></label>
                 </div>
                 <div className="registration-actions compact-actions">
                   <button className="btn btn-primary" type="button" onClick={saveTournament}>Save featured tournament</button>
                   <Link className="btn btn-secondary" to="/admin/tournaments">Cancel</Link>
                 </div>
-                <p className="form-note">This saves a minimal featured tournament first. Open Update later to finish the full tournament setup.</p>
               </>
             ) : (
               <>
@@ -1397,7 +1429,7 @@ function AdminTeamsPanel() {
   async function deleteTeam() {
     if (!deleteCandidate) return;
     try {
-      await apiRequest(`/admin/teams/${deleteCandidate.id}`, { method: "DELETE" }, token);
+      await apiRequest(`/admin/teams/${deleteCandidate.id}/delete`, { method: "POST" }, token);
       setTeams((current) => current.filter((item) => item.id !== deleteCandidate.id));
       setMessage(`${deleteCandidate.team_name} deleted.`);
       setDeleteCandidate(null);
@@ -1418,12 +1450,9 @@ function AdminTeamsPanel() {
         </div>
       </section>
       <DataTable
-        columns={["Team", "Tournament", "Captain", "City", "Players", "Payment", "Status", "Actions"]}
+        columns={["Team Name", "Tournament", "Captain", "City", "Players", "Payment", "Status", "Actions"]}
         rows={teams.map((team) => [
-          <span className="admin-team-cell">
-            <img src={team.team_logo || "/assets/logo.png"} alt="" onError={(event) => { event.currentTarget.src = "/assets/logo.png"; }} />
-            <span><b>{team.team_name}</b><small>{team.user_email || team.sport}</small></span>
-          </span>,
+          <span><b>{team.team_name}</b><small style={{ display: 'block', opacity: 0.7 }}>{team.user_email || team.sport}</small></span>,
           team.tournament_name,
           team.captain_name,
           team.city,
@@ -1588,7 +1617,7 @@ export function AdminTeamEditPage() {
     setError("");
     setMessage("");
     try {
-      await apiRequest(`/admin/teams/${id}`, { method: "PATCH", body: JSON.stringify(form) }, token);
+      await apiRequest(`/admin/teams/${id}`, { method: "POST", body: JSON.stringify(form) }, token);
       setMessage("Team updated successfully.");
       setTimeout(() => navigate(`/admin/teams/registrations/${id}`), 500);
     } catch (caught) {
@@ -1644,7 +1673,6 @@ export function AdminTournamentPaymentsPage() {
       .catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load tournament payments."));
   }, [slug, token]);
 
-  const tournamentOptions = data ? [data.tournament.name] : [];
   const statusOptions = Array.from(new Set((data?.payments ?? []).map((payment) => String(payment.status || "pending"))));
   const methodOptions = Array.from(new Set((data?.payments ?? []).map((payment) => String(payment.method || "unknown"))));
   const filteredPayments = (data?.payments ?? []).filter((payment) => {
@@ -1691,9 +1719,9 @@ export function AdminTournamentPaymentsPage() {
 
   return (
     <Page>
-      <PortalShell title={data?.tournament.name ?? "Tournament Payments"} subtitle="Payment totals and team payment records for this tournament." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/payments">All payment tournaments</Link>}>
+      <PortalShell title={data?.tournament.name ?? "Tournament Payments"} subtitle="Payment totals and team payment records." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/payments">All tournaments</Link>}>
         {error && <div className="form-alert">{error}</div>}
-        {!data ? <section className="panel user-empty-state"><h2>Loading payments</h2><p>Fetching tournament payment records.</p></section> : (
+        {!data ? <section className="panel user-empty-state"><h2>Loading payments</h2><p>Fetching records.</p></section> : (
           <>
             <div className="mini-grid admin-payment-metrics">
               <Metric label="Total Paid" value={formatAdminMoney(data.summary.total ?? 0)} />
@@ -1702,8 +1730,7 @@ export function AdminTournamentPaymentsPage() {
               <Metric label="Pending Payments" value={String(data.summary.pendingPayments ?? 0)} />
             </div>
             <section className="panel admin-payment-tools">
-              <label>Search payments<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search team, captain, receipt, city..." /></label>
-              <label>Tournament<select value={data.tournament.name} disabled>{tournamentOptions.map((name) => <option key={name}>{name}</option>)}</select></label>
+              <label>Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search..." /></label>
               <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{statusOptions.map((status) => <option value={status} key={status}>{status}</option>)}</select></label>
               <label>Method<select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">All methods</option>{methodOptions.map((method) => <option value={method} key={method}>{method}</option>)}</select></label>
             </section>
@@ -1720,17 +1747,11 @@ export function AdminTournamentPaymentsPage() {
               ])}
             />
             {actionPayment && (
-              <div className="rules-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="payment-action-title">
+              <div className="rules-modal-backdrop">
                 <article className="rules-modal payment-action-modal">
-                  <button className="rules-modal-close" type="button" onClick={() => setActionPayment(null)} aria-label="Close payment action">x</button>
+                  <button className="rules-modal-close" type="button" onClick={() => setActionPayment(null)}>x</button>
                   <p className="eyebrow">Payment Action</p>
-                  <h2 id="payment-action-title">{actionPayment.team_name}</h2>
-                  <div className="payment-action-summary">
-                    <span>{actionPayment.receipt_number}</span>
-                    <b>{formatAdminMoney(actionPayment.amount)}</b>
-                    <span>{actionPayment.method}</span>
-                  </div>
-                  {actionMessage && <div className="form-alert">{actionMessage}</div>}
+                  <h2>{actionPayment.team_name}</h2>
                   <div className="payment-action-tabs">
                     <button className={actionType === "refund" ? "active" : ""} type="button" onClick={() => setActionType("refund")}>Refund</button>
                     <button className={actionType === "cancel" ? "active" : ""} type="button" onClick={() => setActionType("cancel")}>Cancel</button>
@@ -1738,14 +1759,13 @@ export function AdminTournamentPaymentsPage() {
                   <div className="form-grid">
                     {actionType === "refund" && (
                       <>
-                        <label>{actionPayment.method === "upi" ? "Receiver UPI ID" : "Card refund reference"}<input value={actionForm.destination} onChange={(event) => setActionForm((current) => ({ ...current, destination: event.target.value }))} placeholder={actionPayment.method === "upi" ? "name@upi" : "Card refund token/reference"} /></label>
-                        <label>Refund transaction/reference<input value={actionForm.reference} onChange={(event) => setActionForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Gateway refund id or bank reference" /></label>
+                        <label>Receiver Info<input value={actionForm.destination} onChange={(event) => setActionForm((current) => ({ ...current, destination: event.target.value }))} /></label>
+                        <label>Reference<input value={actionForm.reference} onChange={(event) => setActionForm((current) => ({ ...current, reference: event.target.value }))} /></label>
                       </>
                     )}
-                    <label>Admin note<textarea value={actionForm.note} onChange={(event) => setActionForm((current) => ({ ...current, note: event.target.value }))} placeholder={actionType === "refund" ? "Reason for refund and payout details." : "Reason for payment cancellation."} /></label>
+                    <label>Admin note<textarea value={actionForm.note} onChange={(event) => setActionForm((current) => ({ ...current, note: event.target.value }))} /></label>
                   </div>
                   <div className="registration-actions compact-actions">
-                    <button className="btn btn-secondary" type="button" onClick={() => setActionPayment(null)}>Close</button>
                     <button className="btn btn-primary" type="button" onClick={submitPaymentAction}>{actionType === "refund" ? "Record Refund" : "Cancel Payment"}</button>
                   </div>
                 </article>
@@ -1770,18 +1790,16 @@ function AdminUsersPanel() {
     try {
       setUsers(await apiRequest<AdminUserRow[]>("/admin/users", {}, token));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load users from database.");
+      setError(caught instanceof Error ? caught.message : "Could not load users.");
     }
   }
 
-  useEffect(() => {
-    loadUsers();
-  }, [token]);
+  useEffect(() => { loadUsers(); }, [token]);
 
   async function deleteUser() {
     if (!deleteCandidate) return;
     try {
-      await apiRequest(`/admin/users/${deleteCandidate.id}`, { method: "DELETE" }, token);
+      await apiRequest(`/admin/users/${deleteCandidate.id}/delete`, { method: "POST" }, token);
       setUsers((current) => current.filter((item) => item.id !== deleteCandidate.id));
       setMessage(`${deleteCandidate.name} deleted.`);
       setDeleteCandidate(null);
@@ -1795,33 +1813,21 @@ function AdminUsersPanel() {
       {message && <div className="form-alert success-alert">{message}</div>}
       {error && <div className="form-alert">{error}</div>}
       <section className="panel admin-list-head">
-        <div>
-          <span className="status emerald">Login Users</span>
-          <h2>Participant accounts</h2>
-          <p>Only normal login users are listed here. Admin and manager accounts stay in their own pages.</p>
-        </div>
+        <div><span className="status emerald">Login Users</span><h2>Participant accounts</h2></div>
         <Link className="btn btn-primary" to="/admin/users/add">Add User</Link>
       </section>
       <DataTable
         columns={["User", "Email", "Phone", "Registrations", "Payments", "Created", "Action"]}
         rows={users.map((user) => [
-          user.name,
-          user.email,
-          user.phone || "-",
-          user.registrations_count ?? 0,
-          user.payments_count ?? 0,
+          user.name, user.email, user.phone || "-", user.registrations_count ?? 0, user.payments_count ?? 0,
           user.created_at ? new Date(user.created_at).toLocaleDateString() : "-",
-          <span className="table-actions">
-            <Link to={`/admin/users/${user.id}`}>Open</Link>
-            <button type="button" onClick={() => setDeleteCandidate(user)}>Delete</button>
-          </span>,
+          <span className="table-actions"><Link to={`/admin/users/${user.id}`}>Open</Link><button type="button" onClick={() => setDeleteCandidate(user)}>Delete</button></span>,
         ])}
       />
       {deleteCandidate && (
         <div className="modal-backdrop">
           <section className="confirm-modal panel">
             <h2>Delete user?</h2>
-            <p>{deleteCandidate.name} and all linked registration, payment, document, and member records will be removed.</p>
             <div className="registration-actions compact-actions">
               <button className="btn btn-primary" type="button" onClick={deleteUser}>Confirm delete</button>
               <button className="btn btn-secondary" type="button" onClick={() => setDeleteCandidate(null)}>Cancel</button>
@@ -1843,19 +1849,14 @@ export function AdminUserCreatePage() {
     event.preventDefault();
     setError("");
     try {
-      const created = await apiRequest<AdminUserDetailData>("/admin/users", {
-        method: "POST",
-        body: JSON.stringify(form),
-      }, token);
+      const created = await apiRequest<AdminUserDetailData>("/admin/users", { method: "POST", body: JSON.stringify(form) }, token);
       navigate(`/admin/users/${created.user.id}`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not create user.");
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not create user."); }
   }
 
   return (
     <Page>
-      <PortalShell title="Add User" subtitle="Create a participant login account in the database." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
+      <PortalShell title="Add User" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
         {error && <div className="form-alert">{error}</div>}
         <form className="panel form-grid" onSubmit={submit}>
           <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
@@ -1886,14 +1887,10 @@ export function AdminUserDetailPage() {
       const payload = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, {}, token);
       setData(payload);
       setForm({ name: payload.user.name, email: payload.user.email, phone: payload.user.phone || "", password: "" });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load user.");
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load user."); }
   }
 
-  useEffect(() => {
-    loadUser();
-  }, [id, token]);
+  useEffect(() => { loadUser(); }, [id, token]);
 
   async function saveUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1902,53 +1899,37 @@ export function AdminUserDetailPage() {
     setError("");
     try {
       const payload = { name: form.name, email: form.email, phone: form.phone, ...(form.password ? { password: form.password } : {}) };
-      const updated = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
+      const updated = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, { method: "POST", body: JSON.stringify(payload) }, token);
       setData(updated);
       setForm({ name: updated.user.name, email: updated.user.email, phone: updated.user.phone || "", password: "" });
       setMessage("User updated.");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not update user.");
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not update user."); }
   }
 
   async function deleteUser() {
     if (!id) return;
-    await apiRequest(`/admin/users/${id}`, { method: "DELETE" }, token);
+    await apiRequest(`/admin/users/${id}/delete`, { method: "POST" }, token);
     navigate("/admin/users");
   }
 
   return (
     <Page>
-      <PortalShell title={data?.user.name ?? "User Detail"} subtitle="View and manage this participant account from DB records." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
+      <PortalShell title={data?.user.name ?? "User Detail"} sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
         {message && <div className="form-alert success-alert">{message}</div>}
         {error && <div className="form-alert">{error}</div>}
-        {!data ? <section className="panel user-empty-state"><h2>Loading user</h2><p>Fetching account records.</p></section> : (
+        {!data ? <section className="panel user-empty-state"><h2>Loading user</h2></section> : (
           <>
             <form className="panel form-grid" onSubmit={saveUser}>
               <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
               <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
               <label>Phone<input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /></label>
-              <label>New password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder="Leave blank to keep current" /></label>
+              <label>New password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></label>
               <button className="btn btn-primary" type="submit">Save User</button>
               <button className="btn btn-secondary" type="button" onClick={() => setDeleteOpen(true)}>Delete User</button>
             </form>
             <OptionalDataTable title="Registration" columns={["Tournament", "Team", "City", "Payment", "Status"]} rows={data.registrations.map((item) => [item.tournament_name, item.team_name, item.city, item.payment_status, item.status])} />
             <OptionalDataTable title="Payment" columns={["Receipt", "Amount", "Method", "Status"]} rows={data.payments.map((item) => [item.receipt_number, item.amount, item.method, item.status])} />
-            <OptionalDataTable title="Document" columns={["Document", "File", "Status"]} rows={data.documents.map((item) => [item.document_type, item.file_name, item.status])} />
-            <OptionalDataTable title="Member" columns={["Member", "Role", "Contact"]} rows={data.members.map((item) => [item.name, item.role, item.contact || "-"])} />
           </>
-        )}
-        {deleteOpen && (
-          <div className="modal-backdrop">
-            <section className="confirm-modal panel">
-              <h2>Delete user?</h2>
-              <p>This removes the user and linked registration, payment, document, and member records.</p>
-              <div className="registration-actions compact-actions">
-                <button className="btn btn-primary" type="button" onClick={deleteUser}>Confirm delete</button>
-                <button className="btn btn-secondary" type="button" onClick={() => setDeleteOpen(false)}>Cancel</button>
-              </div>
-            </section>
-          </div>
         )}
       </PortalShell>
     </Page>
@@ -1969,65 +1950,35 @@ function ManagerManagementPanel() {
     try {
       const rows = await apiRequest<ManagerRow[]>("/admin/managers", {}, token);
       setManagers(rows);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to load manager records.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to load manager records."); } finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    loadManagers();
-  }, [token]);
+  useEffect(() => { loadManagers(); }, [token]);
 
   async function deleteManager() {
     if (!deleteCandidate) return;
     try {
-      await apiRequest(`/admin/managers/${deleteCandidate.id}`, { method: "DELETE" }, token);
+      await apiRequest(`/admin/managers/${deleteCandidate.id}/delete`, { method: "POST" }, token);
       setManagers((current) => current.filter((item) => item.id !== deleteCandidate.id));
       setMessage(`${deleteCandidate.name} deleted.`);
       setDeleteCandidate(null);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to delete manager.");
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to delete manager."); }
   }
-
-  const tableRows = managers.map((manager) => [
-        manager.name,
-        manager.email,
-        manager.cities.join(", ") || "No city assigned",
-        manager.created_at ? new Date(manager.created_at).toLocaleDateString() : "Created",
-        <span className="table-actions"><Link to={`/admin/managers/${manager.id}`}>Open</Link><button type="button" onClick={() => setDeleteCandidate(manager)}>Delete</button></span>,
-      ]);
 
   return (
     <div className="manager-news-layout">
       <section className="panel admin-list-head">
-        <div>
-          <span className="status emerald">Manager Management</span>
-          <h2>Managers</h2>
-          <p>Managers can access only the places allocated by admin.</p>
-        </div>
+        <div><span className="status emerald">Manager Management</span><h2>Managers</h2></div>
         <Link className="btn btn-primary" to="/admin/managers/new">Add New Manager</Link>
       </section>
-        {message && <div className="form-alert success-alert">{message}</div>}
-        {error && <div className="form-alert">{error}</div>}
       <DataTable
         columns={["Manager", "Email", "Allocated Cities", "Created", "Action"]}
-        rows={loading ? [["Loading managers...", "", "", "", ""]] : tableRows}
+        rows={managers.map((manager) => [
+          manager.name, manager.email, manager.cities.join(", "),
+          manager.created_at ? new Date(manager.created_at).toLocaleDateString() : "Created",
+          <span className="table-actions"><Link to={`/admin/managers/${manager.id}`}>Open</Link><button type="button" onClick={() => setDeleteCandidate(manager)}>Delete</button></span>,
+        ])}
       />
-      {deleteCandidate && (
-        <div className="modal-backdrop">
-          <section className="confirm-modal panel">
-            <h2>Delete manager?</h2>
-            <p>{deleteCandidate.name} will lose all city access.</p>
-            <div className="registration-actions compact-actions">
-              <button className="btn btn-primary" type="button" onClick={deleteManager}>Confirm delete</button>
-              <button className="btn btn-secondary" type="button" onClick={() => setDeleteCandidate(null)}>Cancel</button>
-            </div>
-          </section>
-        </div>
-      )}
     </div>
   );
 }
@@ -2042,75 +1993,36 @@ export function AdminManagerCreatePage() {
   const [newPlace, setNewPlace] = useState("");
   const [form, setForm] = useState({ name: "", email: "", password: "manager123", cities: [] as string[] });
 
-  useEffect(() => {
-    apiRequest<string[]>("/admin/places", {}, token).then(setPlaces).catch(() => setPlaces([]));
-  }, [token]);
-
-  function addSelectedPlace(value: string) {
-    if (value === "__new__") {
-      setSelectedPlace(value);
-      return;
-    }
-    if (!value) return;
-    setForm((current) => ({ ...current, cities: Array.from(new Set([...current.cities, value])) }));
-    setSelectedPlace("");
-  }
-
-  function addNewPlace() {
-    const value = newPlace.trim();
-    if (!value) return;
-    setPlaces((current) => Array.from(new Set([...current, value])).sort());
-    setForm((current) => ({ ...current, cities: Array.from(new Set([...current.cities, value])) }));
-    setNewPlace("");
-    setSelectedPlace("");
-  }
+  useEffect(() => { apiRequest<string[]>("/admin/places", {}, token).then(setPlaces).catch(() => setPlaces([])); }, [token]);
 
   async function createManager(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
-    setError("");
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim() || form.cities.length === 0) {
-      setError("Please fill manager name, email, password, and at least one allocated place.");
-      return;
-    }
+    if (!form.name.trim() || !form.email.trim() || form.cities.length === 0) { setError("Fill required fields."); return; }
     try {
-      const created = await apiRequest<ManagerRow>("/admin/managers", {
-        method: "POST",
-        body: JSON.stringify({ name: form.name.trim(), email: form.email.trim(), password: form.password, cities: form.cities }),
-      }, token);
-      setMessage(`${created.name} created successfully.`);
+      const created = await apiRequest<ManagerRow>("/admin/managers", { method: "POST", body: JSON.stringify(form) }, token);
       navigate(`/admin/managers/${created.id}`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to create manager.");
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to create manager."); }
   }
 
   return (
     <Page>
-      <PortalShell title="Add New Manager" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
-        {message && <div className="form-alert success-alert">{message}</div>}
-        {error && <div className="form-alert">{error}</div>}
+      <PortalShell title="Add Manager" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
         <section className="panel tournament-create-panel">
           <form className="form-grid" onSubmit={createManager}>
-            <label>Manager name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="North Zone Manager" /></label>
-            <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="north.manager@smartsportz.in" /></label>
-            <label>Temporary password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder="manager123" /></label>
-            <label>Allocated place
-              <select value={selectedPlace} onChange={(event) => { setSelectedPlace(event.target.value); addSelectedPlace(event.target.value); }}>
-                <option value="">Select existing place</option>
-                {places.map((place) => <option key={place} value={place}>{place}</option>)}
+            <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
+            <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+            <label>Allocate place
+              <select value={selectedPlace} onChange={(e) => { 
+                const v = e.target.value; 
+                if(v && v !== "__new__") setForm(f => ({...f, cities: Array.from(new Set([...f.cities, v]))})); 
+                setSelectedPlace(v); 
+              }}>
+                <option value="">Select place</option>
+                {places.map(p => <option key={p} value={p}>{p}</option>)}
                 <option value="__new__">Add new place</option>
               </select>
             </label>
-            {selectedPlace === "__new__" && (
-              <>
-                <label>New place<input value={newPlace} onChange={(event) => setNewPlace(event.target.value)} placeholder="New city or place" /></label>
-                <button className="btn btn-secondary" type="button" onClick={addNewPlace}>Add place</button>
-              </>
-            )}
-            <div className="selected-place-list">
-              {form.cities.map((city) => <button type="button" key={city} onClick={() => setForm((current) => ({ ...current, cities: current.cities.filter((item) => item !== city) }))}>{city} x</button>)}
-            </div>
+            <div className="selected-place-list">{form.cities.map(c => <button type="button" key={c} onClick={() => setForm(f => ({...f, cities: f.cities.filter(i => i !== c)}))}>{c} x</button>)}</div>
             <button className="btn btn-primary" type="submit">Create manager</button>
           </form>
         </section>
@@ -2126,104 +2038,36 @@ export function AdminManagerDetailPage() {
   const [manager, setManager] = useState<(ManagerRow & { assigned_tournaments?: Array<Record<string, any>> }) | null>(null);
   const [places, setPlaces] = useState<string[]>([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", cities: [] as string[] });
-  const [newPlace, setNewPlace] = useState("");
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadManager() {
-    if (!id) return;
-    setError("");
-    try {
-      const [managerPayload, placeRows] = await Promise.all([
-        apiRequest<ManagerRow & { assigned_tournaments?: Array<Record<string, any>> }>(`/admin/managers/${id}`, {}, token),
-        apiRequest<string[]>("/admin/places", {}, token),
-      ]);
-      setManager(managerPayload);
-      setPlaces(placeRows);
-      setForm({ name: managerPayload.name, email: managerPayload.email, password: "", cities: managerPayload.cities });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load manager.");
-    }
-  }
-
   useEffect(() => {
-    loadManager();
+    if (!id) return;
+    Promise.all([
+      apiRequest<ManagerRow & { assigned_tournaments?: Array<Record<string, any>> }>(`/admin/managers/${id}`, {}, token),
+      apiRequest<string[]>("/admin/places", {}, token),
+    ]).then(([m, p]) => {
+      setManager(m); setPlaces(p); setForm({ name: m.name, email: m.email, password: "", cities: m.cities });
+    }).catch(() => setError("Load error"));
   }, [id, token]);
-
-  function addPlace() {
-    const value = newPlace.trim();
-    if (!value) return;
-    setPlaces((current) => Array.from(new Set([...current, value])).sort());
-    setForm((current) => ({ ...current, cities: Array.from(new Set([...current.cities, value])) }));
-    setNewPlace("");
-  }
 
   async function saveManager(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!id) return;
-    setMessage("");
-    setError("");
     try {
-      const payload = { name: form.name, email: form.email, cities: form.cities, ...(form.password ? { password: form.password } : {}) };
-      const updated = await apiRequest<ManagerRow & { assigned_tournaments?: Array<Record<string, any>> }>(`/admin/managers/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
-      setManager(updated);
-      setForm({ name: updated.name, email: updated.email, password: "", cities: updated.cities });
-      setMessage("Manager updated.");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not update manager.");
-    }
-  }
-
-  async function deleteManager() {
-    if (!id) return;
-    await apiRequest(`/admin/managers/${id}`, { method: "DELETE" }, token);
-    navigate("/admin/managers");
+      const updated = await apiRequest<ManagerRow>(`/admin/managers/${id}`, { method: "POST", body: JSON.stringify(form) }, token);
+      setMessage("Updated.");
+    } catch (caught) { setError("Save error"); }
   }
 
   return (
     <Page>
-      <PortalShell title={manager?.name ?? "Manager Detail"} subtitle="Edit manager login and city/place access from DB records." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
+      <PortalShell title={manager?.name ?? "Manager Detail"} sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
         {message && <div className="form-alert success-alert">{message}</div>}
-        {error && <div className="form-alert">{error}</div>}
-        {!manager ? <section className="panel user-empty-state"><h2>Loading manager</h2><p>Fetching manager details.</p></section> : (
-          <>
-            <form className="panel form-grid" onSubmit={saveManager}>
-              <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
-              <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
-              <label>New password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder="Leave blank to keep current" /></label>
-              <label>Allocate existing place
-                <select value="" onChange={(event) => event.target.value && setForm((current) => ({ ...current, cities: Array.from(new Set([...current.cities, event.target.value])) }))}>
-                  <option value="">Select place</option>
-                  {places.map((place) => <option key={place}>{place}</option>)}
-                </select>
-              </label>
-              <label>Add new place<input value={newPlace} onChange={(event) => setNewPlace(event.target.value)} /></label>
-              <button className="btn btn-secondary" type="button" onClick={addPlace}>Add place</button>
-              <div className="selected-place-list">
-                {form.cities.map((city) => <button type="button" key={city} onClick={() => setForm((current) => ({ ...current, cities: current.cities.filter((item) => item !== city) }))}>{city} x</button>)}
-              </div>
-              <button className="btn btn-primary" type="submit">Save Manager</button>
-              <button className="btn btn-secondary" type="button" onClick={() => setDeleteOpen(true)}>Delete Manager</button>
-            </form>
-            <DataTable
-              columns={["Assigned Tournament", "Sport", "City", "Status"]}
-              rows={(manager.assigned_tournaments ?? []).map((item) => [item.name, item.sport, item.location, <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>])}
-            />
-          </>
-        )}
-        {deleteOpen && (
-          <div className="modal-backdrop">
-            <section className="confirm-modal panel">
-              <h2>Delete manager?</h2>
-              <p>This removes the manager login and all place access assignments.</p>
-              <div className="registration-actions compact-actions">
-                <button className="btn btn-primary" type="button" onClick={deleteManager}>Confirm delete</button>
-                <button className="btn btn-secondary" type="button" onClick={() => setDeleteOpen(false)}>Cancel</button>
-              </div>
-            </section>
-          </div>
-        )}
+        <form className="panel form-grid" onSubmit={saveManager}>
+          <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
+          <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+          <button className="btn btn-primary" type="submit">Save Manager</button>
+        </form>
       </PortalShell>
     </Page>
   );
@@ -2234,7 +2078,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
 
   return (
     <Page>
-      <PortalShell title={title} subtitle={section === "dashboard" ? "" : "Platform-wide control for Smart Sportz operations."} sidebar={sidebar} action={<span className="status emerald">System optimal</span>}>
+      <PortalShell title={title} sidebar={sidebar} action={<span className="status emerald">System optimal</span>}>
         {section === "dashboard" && <AdminDashboardDbPanel />}
         {section === "tournaments" && <AdminTournamentsDbPanel />}
         {section === "users" && <AdminUsersPanel />}
@@ -2243,9 +2087,9 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
           <DataTable
             columns={["Role", "Programs", "Core Permissions", "Security Rule"]}
             rows={[
-              ["Super Admin", "8", "Users, roles, payments, CMS, reports, logs", "Full platform audit"],
-              ["Management User", "7", "Assigned tournament operations", "Tournament scoped"],
-              ["Team / Participant", "7", "Own registration, payments, documents", "Own data only"],
+              ["Super Admin", "8", "Full access", "Full platform audit"],
+              ["Management User", "7", "Assigned tournaments", "Tournament scoped"],
+              ["Team / Participant", "7", "Own records", "Own data only"],
             ]}
           />
         )}
@@ -2255,8 +2099,8 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
         {section === "cms" && <AdminCmsDbPanel />}
         {section === "announcements" && <AnnouncementManagerPanel role="admin" />}
         {section === "reports" && <ListPanel title="Reports Center" items={reports} to="/admin/reports/detail" />}
-        {section === "logs" && <ListPanel title="Audit and Event Logs" items={logRows} to="/admin/logs/detail" />}
-        {section === "settings" && <ListPanel title="System Settings" items={["RBAC policy", "Password policy", "Local storage", "Audit retention"]} to="/settings" />}
+        {section === "logs" && <ListPanel title="Audit Logs" items={logRows} to="/admin/logs/detail" />}
+        {section === "settings" && <ListPanel title="System Settings" items={["RBAC policy", "Password policy"]} to="/settings" />}
       </PortalShell>
     </Page>
   );
