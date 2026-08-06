@@ -2,7 +2,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, ExternalLink, FileText, ImagePlus, Printer, ShieldCheck, Smartphone, Trophy, Upload, UserPlus, Users } from "lucide-react";
 import { Page } from "../components/UI";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
@@ -497,6 +497,121 @@ function scrollRegistrationTop() {
   window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
+type ImportedRosterEntry = {
+  name: string;
+  age: string;
+  jerseySize: string;
+};
+
+function splitCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (inQuotes && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function parseRosterImportContent(rawText: string): ImportedRosterEntry[] {
+  const trimmed = rawText.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((entry) => {
+            if (typeof entry === "string") {
+              return { name: entry, age: "", jerseySize: "" };
+            }
+            if (entry && typeof entry === "object") {
+              const record = entry as Record<string, unknown>;
+              const name = [record.name, record.playerName, record.fullName, record.player].find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? "";
+              const age = [record.age, record.playerAge].find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? "";
+              const jerseySize = [record.jerseySize, record.size, record.kitSize].find((value): value is string => typeof value === "string" && value.trim().length > 0) ?? "";
+              return { name: name.trim(), age: String(age ?? "").trim(), jerseySize: String(jerseySize ?? "").trim() };
+            }
+            return null;
+          })
+          .filter((entry): entry is ImportedRosterEntry => Boolean(entry && entry.name));
+      }
+    } catch {
+      // fall back to line parsing below
+    }
+  }
+
+  const rows = trimmed
+    .replace(/\r/g, "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!rows.length) return [];
+
+  const imported: ImportedRosterEntry[] = [];
+  rows.forEach((line) => {
+    const cells = splitCsvLine(line);
+    if (!cells.length) return;
+
+    const header = cells.join(" ").toLowerCase();
+    if (header.includes("name") && header.includes("age")) {
+      return;
+    }
+
+    let name = "";
+    let age = "";
+    let jerseySize = "";
+
+    if (cells.length === 1) {
+      name = cells[0];
+    } else if (cells.length === 2) {
+      const [first, second] = cells;
+      const firstLooksLikeAge = /^\d{1,2}$/.test(first.trim());
+      const secondLooksLikeAge = /^\d{1,2}$/.test(second.trim());
+      if (firstLooksLikeAge && !secondLooksLikeAge) {
+        age = first;
+        name = second;
+      } else if (secondLooksLikeAge && !firstLooksLikeAge) {
+        name = first;
+        age = second;
+      } else {
+        name = first;
+        jerseySize = second;
+      }
+    } else {
+      name = cells[0] || "";
+      age = cells[1] || "";
+      jerseySize = cells[2] || "";
+    }
+
+    const cleanedName = name.replace(/^[-•*]\s*/, "").trim();
+    if (!cleanedName) return;
+    imported.push({ name: cleanedName, age: age.trim(), jerseySize: jerseySize.trim() });
+  });
+
+  return imported;
+}
+
 export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -545,6 +660,9 @@ export function RegistrationPage() {
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [rulesScrolled, setRulesScrolled] = useState(false);
   const [jerseyPickerOpen, setJerseyPickerOpen] = useState(false);
+  const [rosterImportOpen, setRosterImportOpen] = useState(false);
+  const [rosterImportText, setRosterImportText] = useState("");
+  const rosterFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
@@ -598,6 +716,46 @@ export function RegistrationPage() {
     setRulesScrolled(false);
     setRulesModalOpen(true);
     downloadRulesFile(tournament);
+  }
+
+  function applyRosterImport(rawText: string) {
+    const importedRows = parseRosterImportContent(rawText);
+    if (!importedRows.length) {
+      showMissing("No roster rows were found. Paste names, ages, and jersey sizes or upload a CSV/text file.");
+      return;
+    }
+
+    const nextMembers = [...members];
+    const nextMemberAges = [...memberAges];
+    const nextMemberJerseySizes = [...memberJerseySizes];
+
+    importedRows.forEach((entry, index) => {
+      if (index >= memberSlots.length) return;
+      nextMembers[index] = entry.name;
+      nextMemberAges[index] = entry.age;
+      nextMemberJerseySizes[index] = entry.jerseySize;
+    });
+
+    setMembers(nextMembers);
+    setMemberAges(nextMemberAges);
+    setMemberJerseySizes(nextMemberJerseySizes);
+    setRosterImportText("");
+    setRosterImportOpen(false);
+    window.alert("Roster imported into the first available player slots.");
+  }
+
+  async function handleRosterFileImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      applyRosterImport(text);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "The selected file could not be read.";
+      showMissing(message);
+    } finally {
+      event.target.value = "";
+    }
   }
 
   function handleRulesScroll(event: React.UIEvent<HTMLDivElement>) {
@@ -813,7 +971,7 @@ export function RegistrationPage() {
                   <div className="section-head-inline">
                     <h3>Player Roster</h3>
                     <div className="section-actions">
-                      <button className="btn btn-secondary btn-sm" type="button"><Upload size={14} /> Import</button>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRosterImportOpen(true)}><Upload size={14} /> Import</button>
                     </div>
                   </div>
                   <div className="player-roster-rows" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -870,6 +1028,30 @@ export function RegistrationPage() {
           {activeStep === 0 ? <TournamentPosterPanel tournament={tournament} /> : null}
         </div>
         
+        {rosterImportOpen && (
+          <div className="rules-modal-backdrop" role="dialog" aria-modal="true">
+            <article className="rules-modal">
+              <button className="rules-modal-close" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>x</button>
+              <h2>Import roster</h2>
+              <p>Paste player rows or upload a CSV/text file. We will fill the first available roster slots.</p>
+              <input ref={rosterFileInputRef} type="file" accept=".csv,.txt,.json" onChange={handleRosterFileImport} style={{ display: "none" }} />
+              <div className="rules-modal-actions" style={{ justifyContent: "flex-start", marginBottom: "12px" }}>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => rosterFileInputRef.current?.click()}>Upload file</button>
+              </div>
+              <textarea
+                value={rosterImportText}
+                onChange={(event) => setRosterImportText(event.target.value)}
+                placeholder="Example:&#10;John Doe, 20, M&#10;Ravi Kumar, 19, L"
+                style={{ minHeight: "140px", width: "100%", border: "1px solid #d4d8e0", borderRadius: "10px", padding: "10px", resize: "vertical" }}
+              />
+              <div className="rules-modal-actions">
+                <button className="btn btn-secondary" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>Cancel</button>
+                <button className="btn btn-primary" type="button" onClick={() => applyRosterImport(rosterImportText)}>Import rows</button>
+              </div>
+            </article>
+          </div>
+        )}
+
         {jerseyPickerOpen && (
           <div className="rules-modal-backdrop" role="dialog" aria-modal="true">
             <article className="rules-modal jersey-picker-modal">

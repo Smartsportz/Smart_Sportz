@@ -240,7 +240,7 @@ img { max-width: 100%; display: block; }
 .carousel-row.wheel-horizontal > * { transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease, opacity .24s ease; transform-origin: center; }
 .carousel-row.wheel-horizontal > *:hover { transform: translateY(-5px) scale(1.025); z-index: 2; }
 .queue-shell { position: relative; width: 100%; max-width: 100%; overflow: hidden; }
-.queue-track { display: flex; width: max-content; min-width: 100%; gap: 20px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; will-change: transform; }
+.queue-track { display: flex; width: 100%; min-width: 100%; gap: 20px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; will-change: transform; }
 .queue-track::-webkit-scrollbar { display: none; }
 .queue-shell:hover .queue-track { animation-play-state: paused; }
 .queue-track > * { flex: 0 0 auto; transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
@@ -994,6 +994,23 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .auth-card form { display: grid; align-content: center; gap: 16px; padding: 44px; }
 .auth-card h1 { margin: 0; font-family: Poppins, sans-serif; }
 .auth-card a { color: var(--primary-dark); font-weight: 800; }
+.password-field { display: grid; gap: 10px; }
+.password-input-wrap { position: relative; }
+.password-input-wrap input { width: 100%; }
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.password-toggle:hover { color: var(--text); }
 .form-alert { padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(225, 29, 72, .22); background: rgba(225, 29, 72, .08); color: #be123c; font-weight: 700; font-size: 13px; }
 .form-hint { padding: 10px 12px; border: 1px solid rgba(11, 136, 82, .2); border-radius: 12px; background: rgba(11, 136, 82, .08); color: var(--primary-dark); font-size: 13px; font-weight: 800; }
 .login-help { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
