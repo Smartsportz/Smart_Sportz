@@ -1856,7 +1856,7 @@ export function AdminUserCreatePage() {
 
   return (
     <Page>
-      <PortalShell title="Add User" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
+      <PortalShell title="Add User" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
         {error && <div className="form-alert">{error}</div>}
         <form className="panel form-grid" onSubmit={submit}>
           <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
@@ -1914,7 +1914,7 @@ export function AdminUserDetailPage() {
 
   return (
     <Page>
-      <PortalShell title={data?.user.name ?? "User Detail"} sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
+      <PortalShell title={data?.user.name ?? "User Detail"} subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
         {message && <div className="form-alert success-alert">{message}</div>}
         {error && <div className="form-alert">{error}</div>}
         {!data ? <section className="panel user-empty-state"><h2>Loading user</h2></section> : (
@@ -2006,7 +2006,7 @@ export function AdminManagerCreatePage() {
 
   return (
     <Page>
-      <PortalShell title="Add Manager" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
+      <PortalShell title="Add Manager" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
         <section className="panel tournament-create-panel">
           <form className="form-grid" onSubmit={createManager}>
             <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
@@ -2061,7 +2061,7 @@ export function AdminManagerDetailPage() {
 
   return (
     <Page>
-      <PortalShell title={manager?.name ?? "Manager Detail"} sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
+      <PortalShell title={manager?.name ?? "Manager Detail"} subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
         {message && <div className="form-alert success-alert">{message}</div>}
         <form className="panel form-grid" onSubmit={saveManager}>
           <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
@@ -2078,7 +2078,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
 
   return (
     <Page>
-      <PortalShell title={title} sidebar={sidebar} action={<span className="status emerald">System optimal</span>}>
+      <PortalShell title={title} subtitle="" sidebar={sidebar} action={<span className="status emerald">System optimal</span>}>
         {section === "dashboard" && <AdminDashboardDbPanel />}
         {section === "tournaments" && <AdminTournamentsDbPanel />}
         {section === "users" && <AdminUsersPanel />}
