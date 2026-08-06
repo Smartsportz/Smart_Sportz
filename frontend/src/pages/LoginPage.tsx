@@ -31,8 +31,9 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const googleCallbackRef = useRef<(response: { credential?: string }) => void>(() => undefined);
   const from = (location.state as { from?: string } | null)?.from;
   const registerFlow = Boolean(from?.includes("/register"));
-  const [email, setEmail] = useState(registerFlow ? "user@smartsportz.in" : "admin@smartsportz.in");
-  const [password, setPassword] = useState(registerFlow ? "user123" : "admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginPreset, setLoginPreset] = useState<"super_admin" | "management" | "participant" | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+916374409006");
   const [channel, setChannel] = useState<"email" | "sms">("email");
@@ -44,6 +45,23 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
+  const emailPlaceholder = loginPreset === "management"
+    ? "manager@smartsportz.in"
+    : loginPreset === "participant"
+      ? "user@smartsportz.in"
+      : "admin@smartsportz.in";
+  const passwordPlaceholder = loginPreset === "management"
+    ? "manager123"
+    : loginPreset === "participant"
+      ? "user123"
+      : "admin123";
+
+  function applyLoginPreset(preset: "super_admin" | "management" | "participant") {
+    setLoginPreset(preset);
+    setEmail("");
+    setPassword("");
+    setError("");
+  }
 
   useEffect(() => {
     googleCallbackRef.current = async (response) => {
@@ -184,14 +202,14 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
                   : "Please enter your credentials to access your dashboard."}
           </p>
           {!challenge && mode === "signup" && <label>Full name<input placeholder="Team captain name" value={name} onChange={(event) => setName(event.target.value)} /></label>}
-          {!challenge && <label>Email address<input placeholder="coach@smartsportz.in" value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
+          {!challenge && <label>Email address<input placeholder={emailPlaceholder} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
           {!challenge && mode === "signup" && <label>Phone number<input placeholder="+916374409006" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>}
           {!challenge && !recovery && (
             <label className="password-field">
               Password
               <div className="password-input-wrap">
                 <input
-                  placeholder="********"
+                  placeholder={passwordPlaceholder}
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -234,9 +252,9 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
           </button>
           {!recovery && !challenge && mode === "login" && (
             <div className="login-help">
-              <button type="button" onClick={() => { setEmail("admin@smartsportz.in"); setPassword("admin123"); }}>Super Admin</button>
-              <button type="button" onClick={() => { setEmail("manager@smartsportz.in"); setPassword("manager123"); }}>Management</button>
-              <button type="button" onClick={() => { setEmail("user@smartsportz.in"); setPassword("user123"); }}>Participant</button>
+              <button type="button" onClick={() => applyLoginPreset("super_admin")}>Super Admin</button>
+              <button type="button" onClick={() => applyLoginPreset("management")}>Management</button>
+              <button type="button" onClick={() => applyLoginPreset("participant")}>Participant</button>
             </div>
           )}
           {!recovery && !challenge && (
