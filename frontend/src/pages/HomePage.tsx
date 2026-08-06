@@ -168,6 +168,7 @@ export function HomePage() {
   useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
   const [discoveryEl, setDiscoveryEl] = useState<HTMLDivElement | null>(null);
+  const discoveryQueueRef = useRef<HTMLDivElement | null>(null);
   const sponsorQueueRef = useRef<HTMLDivElement>(null);
   const leaderboardFilterRef = useRef<HTMLDivElement>(null);
   const upcomingTournamentsRef = useRef<HTMLDivElement>(null);
@@ -403,12 +404,12 @@ export function HomePage() {
         </div>
         <div className="queue-shell discovery-queue-shell" onMouseEnter={() => setIsDiscoveryHovered(true)} onMouseLeave={() => setIsDiscoveryHovered(false)}>
           <div className="queue-controls left">
-            <button type="button" aria-label="Scroll sports left" onClick={() => scrollQueue(discoveryEl, "left")}>‹</button>
+            <button type="button" aria-label="Scroll sports left" onClick={() => scrollQueue(discoveryQueueRef.current, "left")}>‹</button>
           </div>
           <div className="queue-controls right">
-            <button type="button" aria-label="Scroll sports right" onClick={() => scrollQueue(discoveryEl, "right")}>›</button>
+            <button type="button" aria-label="Scroll sports right" onClick={() => scrollQueue(discoveryQueueRef.current, "right")}>›</button>
           </div>
-          <div className="queue-track discovery-queue-track wheel-horizontal" ref={setDiscoveryEl}>
+          <div className="queue-track discovery-queue-track wheel-horizontal" ref={(node) => { discoveryQueueRef.current = node; setDiscoveryEl(node); }}>
           {discoveryQueue.map((card, index) => (
             <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
               <img src={assetUrl(card.image || assets.cricket)} alt="" />

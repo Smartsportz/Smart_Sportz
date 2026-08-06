@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -40,6 +40,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
@@ -185,7 +186,27 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
           {!challenge && mode === "signup" && <label>Full name<input placeholder="Team captain name" value={name} onChange={(event) => setName(event.target.value)} /></label>}
           {!challenge && <label>Email address<input placeholder="coach@smartsportz.in" value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
           {!challenge && mode === "signup" && <label>Phone number<input placeholder="+916374409006" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>}
-          {!challenge && !recovery && <label>Password<input placeholder="********" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>}
+          {!challenge && !recovery && (
+            <label className="password-field">
+              Password
+              <div className="password-input-wrap">
+                <input
+                  placeholder="********"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((current) => !current)}
+                >
+                  {showPassword ? <Eye /> : <EyeOff />}
+                </button>
+              </div>
+            </label>
+          )}
           {!challenge && !recovery && mode === "login" && (
             <div className="google-login-wrap">
               {googleClientId ? (
@@ -224,7 +245,8 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
             </button>
           )}
           {challenge && <button className="auth-switch" type="button" onClick={() => { setChallenge(null); setOtp(""); }}>Change details</button>}
-          <Link to={recovery ? "/login" : "/forgot-password"}>{recovery ? "Back to login" : "Forgot password?"}</Link>
+          {recovery && <Link to="/login">Back to login</Link>}
+          {!recovery && mode === "login" && <Link to="/forgot-password">Forgot password?</Link>}
         </form>
       </div>
     </Page>

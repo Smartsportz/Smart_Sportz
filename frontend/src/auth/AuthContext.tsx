@@ -109,12 +109,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
       if (isOtpChallenge(data)) return data;
-      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-      localStorage.setItem(TOKEN_KEY, data.accessToken);
-      localStorage.setItem(REFRESH_KEY, data.refreshToken);
-      setUser(data.user);
-      setToken(data.accessToken);
-      return data.user;
+      if (!data || typeof data !== "object" || !("user" in data) || !("accessToken" in data) || !("refreshToken" in data)) {
+        throw new Error("Login response was invalid.");
+      }
+      const loginData = data as LoginResponse;
+      localStorage.setItem(USER_KEY, JSON.stringify(loginData.user));
+      localStorage.setItem(TOKEN_KEY, loginData.accessToken);
+      localStorage.setItem(REFRESH_KEY, loginData.refreshToken);
+      setUser(loginData.user);
+      setToken(loginData.accessToken);
+      return loginData.user;
     },
     async loginWithGoogle(credential: string) {
       const data = await apiRequest<LoginResponse>("/auth/google", {
