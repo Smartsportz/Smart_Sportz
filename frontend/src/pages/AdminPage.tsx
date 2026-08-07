@@ -389,11 +389,11 @@ function AdminTournamentsDbPanel() {
       name: form.name,
       sport: form.sport === "__new__" ? form.newSportName : form.sport,
       new_sport_name: form.sport === "__new__" ? form.newSportName : undefined,
-      status: form.status,
-      location: form.location,
-      date: form.date,
-      registration_start: form.registrationStart,
-      registration_end: form.registrationEnd,
+      status: form.status === "Featured" ? "Upcoming" : form.status,
+      location: form.location || "Mumbai",
+      date: form.date || "TBA",
+      registration_start: form.registrationStart || "TBA",
+      registration_end: form.registrationEnd || "TBA",
       teams: form.teams,
       capacity: form.capacity,
       team_size: form.maxTeamSize,
@@ -417,8 +417,8 @@ function AdminTournamentsDbPanel() {
     };
     try {
       const saved = await apiRequest<Record<string, any>>(
-        editing ? `/admin/tournaments/${editing.slug}` : "/admin/tournaments",
-        { method: "POST", body: JSON.stringify(payload) }, 
+        editing ? `/management/tournaments/${editing.slug}` : "/management/tournaments",
+        { method: editing ? "PATCH" : "POST", body: JSON.stringify(payload) }, 
         token,
       );
       await loadTournaments();
@@ -1196,11 +1196,11 @@ export function AdminTournamentEditorPage() {
       name: form.name,
       sport: form.sport === "__new__" ? form.newSportName : form.sport,
       new_sport_name: form.sport === "__new__" ? form.newSportName : undefined,
-      status: form.status,
-      location: form.location,
-      date: form.date,
-      registration_start: form.registrationStart,
-      registration_end: form.registrationEnd,
+      status: form.status === "Featured" ? "Upcoming" : form.status,
+      location: form.location || "Mumbai",
+      date: form.date || "TBA",
+      registration_start: form.registrationStart || "TBA",
+      registration_end: form.registrationEnd || "TBA",
       teams: form.teams,
       capacity: form.capacity,
       team_size: form.maxTeamSize,
@@ -1224,8 +1224,8 @@ export function AdminTournamentEditorPage() {
     };
     try {
       const saved = await apiRequest<Record<string, any>>(
-        isNew ? "/admin/tournaments" : `/admin/tournaments/${slug}`,
-        { method: "POST", body: JSON.stringify(payload) }, 
+        isNew ? "/management/tournaments" : `/management/tournaments/${slug}`,
+        { method: isNew ? "POST" : "PATCH", body: JSON.stringify(payload) }, 
         token,
       );
       setSavedTournament(saved);
