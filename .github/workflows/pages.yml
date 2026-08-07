@@ -17,56 +17,40 @@ jobs:
   publish:
     name: Build Vite App and Publish gh-pages
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Show Node and NPM versions
-        run: |
-          node -v
-          npm -v
-
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Verify installed packages
-        run: |
-          npm ls typescript
-          npm ls lucide-react
-          ./node_modules/.bin/tsc -v
-          node -e "import('lucide-react').then(m=>console.log({Eye:!!m.Eye,EyeOff:!!m.EyeOff,Lock:!!m.Lock}))"
-
       - name: Build frontend
+        working-directory: frontend
         run: |
           npm run build
           test -d dist
 
       - name: Add GitHub Pages marker
-        working-directory: .
         run: |
           touch frontend/dist/.nojekyll
           cp frontend/dist/index.html frontend/dist/404.html
 
-      - name: Publish to gh-pages
-        working-directory: frontend/dist
+      - name: Publish to gh-pages branch
         run: |
+          cd frontend/dist
           git init
-          git checkout -B gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
           git add .
-          git commit -m "Deploy Smart Sportz frontend" || echo "Nothing to commit"
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git commit -m "Deploy Smart Sportz frontend"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           git push --force origin gh-pages
