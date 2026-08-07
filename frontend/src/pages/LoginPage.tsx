@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -220,7 +220,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword((current) => !current)}
                 >
-                  {showPassword ? <EyeOff /> : <Eye />}
+                  {showPassword ? "👁️‍🗨️" : "👁️"}
                 </button>
               </div>
             </label>
