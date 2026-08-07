@@ -33,7 +33,7 @@ export function TournamentsPage() {
     () => Array.from(new Set(runtimeTournaments.flatMap((item) => [item.location, ...(item.cities ?? [])]))).sort(),
     [runtimeTournaments],
   );
-  const statusOptions = ["Featured", "Open Registration", "Upcoming", "Live", "Completed"];
+  const statusOptions = ["Featured", "Open Registration", "Live", "Completed"]; //removed 
 
   function toggleValue(list: string[], value: string) {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];

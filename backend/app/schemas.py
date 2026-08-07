@@ -336,3 +336,26 @@ class AnnouncementCreate(BaseModel):
     tournament_slug: str
     title: str
     message: str
+
+from pydantic import BaseModel
+from typing import Optional
+
+
+class AnnouncementCreatePayload(BaseModel):
+    title: str
+    description: str = ""
+    image: str = "/assets/poster.jpeg"
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    published: bool = True
+    city: Optional[str] = None
+
+
+class AnnouncementUpdatePayload(BaseModel):
+    title: str
+    description: str = ""
+    image: str = "/assets/poster.jpeg"
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    published: bool = True
+    city: Optional[str] = None

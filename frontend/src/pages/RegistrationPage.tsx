@@ -8,6 +8,7 @@ import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
 import { useAuth } from "../auth/AuthContext";
+import * as XLSX from "xlsx";
 
 type SavedDocument = {
   documentType: string;
@@ -192,6 +193,8 @@ const jerseyOptions = [
   { label: "Classic", image: jerseySvg("Classic", "#7c3aed") },
 ];
 
+const jerseySizeOptions = ["XS", "S", "M", "L", "XL"];
+
 function jerseyDisplayName(value: string) {
   return jerseyOptions.find((jersey) => jersey.image === value)?.label ?? "Selected team kit";
 }
@@ -320,6 +323,15 @@ function tournamentAgeRange(tournament: (typeof tournaments)[number]) {
   return "Open age category";
 }
 
+function isAgeInRange(age: number, tournament: (typeof tournaments)[number]): boolean {
+  const minAge = Number((tournament as any).minAge ?? (tournament as any).min_age ?? 0);
+  const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
+  if (minAge && maxAge) return age >= minAge && age <= maxAge;
+  if (minAge) return age >= minAge;
+  if (maxAge) return age <= maxAge;
+  return true;
+}
+
 function tournamentRulesText(tournament: (typeof tournaments)[number]) {
   const description = (tournament as any).tournamentDescription || `${tournament.name} follows SmartSportz registration, roster verification, payment, fair-play, and event operations rules.`;
   return [
@@ -402,13 +414,45 @@ function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   window.setTimeout(() => URL.revokeObjectURL(url), 300);
 }
 
+function downloadSampleExcel() {
+  const sampleData = [
+    { sno: 1, name: "John Doe", age: 25, size: "L" },
+    { sno: 2, name: "Jane Smith", age: 24, size: "M" },
+    { sno: 3, name: "Mike Johnson", age: 26, size: "XL" },
+    { sno: 4, name: "Sarah Williams", age: 23, size: "S" },
+    { sno: 5, name: "David Brown", age: 27, size: "M" },
+  ];
+  
+  const ws = XLSX.utils.json_to_sheet(sampleData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Players");
+  
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 8 },  // sno
+    { wch: 20 }, // name
+    { wch: 10 }, // age
+    { wch: 10 }  // size
+  ];
+  
+  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'import_player_sample.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
   const wizard = ["Tournament", "Team Details", "Payment", "Confirmation"];
-  // Map index for custom 4-step wizard
   let displayIndex = activeIndex;
-  if (activeIndex >= 1) displayIndex = 1; // Team & Players
-  if (activeIndex === 4) displayIndex = 2; // Payment
-  if (activeIndex === 5) displayIndex = 3; // Confirmation
+  if (activeIndex >= 1) displayIndex = 1;
+  if (activeIndex === 4) displayIndex = 2;
+  if (activeIndex === 5) displayIndex = 3;
 
   return (
     <div className="registration-stepper" aria-label="Registration progress">
@@ -423,9 +467,7 @@ function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
 }
 
 function RegistrationShell({ children }: { children: React.ReactNode }) {
-  return (
-    <>{children}</>
-  );
+  return <>{children}</>;
 }
 
 function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: (typeof tournaments)[number]; amount: number; showTimeline?: boolean }) {
@@ -612,6 +654,41 @@ function parseRosterImportContent(rawText: string): ImportedRosterEntry[] {
   return imported;
 }
 
+function parseExcelFile(file: File): Promise<ImportedRosterEntry[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+        
+        const entries: ImportedRosterEntry[] = [];
+        jsonData.forEach((row: any) => {
+          const name = row.name || row.Name || row.NAME || row.player_name || "";
+          const age = String(row.age || row.Age || row.AGE || row.player_age || "");
+          const jerseySize = String(row.size || row.Size || row.SIZE || row.jersey_size || "");
+          
+          if (name && name.trim()) {
+            entries.push({
+              name: name.trim(),
+              age: age.trim(),
+              jerseySize: jerseySize.trim()
+            });
+          }
+        });
+        
+        resolve(entries);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -654,7 +731,6 @@ export function RegistrationPage() {
   const [documents, setDocuments] = useState<SavedDocument[]>(() => teamGroupImageDocument(savedDraft?.documents));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  // steps 2 and 3 are now hidden/merged into step 1
   const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 1));
   const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
@@ -663,6 +739,10 @@ export function RegistrationPage() {
   const [rosterImportOpen, setRosterImportOpen] = useState(false);
   const [rosterImportText, setRosterImportText] = useState("");
   const rosterFileInputRef = useRef<HTMLInputElement | null>(null);
+  const excelFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const minAge = Number((tournament as any).minAge ?? (tournament as any).min_age ?? 0);
+  const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
@@ -718,10 +798,9 @@ export function RegistrationPage() {
     downloadRulesFile(tournament);
   }
 
-  function applyRosterImport(rawText: string) {
-    const importedRows = parseRosterImportContent(rawText);
-    if (!importedRows.length) {
-      showMissing("No roster rows were found. Paste names, ages, and jersey sizes or upload a CSV/text file.");
+  function applyRosterImport(entries: ImportedRosterEntry[]) {
+    if (!entries.length) {
+      showMissing("No roster entries were found.");
       return;
     }
 
@@ -729,7 +808,7 @@ export function RegistrationPage() {
     const nextMemberAges = [...memberAges];
     const nextMemberJerseySizes = [...memberJerseySizes];
 
-    importedRows.forEach((entry, index) => {
+    entries.forEach((entry, index) => {
       if (index >= memberSlots.length) return;
       nextMembers[index] = entry.name;
       nextMemberAges[index] = entry.age;
@@ -741,17 +820,26 @@ export function RegistrationPage() {
     setMemberJerseySizes(nextMemberJerseySizes);
     setRosterImportText("");
     setRosterImportOpen(false);
-    window.alert("Roster imported into the first available player slots.");
+    window.alert(`${entries.length} players imported into the available roster slots.`);
   }
 
-  async function handleRosterFileImport(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleRosterTextImport() {
+    if (!rosterImportText.trim()) {
+      showMissing("Please paste player data first.");
+      return;
+    }
+    const entries = parseRosterImportContent(rosterImportText);
+    applyRosterImport(entries);
+  }
+
+  async function handleExcelImport(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      applyRosterImport(text);
+      const entries = await parseExcelFile(file);
+      applyRosterImport(entries);
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "The selected file could not be read.";
+      const message = caught instanceof Error ? caught.message : "The Excel file could not be read.";
       showMissing(message);
     } finally {
       event.target.value = "";
@@ -766,7 +854,6 @@ export function RegistrationPage() {
   }
 
   async function continueToRoster() {
-    // Validate everything combined
     const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
     
@@ -775,15 +862,30 @@ export function RegistrationPage() {
       .filter((item) => item.name.length < 2)
       .map((item) => item.label);
 
-    const missingAges = memberAges.filter(a => !a.trim()).length;
+    const invalidAges = memberAges
+      .map((age, index) => ({ age: age.trim(), index, label: memberSlots[index] }))
+      .filter((item) => {
+        if (!item.age) return false;
+        const ageNum = parseInt(item.age);
+        return isNaN(ageNum) || ageNum <= 0 || !isAgeInRange(ageNum, tournament);
+      });
+
     const missingSizes = memberJerseySizes.filter(s => !s.trim()).length;
 
     if (missingTeamFields.length) {
       showMissing(`Please complete these fields: ${missingTeamFields.join(", ")}.`);
       return;
     }
-    if (missingMemberLabels.length || missingAges || missingSizes) {
-      showMissing(`Please complete all player names, ages, and jersey sizes.`);
+    if (missingMemberLabels.length) {
+      showMissing(`Please complete all player names.`);
+      return;
+    }
+    if (invalidAges.length) {
+      showMissing(`Invalid ages for: ${invalidAges.map(a => a.label).join(", ")}. Age must be between ${minAge || 0} and ${maxAge || 100}.`);
+      return;
+    }
+    if (missingSizes) {
+      showMissing(`Please select jersey sizes for all players.`);
       return;
     }
 
@@ -963,39 +1065,63 @@ export function RegistrationPage() {
                     <label>Sub-captain name<input value={teamDetails.subCaptainName} onChange={(event) => updateTeamDetails("subCaptainName", event.target.value)} placeholder="Full Name" /></label>
                     <label>Coach name<input value={teamDetails.coachName} onChange={(event) => updateTeamDetails("coachName", event.target.value)} placeholder="Optional" /></label>
                     <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="contact@team.com" /></label>
-                    <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91" /></label>
+                    <label>Phone
+                      <input 
+                        type="number" 
+                        value={teamDetails.phone} 
+                        onChange={(event) => updateTeamDetails("phone", event.target.value)} 
+                        placeholder="+91" 
+                      />
+                    </label>
                   </div>
                 </div>
 
                 <div className="form-group-box" style={{ marginTop: "2rem" }}>
                   <div className="section-head-inline">
                     <h3>Player Roster</h3>
-                    <div className="section-actions">
+                    <div className="section-actions" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRosterImportOpen(true)}><Upload size={14} /> Import</button>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={downloadSampleExcel}><Download size={14} /> Sample</button>
                     </div>
                   </div>
                   <div className="player-roster-rows" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {memberSlots.map((role, index) => (
-                      <div key={role} className="player-row-input" style={{ display: "grid", gridTemplateColumns: "40px 1fr 80px 120px", gap: "10px", alignItems: "center" }}>
-                        <span style={{ fontWeight: "bold", color: "#666" }}>{index + 1}</span>
-                        <input 
-                          value={members[index]} 
-                          onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} 
-                          placeholder={`${role} Name`} 
-                        />
-                        <input 
-                          value={memberAges[index]} 
-                          onChange={(event) => setMemberAges((current) => current.map((v, i) => i === index ? event.target.value : v))} 
-                          placeholder="Age" 
-                          inputMode="numeric" 
-                        />
-                        <input 
-                          value={memberJerseySizes[index]} 
-                          onChange={(event) => setMemberJerseySizes((current) => current.map((v, i) => i === index ? event.target.value : v))} 
-                          placeholder="Size (S/M/L)" 
-                        />
-                      </div>
-                    ))}
+                    {memberSlots.map((role, index) => {
+                      const ageStr = memberAges[index] || "";
+                      const ageNum = parseInt(ageStr);
+                      const isInvalid = ageStr && (!isNaN(ageNum) && ageNum > 0) ? !isAgeInRange(ageNum, tournament) : false;
+                      return (
+                        <div key={role} className="player-row-input" style={{ display: "grid", gridTemplateColumns: "40px 1fr 80px 120px", gap: "10px", alignItems: "center" }}>
+                          <span style={{ fontWeight: "bold", color: "#666" }}>{index + 1}</span>
+                          <input 
+                            value={members[index]} 
+                            onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} 
+                            placeholder={`${role} Name`} 
+                          />
+                          <input 
+                            type="number"
+                            value={memberAges[index]} 
+                            onChange={(event) => setMemberAges((current) => current.map((v, i) => i === index ? event.target.value : v))} 
+                            placeholder="Age"
+                            style={isInvalid ? { borderColor: "red", backgroundColor: "#fff0f0" } : {}}
+                          />
+                          <select
+                            value={memberJerseySizes[index] || ""}
+                            onChange={(event) => setMemberJerseySizes((current) => current.map((v, i) => i === index ? event.target.value : v))}
+                            style={{ padding: "8px", borderRadius: "8px", border: "1px solid #ddd" }}
+                          >
+                            <option value="">Size</option>
+                            {jerseySizeOptions.map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: "8px", fontSize: "14px", color: "#666" }}>
+                    <span>Age restriction: {tournamentAgeRange(tournament)}</span>
+                    {minAge > 0 && <span style={{ marginLeft: "16px" }}>Min: {minAge} years</span>}
+                    {maxAge > 0 && <span style={{ marginLeft: "16px" }}>Max: {maxAge} years</span>}
                   </div>
                 </div>
 
@@ -1033,20 +1159,32 @@ export function RegistrationPage() {
             <article className="rules-modal">
               <button className="rules-modal-close" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>x</button>
               <h2>Import roster</h2>
-              <p>Paste player rows or upload a CSV/text file. We will fill the first available roster slots.</p>
-              <input ref={rosterFileInputRef} type="file" accept=".csv,.txt,.json" onChange={handleRosterFileImport} style={{ display: "none" }} />
-              <div className="rules-modal-actions" style={{ justifyContent: "flex-start", marginBottom: "12px" }}>
-                <button className="btn btn-secondary btn-sm" type="button" onClick={() => rosterFileInputRef.current?.click()}>Upload file</button>
+              <p>Paste player rows or upload a CSV/Excel file. We will fill the first available roster slots.</p>
+              <div className="rules-modal-actions" style={{ justifyContent: "flex-start", marginBottom: "12px", gap: "8px" }}>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => document.getElementById('excel-upload')?.click()}>
+                  <FileText size={14} /> Upload Excel
+                </button>
+                <input 
+                  id="excel-upload"
+                  ref={excelFileInputRef}
+                  type="file" 
+                  accept=".xlsx,.xls,.csv" 
+                  onChange={handleExcelImport}
+                  style={{ display: "none" }}
+                />
+                <button className="btn btn-secondary btn-sm" type="button" onClick={downloadSampleExcel}>
+                  <Download size={14} /> Sample
+                </button>
               </div>
               <textarea
                 value={rosterImportText}
                 onChange={(event) => setRosterImportText(event.target.value)}
-                placeholder="Example:&#10;John Doe, 20, M&#10;Ravi Kumar, 19, L"
+                placeholder="Example:&#10;John Doe, 25, L&#10;Ravi Kumar, 24, M"
                 style={{ minHeight: "140px", width: "100%", border: "1px solid #d4d8e0", borderRadius: "10px", padding: "10px", resize: "vertical" }}
               />
               <div className="rules-modal-actions">
                 <button className="btn btn-secondary" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>Cancel</button>
-                <button className="btn btn-primary" type="button" onClick={() => applyRosterImport(rosterImportText)}>Import rows</button>
+                <button className="btn btn-primary" type="button" onClick={handleRosterTextImport}>Import rows</button>
               </div>
             </article>
           </div>

@@ -464,6 +464,29 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
   message TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+-- Create announcements table
+CREATE TABLE IF NOT EXISTS announcements (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    image TEXT,
+    date_from TEXT,
+    date_to TEXT,
+    published INTEGER DEFAULT 1,
+    created_by TEXT,
+    city TEXT,
+    created_at TEXT,
+    updated_at TEXT,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(published);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_by ON announcements(created_by);
+CREATE INDEX IF NOT EXISTS idx_announcements_city ON announcements(city);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
+
 """
 
 INDEX_SCHEMA = """
@@ -635,6 +658,7 @@ CREATE TABLE IF NOT EXISTS news_social (
   comments_json TEXT NOT NULL DEFAULT '[]',
   updated_at TEXT NOT NULL
 );
+
 """)
         live_match_columns = {
             "youtube_url": "TEXT NOT NULL DEFAULT ''",

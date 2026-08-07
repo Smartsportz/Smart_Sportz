@@ -15,6 +15,8 @@ from app.schemas import (
     AdminTeamUpdatePayload,
     AdminUserCreatePayload,
     AdminUserUpdatePayload,
+    AnnouncementCreatePayload,
+    AnnouncementUpdatePayload,
     CmsUpdate,
     HomeDiscoveryCardUpdate,
     LiveHighlightUpdate,
@@ -45,6 +47,26 @@ def ensure_city_access(user: dict, city: str) -> None:
         raise HTTPException(
             status_code=403,
             detail=f"Manager does not have access to city: {city}"
+        )
+
+
+def ensure_announcement_access(user: dict, announcement: dict) -> None:
+    """Ensure the user has access to the announcement."""
+    if user["role"] == "super_admin":
+        return
+    # For managers, check if they have access to the city
+    if announcement.get("city"):
+        allowed_cities = [c.lower() for c in manager_cities(user)]
+        if announcement["city"].lower() not in allowed_cities:
+            raise HTTPException(
+                status_code=403,
+                detail="Manager does not have access to this announcement's city"
+            )
+    # If no city specified, check if they own the announcement
+    if announcement.get("created_by") != user["id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Manager does not have access to this announcement"
         )
 
 
@@ -88,6 +110,339 @@ def manager_tournament_slugs(user: dict) -> list[str]:
         )
     ]
 
+
+# ==================== ANNOUNCEMENT CRUD OPERATIONS ====================
+
+@router.get("/announcements")
+def get_announcements(
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Get all announcements with optional filters."""
+    try:
+        query = """
+            SELECT a.*, u.name AS created_by_name, u.email AS created_by_email
+            FROM announcements a
+            LEFT JOIN users u ON u.id = a.created_by
+            WHERE 1=1
+        """
+        params = []
+
+        # If manager, filter by assigned cities
+        if user["role"] != "super_admin":
+            cities = manager_cities(user)
+            if cities:
+                placeholders = ",".join(["?"] * len(cities))
+                query += f" AND (a.city IN ({placeholders}) OR a.created_by = ?)"
+                params.extend(cities)
+                params.append(user["id"])
+            else:
+                # If manager has no cities, only show their own announcements
+                query += " AND a.created_by = ?"
+                params.append(user["id"])
+
+        query += " ORDER BY a.created_at DESC"
+        announcements = rows(query, tuple(params))
+        
+        return ok(announcements)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/announcements/{announcement_id}")
+def get_announcement(
+    announcement_id: str,
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Get a single announcement by ID."""
+    try:
+        announcement = row(
+            """
+            SELECT a.*, u.name AS created_by_name, u.email AS created_by_email
+            FROM announcements a
+            LEFT JOIN users u ON u.id = a.created_by
+            WHERE a.id = ?
+            """,
+            (announcement_id,)
+        )
+        
+        if not announcement:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+        
+        # Check access
+        ensure_announcement_access(user, announcement)
+        
+        return ok(announcement)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/announcements")
+def create_announcement(
+    payload: AnnouncementCreatePayload,
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Create a new announcement."""
+    try:
+        # Generate unique ID
+        announcement_id = f"ann_{uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Insert announcement
+        execute(
+            """
+            INSERT INTO announcements(
+                id, title, description, image, date_from, date_to,
+                published, created_by, city, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                announcement_id,
+                payload.title,
+                payload.description,
+                payload.image,
+                payload.date_from,
+                payload.date_to,
+                int(payload.published),
+                user["id"],
+                payload.city,
+                now,
+                now,
+            ),
+        )
+
+        log(
+            user["email"],
+            "announcement_created",
+            "announcement",
+            announcement_id,
+            f"Announcement created: {payload.title}"
+        )
+
+        # Return created announcement
+        result = row(
+            """
+            SELECT a.*, u.name AS created_by_name, u.email AS created_by_email
+            FROM announcements a
+            LEFT JOIN users u ON u.id = a.created_by
+            WHERE a.id = ?
+            """,
+            (announcement_id,)
+        )
+
+        return ok(result, "Announcement created successfully")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/announcements/{announcement_id}")
+def update_announcement(
+    announcement_id: str,
+    payload: AnnouncementUpdatePayload,
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Update an existing announcement."""
+    try:
+        # Get existing announcement
+        announcement = row("SELECT * FROM announcements WHERE id = ?", (announcement_id,))
+        if not announcement:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+
+        # Check access
+        ensure_announcement_access(user, announcement)
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Update announcement
+        execute(
+            """
+            UPDATE announcements
+            SET title = ?, description = ?, image = ?,
+                date_from = ?, date_to = ?, published = ?,
+                city = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                payload.title,
+                payload.description,
+                payload.image,
+                payload.date_from,
+                payload.date_to,
+                int(payload.published),
+                payload.city,
+                now,
+                announcement_id,
+            ),
+        )
+
+        log(
+            user["email"],
+            "announcement_updated",
+            "announcement",
+            announcement_id,
+            f"Announcement updated: {payload.title}"
+        )
+
+        # Return updated announcement
+        result = row(
+            """
+            SELECT a.*, u.name AS created_by_name, u.email AS created_by_email
+            FROM announcements a
+            LEFT JOIN users u ON u.id = a.created_by
+            WHERE a.id = ?
+            """,
+            (announcement_id,)
+        )
+
+        return ok(result, "Announcement updated successfully")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/announcements/{announcement_id}/publish")
+def toggle_announcement_publish(
+    announcement_id: str,
+    payload: dict = Body(default_factory=dict),
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Toggle announcement published status."""
+    try:
+        announcement = row("SELECT * FROM announcements WHERE id = ?", (announcement_id,))
+        if not announcement:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+
+        ensure_announcement_access(user, announcement)
+
+        new_status = not bool(announcement["published"])
+        now = datetime.now(timezone.utc).isoformat()
+
+        execute(
+            """
+            UPDATE announcements
+            SET published = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                int(new_status),
+                now,
+                announcement_id,
+            ),
+        )
+
+        log(
+            user["email"],
+            "announcement_publish_toggled",
+            "announcement",
+            announcement_id,
+            f"Announcement {'published' if new_status else 'hidden'}"
+        )
+
+        result = row(
+            """
+            SELECT a.*, u.name AS created_by_name, u.email AS created_by_email
+            FROM announcements a
+            LEFT JOIN users u ON u.id = a.created_by
+            WHERE a.id = ?
+            """,
+            (announcement_id,)
+        )
+
+        return ok(result, f"Announcement {'published' if new_status else 'hidden'}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/announcements/{announcement_id}")
+def delete_announcement(
+    announcement_id: str,
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Delete an announcement."""
+    try:
+        announcement = row("SELECT * FROM announcements WHERE id = ?", (announcement_id,))
+        if not announcement:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+
+        ensure_announcement_access(user, announcement)
+
+        execute("DELETE FROM announcements WHERE id = ?", (announcement_id,))
+
+        log(
+            user["email"],
+            "announcement_deleted",
+            "announcement",
+            announcement_id,
+            f"Announcement deleted: {announcement['title']}"
+        )
+
+        return ok({"deleted": True, "id": announcement_id}, "Announcement deleted successfully")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/announcements/published")
+def get_published_announcements(
+    user: dict = Depends(require_roles("super_admin", "management", "user"))
+):
+    """Get all published announcements (for public display)."""
+    try:
+        query = """
+            SELECT a.*, u.name AS created_by_name
+            FROM announcements a
+            LEFT JOIN users u ON u.id = a.created_by
+            WHERE a.published = 1
+        """
+        params = []
+
+        # If user is manager, filter by assigned cities
+        if user["role"] == "management":
+            cities = manager_cities(user)
+            if cities:
+                placeholders = ",".join(["?"] * len(cities))
+                query += f" AND (a.city IN ({placeholders}) OR a.created_by = ?)"
+                params.extend(cities)
+                params.append(user["id"])
+            else:
+                query += " AND a.created_by = ?"
+                params.append(user["id"])
+
+        query += " ORDER BY a.created_at DESC"
+        announcements = rows(query, tuple(params))
+        
+        return ok(announcements)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/announcements/stats/summary")
+def get_announcement_stats(
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    """Get announcement statistics."""
+    try:
+        total = row("SELECT COUNT(*) AS count FROM announcements")["count"]
+        published = row("SELECT COUNT(*) AS count FROM announcements WHERE published = 1")["count"]
+        hidden = row("SELECT COUNT(*) AS count FROM announcements WHERE published = 0")["count"]
+
+        return ok({
+            "total": total,
+            "published": published,
+            "hidden": hidden
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== DASHBOARD ====================
 
 @router.get("/dashboard")
 def dashboard(_: dict = Depends(require_roles("super_admin", "management"))):
@@ -765,8 +1120,7 @@ def _admin_tournament_payments_payload(tournament_slug: str):
           r.city,
           r.payment_status,
           r.status AS registration_status
-        FROM payments p
-        INNER JOIN registrations r ON r.id = p.registration_id
+        FROM payments p        INNER JOIN registrations r ON r.id = p.registration_id
         WHERE r.tournament_slug = ?
         ORDER BY p.created_at DESC
         """,
