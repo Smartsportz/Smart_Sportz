@@ -220,7 +220,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword((current) => !current)}
                 >
-                  {showPassword ? <Eye /> : <EyeOff />}
+                  {showPassword ? <EyeOff /> : <Eye />}
                 </button>
               </div>
             </label>
