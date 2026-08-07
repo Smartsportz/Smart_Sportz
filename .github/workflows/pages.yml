@@ -18,6 +18,10 @@ jobs:
     name: Build Vite App and Publish gh-pages
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: frontend
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -29,37 +33,35 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Show Node, NPM and TypeScript versions
+      - name: Show Node and NPM versions
         run: |
           node -v
           npm -v
-          npx tsc -v
 
       - name: Install dependencies
-        working-directory: frontend
         run: npm ci
 
-      - name: Debug installed packages
-        working-directory: frontend
+      - name: Verify installed packages
         run: |
-          npm ls lucide-react
           npm ls typescript
-          node -e "import('lucide-react').then(m=>console.log('Eye:',!!m.Eye,'EyeOff:',!!m.EyeOff,'Lock:',!!m.Lock))"
+          npm ls lucide-react
+          ./node_modules/.bin/tsc -v
+          node -e "import('lucide-react').then(m=>console.log({Eye:!!m.Eye,EyeOff:!!m.EyeOff,Lock:!!m.Lock}))"
 
       - name: Build frontend
-        working-directory: frontend
         run: |
           npm run build
           test -d dist
 
       - name: Add GitHub Pages marker
+        working-directory: .
         run: |
           touch frontend/dist/.nojekyll
           cp frontend/dist/index.html frontend/dist/404.html
 
       - name: Publish to gh-pages
+        working-directory: frontend/dist
         run: |
-          cd frontend/dist
           git init
           git checkout -B gh-pages
           git config user.name "github-actions[bot]"
