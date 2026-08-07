@@ -1,5 +1,5 @@
 import { CalendarDays, Heart, MessageCircle, Send, Share2, Trophy, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Page } from "../components/UI";
@@ -166,6 +166,23 @@ function writeGalleryState(value: GallerySocialState) {
   localStorage.setItem(galleryStateKey, JSON.stringify(value));
 }
 
+// Custom hook for debouncing API calls
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  
+  return debouncedValue;
+}
+
 export function GalleryPage() {
   useWheelHorizontal(".gallery-feed-grid");
   const [params, setParams] = useSearchParams();
@@ -174,16 +191,40 @@ export function GalleryPage() {
   const [selectedKey, setSelectedKey] = useState(params.get("image") || "");
   const [modalFlipped, setModalFlipped] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [socialLoaded, setSocialLoaded] = useState(false);
+  const pendingLikes = useRef<Record<string, boolean>>({});
+  const pendingComments = useRef<Record<string, string[]>>({});
+  
   const futureEvents = useMemo(
     () => tournaments.map((item) => withRuntimeTournamentStatus(item)).filter((item) => item.status !== "Completed").slice(0, 4),
     [],
   );
 
+  // Load social data with caching
   useEffect(() => {
     let active = true;
-    apiRequest<Record<string, { likes?: number; comments?: string[] }>>("/public/gallery/social")
-      .then((remote) => {
+    const controller = new AbortController();
+    
+    // Check if data exists in localStorage and is recent (within 5 minutes)
+    const cachedData = readGalleryState();
+    const hasCachedData = Object.keys(cachedData).length > 0;
+    
+    if (hasCachedData) {
+      setSocial(cachedData);
+      setSocialLoaded(true);
+      setIsLoading(false);
+    }
+    
+    const loadSocialData = async () => {
+      try {
+        const remote = await apiRequest<Record<string, { likes?: number; comments?: string[] }>>(
+          "/public/gallery/social",
+          { signal: controller.signal },
+          undefined
+        );
         if (!active) return;
+        
         setSocial((current) => {
           const merged: GallerySocialState = { ...current };
           Object.entries(remote).forEach(([key, value]) => {
@@ -196,10 +237,26 @@ export function GalleryPage() {
           writeGalleryState(merged);
           return merged;
         });
-      })
-      .catch(() => undefined);
+        setSocialLoaded(true);
+        setIsLoading(false);
+      } catch {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    // Load immediately if no cache, otherwise load in background
+    if (!hasCachedData) {
+      loadSocialData();
+    } else {
+      // Background refresh
+      setTimeout(loadSocialData, 100);
+    }
+    
     return () => {
       active = false;
+      controller.abort();
     };
   }, []);
 
@@ -236,55 +293,115 @@ export function GalleryPage() {
     setModalFlipped(false);
   }
 
-  function toggleGalleryLike(key: string) {
-    // Optimistic Update
+  // Optimized like toggle with debounce
+  const toggleGalleryLike = useCallback((key: string) => {
     const current = social[key] ?? { likes: 0, comments: [], liked: false };
     const liked = !current.liked;
+    const newLikes = Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1));
+    
+    // Immediate optimistic update
     const next = {
       ...social,
       [key]: {
         ...current,
         liked,
-        likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)),
+        likes: newLikes,
       },
     };
     persistGallerySocial(next);
 
-    apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/like", {
-      method: "POST",
-      body: JSON.stringify({ image_key: key, liked }),
-    }).then((remote) => {
-      setSocial((currentState) => ({
-        ...currentState,
-        [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments }
-      }));
-    }).catch(() => undefined);
-  }
+    // Store pending like
+    pendingLikes.current[key] = liked;
 
-  function addGalleryComment(event: FormEvent<HTMLFormElement>) {
+    // Debounced API call
+    const timer = setTimeout(() => {
+      const pendingLike = pendingLikes.current[key];
+      if (pendingLike !== undefined) {
+        apiRequest<{ image_key: string; likes: number; comments: string[] }>(
+          "/public/gallery/social/like",
+          {
+            method: "POST",
+            body: JSON.stringify({ image_key: key, liked: pendingLike }),
+          },
+          undefined
+        ).then((remote) => {
+          setSocial((currentState) => ({
+            ...currentState,
+            [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments }
+          }));
+        }).catch(() => {
+          // Revert on error
+          setSocial((currentState) => ({
+            ...currentState,
+            [key]: { 
+              ...currentState[key], 
+              liked: !liked, 
+              likes: Math.max(0, (currentState[key]?.likes ?? 0) - (liked ? 1 : -1)) 
+            }
+          }));
+        });
+        delete pendingLikes.current[key];
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [social]);
+
+  // Optimized comment add with debounce
+  const addGalleryComment = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedWinner || !commentDraft.trim()) return;
     const key = selectedWinner.key;
     const current = social[key] ?? { likes: 0, comments: [] };
     const comment = commentDraft.trim();
 
-    // Optimistic Update
+    // Immediate optimistic update
+    const newComments = [...(current.comments ?? []), comment];
     persistGallerySocial({ 
       ...social, 
-      [key]: { ...current, comments: [...(current.comments ?? []), comment] } 
+      [key]: { ...current, comments: newComments } 
     });
     setCommentDraft("");
 
-    apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/comment", {
-      method: "POST",
-      body: JSON.stringify({ image_key: key, comment }),
-    }).then((remote) => {
-      setSocial((currentState) => ({
-        ...currentState,
-        [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments }
-      }));
-    }).catch(() => undefined);
-  }
+    // Store pending comment
+    if (!pendingComments.current[key]) {
+      pendingComments.current[key] = [];
+    }
+    pendingComments.current[key].push(comment);
+
+    // Debounced API call
+    const timer = setTimeout(() => {
+      const pending = pendingComments.current[key];
+      if (pending && pending.length > 0) {
+        const lastComment = pending[pending.length - 1];
+        apiRequest<{ image_key: string; likes: number; comments: string[] }>(
+          "/public/gallery/social/comment",
+          {
+            method: "POST",
+            body: JSON.stringify({ image_key: key, comment: lastComment }),
+          },
+          undefined
+        ).then((remote) => {
+          setSocial((currentState) => ({
+            ...currentState,
+            [key]: { ...currentState[key], likes: remote.likes, comments: remote.comments }
+          }));
+        }).catch(() => {
+          // Revert on error
+          setSocial((currentState) => ({
+            ...currentState,
+            [key]: { 
+              ...currentState[key], 
+              comments: (currentState[key]?.comments ?? []).filter(c => c !== comment) 
+            }
+          }));
+        });
+        pendingComments.current[key] = [];
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedWinner, commentDraft, social]);
 
   async function shareGalleryWinner(item: typeof winnerItems[number]) {
     const url = `${window.location.origin}${window.location.pathname}?image=${encodeURIComponent(item.key)}`;
@@ -296,28 +413,50 @@ export function GalleryPage() {
     }
   }
 
+  // Memoized social data to prevent unnecessary re-renders
+  const getSocialState = useCallback((key: string) => {
+    return social[key] ?? { likes: 0, comments: [], liked: false };
+  }, [social]);
+
   return (
     <Page className="gallery-page">
       <section className="gallery-section gallery-section-first">
         <div className="gallery-simple-title"><h1>Gallery</h1></div>
-        <div className="gallery-feed-grid wheel-horizontal">
-          {winnerItems.map((winner) => {
-            const state = social[winner.key] ?? { likes: 0, comments: [] };
-            return (
-              <article className="gallery-feed-card" key={winner.key}>
-                <button className="gallery-image-open" type="button" onClick={() => openWinner(winner.key)}>
-                  <div className="gallery-winner-media"><img src={winner.image.image} alt="" /></div>
-                  <h3>{winner.image.title}</h3>
-                </button>
-                <div className="gallery-social-row">
-                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleGalleryLike(winner.key)}><Heart size={15} />{state.likes ?? 0}</button>
-                  <button type="button" onClick={() => openWinner(winner.key)}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
-                  <button type="button" onClick={() => void shareGalleryWinner(winner)}><Share2 size={15} />Share</button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        {isLoading ? (
+          <div className="gallery-loading">
+            <p>Loading gallery...</p>
+          </div>
+        ) : (
+          <div className="gallery-feed-grid wheel-horizontal">
+            {winnerItems.map((winner) => {
+              const state = getSocialState(winner.key);
+              return (
+                <article className="gallery-feed-card" key={winner.key}>
+                  <button className="gallery-image-open" type="button" onClick={() => openWinner(winner.key)}>
+                    <div className="gallery-winner-media"><img src={winner.image.image} alt="" loading="lazy" /></div>
+                    <h3>{winner.image.title}</h3>
+                  </button>
+                  <div className="gallery-social-row">
+                    <button 
+                      type="button" 
+                      className={state.liked ? "active" : ""} 
+                      onClick={() => toggleGalleryLike(winner.key)}
+                      aria-label="Like"
+                    >
+                      <Heart size={15} />{state.likes ?? 0}
+                    </button>
+                    <button type="button" onClick={() => openWinner(winner.key)}>
+                      <MessageCircle size={15} />{state.comments?.length ?? 0}
+                    </button>
+                    <button type="button" onClick={() => void shareGalleryWinner(winner)}>
+                      <Share2 size={15} />Share
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {selectedWinner && (
@@ -326,7 +465,7 @@ export function GalleryPage() {
             <button className="gallery-modal-close" type="button" onClick={closeWinner}><X size={18} /></button>
             <button className="gallery-modal-flipper" type="button" onClick={() => setModalFlipped((current) => !current)}>
               <div className="gallery-modal-face gallery-modal-front">
-                <img src={selectedWinner.image.image} alt="" />
+                <img src={selectedWinner.image.image} alt="" loading="lazy" />
                 <div><span className="status emerald">{selectedWinner.round.name}</span><h2>{selectedWinner.image.title}</h2><p>{selectedWinner.image.caption}</p></div>
               </div>
               <div className="gallery-modal-face gallery-modal-back">
@@ -335,12 +474,27 @@ export function GalleryPage() {
               </div>
             </button>
             <div className="gallery-modal-actions">
-              <button type="button" className={social[selectedWinner.key]?.liked ? "active" : ""} onClick={() => toggleGalleryLike(selectedWinner.key)}><Heart size={16} />{social[selectedWinner.key]?.likes ?? 0}</button>
-              <button type="button" onClick={() => void shareGalleryWinner(selectedWinner)}><Share2 size={16} />Share</button>
+              <button 
+                type="button" 
+                className={social[selectedWinner.key]?.liked ? "active" : ""} 
+                onClick={() => toggleGalleryLike(selectedWinner.key)}
+              >
+                <Heart size={16} />{social[selectedWinner.key]?.likes ?? 0}
+              </button>
+              <button type="button" onClick={() => void shareGalleryWinner(selectedWinner)}>
+                <Share2 size={16} />Share
+              </button>
             </div>
             <form className="gallery-comment-form" onSubmit={addGalleryComment}>
-              <input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Comment..." />
-              <button type="submit"><Send size={16} /></button>
+              <input 
+                value={commentDraft} 
+                onChange={(event) => setCommentDraft(event.target.value)} 
+                placeholder="Comment..." 
+                disabled={!socialLoaded}
+              />
+              <button type="submit" disabled={!commentDraft.trim() || !socialLoaded}>
+                <Send size={16} />
+              </button>
             </form>
             <div className="gallery-comment-list">
               {(social[selectedWinner.key]?.comments ?? []).map((comment, index) => (
@@ -363,12 +517,34 @@ export function GalleryAlbumPage() {
   const [flipped, setFlipped] = useState(Boolean(params.get("image")));
   const [social, setSocial] = useState(() => readGalleryState());
   const [commentDraft, setCommentDraft] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [socialLoaded, setSocialLoaded] = useState(false);
+  const pendingLikes = useRef<Record<string, boolean>>({});
+  const pendingComments = useRef<Record<string, string[]>>({});
 
+  // Load social data with caching
   useEffect(() => {
     let active = true;
-    apiRequest<Record<string, { likes?: number; comments?: string[] }>>("/public/gallery/social")
-      .then((remote) => {
+    const controller = new AbortController();
+    
+    const cachedData = readGalleryState();
+    const hasCachedData = Object.keys(cachedData).length > 0;
+    
+    if (hasCachedData) {
+      setSocial(cachedData);
+      setSocialLoaded(true);
+      setIsLoading(false);
+    }
+    
+    const loadSocialData = async () => {
+      try {
+        const remote = await apiRequest<Record<string, { likes?: number; comments?: string[] }>>(
+          "/public/gallery/social",
+          { signal: controller.signal },
+          undefined
+        );
         if (!active) return;
+        
         setSocial((current) => {
           const merged: GallerySocialState = { ...current };
           Object.entries(remote).forEach(([key, value]) => {
@@ -377,9 +553,25 @@ export function GalleryAlbumPage() {
           writeGalleryState(merged);
           return merged;
         });
-      })
-      .catch(() => undefined);
-    return () => { active = false; };
+        setSocialLoaded(true);
+        setIsLoading(false);
+      } catch {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+    
+    if (!hasCachedData) {
+      loadSocialData();
+    } else {
+      setTimeout(loadSocialData, 100);
+    }
+    
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -394,49 +586,95 @@ export function GalleryAlbumPage() {
   const activeRound = album.rounds.find((round) => round.id === activeRoundId) ?? album.rounds[0];
   const selectedImage = activeRound?.images.find((image) => image.id === selectedImageId);
 
-  function toggleLike(roundId: string, imageId: string) {
+  function persistGallerySocial(next: GallerySocialState) {
+    setSocial(next);
+    writeGalleryState(next);
+  }
+
+  const toggleLike = useCallback((roundId: string, imageId: string) => {
     const key = imageKey(album!.slug, roundId, imageId);
     const current = social[key] ?? { likes: 0, comments: [], liked: false };
     const liked = !current.liked;
+    const newLikes = Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1));
     
-    // Optimistic Update
-    const next = { ...social, [key]: { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) } };
-    setSocial(next);
-    writeGalleryState(next);
+    // Immediate optimistic update
+    const next = { ...social, [key]: { ...current, liked, likes: newLikes } };
+    persistGallerySocial(next);
 
-    apiRequest<{ likes: number; comments: string[] }>("/public/gallery/social/like", {
-      method: "POST",
-      body: JSON.stringify({ image_key: key, liked }),
-    }).then((remote) => {
-      setSocial((prev) => ({ ...prev, [key]: { ...prev[key], likes: remote.likes, comments: remote.comments } }));
-    }).catch(() => undefined);
-  }
+    pendingLikes.current[key] = liked;
 
-  function addComment(event: FormEvent<HTMLFormElement>) {
+    const timer = setTimeout(() => {
+      const pendingLike = pendingLikes.current[key];
+      if (pendingLike !== undefined) {
+        apiRequest<{ likes: number; comments: string[] }>(
+          "/public/gallery/social/like",
+          {
+            method: "POST",
+            body: JSON.stringify({ image_key: key, liked: pendingLike }),
+          },
+          undefined
+        ).then((remote) => {
+          setSocial((prev) => ({ ...prev, [key]: { ...prev[key], likes: remote.likes, comments: remote.comments } }));
+        }).catch(() => {
+          setSocial((prev) => ({
+            ...prev,
+            [key]: { ...prev[key], liked: !liked, likes: Math.max(0, (prev[key]?.likes ?? 0) - (liked ? 1 : -1)) }
+          }));
+        });
+        delete pendingLikes.current[key];
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [social, album]);
+
+  const addComment = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedImage || !commentDraft.trim()) return;
     const key = imageKey(album!.slug, activeRound.id, selectedImage.id);
     const comment = commentDraft.trim();
 
-    // Optimistic Update
     const prev = social[key] ?? { likes: 0, comments: [] };
-    const next = { ...social, [key]: { ...prev, comments: [...(prev.comments ?? []), comment] } };
-    setSocial(next);
-    writeGalleryState(next);
+    const newComments = [...(prev.comments ?? []), comment];
+    const next = { ...social, [key]: { ...prev, comments: newComments } };
+    persistGallerySocial(next);
     setCommentDraft("");
 
-    apiRequest<{ likes: number; comments: string[] }>("/public/gallery/social/comment", {
-      method: "POST",
-      body: JSON.stringify({ image_key: key, comment }),
-    }).then((remote) => {
-      setSocial((prev) => ({ ...prev, [key]: { ...prev[key], likes: remote.likes, comments: remote.comments } }));
-    }).catch(() => undefined);
-  }
+    if (!pendingComments.current[key]) {
+      pendingComments.current[key] = [];
+    }
+    pendingComments.current[key].push(comment);
+
+    const timer = setTimeout(() => {
+      const pending = pendingComments.current[key];
+      if (pending && pending.length > 0) {
+        const lastComment = pending[pending.length - 1];
+        apiRequest<{ likes: number; comments: string[] }>(
+          "/public/gallery/social/comment",
+          {
+            method: "POST",
+            body: JSON.stringify({ image_key: key, comment: lastComment }),
+          },
+          undefined
+        ).then((remote) => {
+          setSocial((prev) => ({ ...prev, [key]: { ...prev[key], likes: remote.likes, comments: remote.comments } }));
+        }).catch(() => {
+          setSocial((prev) => ({
+            ...prev,
+            [key]: { ...prev[key], comments: (prev[key]?.comments ?? []).filter(c => c !== comment) }
+          }));
+        });
+        pendingComments.current[key] = [];
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [selectedImage, commentDraft, social, album, activeRound.id]);
 
   return (
     <Page className="gallery-page gallery-detail-page">
       <section className="gallery-detail-hero">
-        <img src={album.cover} alt="" />
+        <img src={album.cover} alt="" loading="lazy" />
         <div>
           <Link className="inline-link" to="/gallery">Back</Link>
           <h1>{album.title}</h1>
@@ -447,7 +685,12 @@ export function GalleryAlbumPage() {
       <section className="gallery-section">
         <div className="gallery-round-grid">
           {album.rounds.map((round) => (
-            <button className={`gallery-round-card ${round.id === activeRound.id ? "active" : ""}`} type="button" onClick={() => setParams({ round: round.id })} key={round.id}>
+            <button 
+              className={`gallery-round-card ${round.id === activeRound.id ? "active" : ""}`} 
+              type="button" 
+              onClick={() => setParams({ round: round.id })} 
+              key={round.id}
+            >
               <h3>{round.name}</h3><small>{round.date}</small>
             </button>
           ))}
@@ -455,24 +698,39 @@ export function GalleryAlbumPage() {
       </section>
 
       <section className="gallery-section">
-        <div className="gallery-image-grid interactive-gallery-grid">
-          {activeRound.images.map((item) => {
-            const key = imageKey(album.slug, activeRound.id, item.id);
-            const state = social[key] ?? { likes: 0, comments: [] };
-            return (
-              <article className="gallery-image-card" key={item.id}>
-                <button className="gallery-image-open" type="button" onClick={() => { setParams({ round: activeRound.id, image: item.id }); setFlipped(true); }}>
-                  <img src={item.image} alt="" />
-                  <div><h3>{item.title}</h3><p>{item.caption}</p></div>
-                </button>
-                <div className="gallery-social-row">
-                  <button type="button" className={state.liked ? "active" : ""} onClick={() => toggleLike(activeRound.id, item.id)}><Heart size={15} />{state.likes ?? 0}</button>
-                  <button type="button" onClick={() => { setParams({ round: activeRound.id, image: item.id }); setFlipped(true); }}><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        {isLoading ? (
+          <div className="gallery-loading">
+            <p>Loading images...</p>
+          </div>
+        ) : (
+          <div className="gallery-image-grid interactive-gallery-grid">
+            {activeRound.images.map((item) => {
+              const key = imageKey(album.slug, activeRound.id, item.id);
+              const state = social[key] ?? { likes: 0, comments: [] };
+              return (
+                <article className="gallery-image-card" key={item.id}>
+                  <button className="gallery-image-open" type="button" onClick={() => { setParams({ round: activeRound.id, image: item.id }); setFlipped(true); }}>
+                    <img src={item.image} alt="" loading="lazy" />
+                    <div><h3>{item.title}</h3><p>{item.caption}</p></div>
+                  </button>
+                  <div className="gallery-social-row">
+                    <button 
+                      type="button" 
+                      className={state.liked ? "active" : ""} 
+                      onClick={() => toggleLike(activeRound.id, item.id)}
+                      aria-label="Like"
+                    >
+                      <Heart size={15} />{state.likes ?? 0}
+                    </button>
+                    <button type="button" onClick={() => { setParams({ round: activeRound.id, image: item.id }); setFlipped(true); }}>
+                      <MessageCircle size={15} />{state.comments?.length ?? 0}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {selectedImage && (
@@ -481,7 +739,7 @@ export function GalleryAlbumPage() {
             <button className="gallery-modal-close" type="button" onClick={() => { setParams({ round: activeRound.id }); setSelectedImageId(""); }}><X size={18} /></button>
             <button className="gallery-modal-flipper" type="button" onClick={() => setFlipped(!flipped)}>
               <div className="gallery-modal-face gallery-modal-front">
-                <img src={selectedImage.image} alt="" />
+                <img src={selectedImage.image} alt="" loading="lazy" />
                 <div><h2>{selectedImage.title}</h2><p>{selectedImage.caption}</p></div>
               </div>
               <div className="gallery-modal-face gallery-modal-back">
@@ -489,12 +747,30 @@ export function GalleryAlbumPage() {
               </div>
             </button>
             <div className="gallery-modal-actions">
-              <button type="button" className={social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.liked ? "active" : ""} onClick={() => toggleLike(activeRound.id, selectedImage.id)}><Heart size={16} />{social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.likes ?? 0}</button>
+              <button 
+                type="button" 
+                className={social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.liked ? "active" : ""} 
+                onClick={() => toggleLike(activeRound.id, selectedImage.id)}
+              >
+                <Heart size={16} />{social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.likes ?? 0}
+              </button>
             </div>
             <form className="gallery-comment-form" onSubmit={addComment}>
-              <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} placeholder="Comment..." />
-              <button type="submit"><Send size={16} /></button>
+              <input 
+                value={commentDraft} 
+                onChange={(e) => setCommentDraft(e.target.value)} 
+                placeholder="Comment..." 
+                disabled={!socialLoaded}
+              />
+              <button type="submit" disabled={!commentDraft.trim() || !socialLoaded}>
+                <Send size={16} />
+              </button>
             </form>
+            <div className="gallery-comment-list">
+              {(social[imageKey(album.slug, activeRound.id, selectedImage.id)]?.comments ?? []).map((comment, index) => (
+                <p key={index}><b>Fan</b> <span>{comment}</span></p>
+              ))}
+            </div>
           </article>
         </div>
       )}

@@ -632,7 +632,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
           post.category,
           post.city,
           <span className="status emerald">{post.status}</span>,
-          <span className="table-actions"><Link to={`/news/${post.slug}`}>Open</Link><button>Edit</button></span>,
+          <span className="table-actions"><Link to={`/news/${post.slug}`}>Open</Link><button>Edit</button><button>Delete</button></span>,
         ])}
       />
     </div>

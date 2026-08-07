@@ -398,7 +398,6 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
     log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
     return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post updated")
 
-
 @router.patch("/sports/{sport_slug}/home-visibility")
 def update_sport_home_visibility(sport_slug: str, payload: SportHomeVisibilityPayload, user: dict = Depends(require_roles("super_admin", "management"))):
     sport = row("SELECT slug FROM sports WHERE slug = ?", (sport_slug,))
