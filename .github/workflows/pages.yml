@@ -17,11 +17,12 @@ jobs:
   publish:
     name: Build Vite App and Publish gh-pages
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -40,6 +41,7 @@ jobs:
         run: |
           touch frontend/dist/.nojekyll
           cp frontend/dist/index.html frontend/dist/404.html
+
       - name: Publish to gh-pages branch
         run: |
           cd frontend/dist
@@ -49,5 +51,5 @@ jobs:
           git checkout -b gh-pages
           git add .
           git commit -m "Deploy Smart Sportz frontend"
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git push --force origin gh-pages
