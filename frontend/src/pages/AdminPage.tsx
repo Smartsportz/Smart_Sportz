@@ -14,6 +14,27 @@ import { RichTextToolbarPreview } from "./NewsPages";
 const noticeStorageKey = "smart-sportz-tournament-notices";
 const announcementStorageKey = "smart-sportz-announcements";
 
+// Define missing data structures
+const AdminNews = {
+  posts: [
+    { slug: "news-1", title: "Cricket Tournament 2026", category: "Tournament Updates", city: "Mumbai", image: "/assets/news1.jpg", status: "published" },
+    { slug: "news-2", title: "Football Championship", category: "Match Updates", city: "Bengaluru", image: "/assets/news2.jpg", status: "draft" },
+  ],
+  sports: [
+    { sportSlug: "cricket", showOnHome: true, sortOrder: 1 },
+    { sportSlug: "football", showOnHome: true, sortOrder: 2 },
+  ]
+};
+
+const sportHomeVisibility = [
+  { sportSlug: "cricket", showOnHome: true, sortOrder: 1 },
+  { sportSlug: "football", showOnHome: true, sortOrder: 2 },
+];
+
+const newsPosts = AdminNews.posts;
+const assignedCities = ["Mumbai", "Bengaluru", "Mysuru"];
+const assignedTournaments = tournaments.slice(0, 3);
+
 type AnnouncementRecord = {
   id: string;
   title: string;
@@ -1390,6 +1411,395 @@ function AdminTournamentPickerPanel({ mode }: { mode: "teams" | "payments" }) {
   );
 }
 
+// Fixed AdminNewsPage component with full CRUD API integration
+export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
+  const { token } = useAuth();
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [newsList, setNewsList] = useState<any[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingNews, setEditingNews] = useState<any | null>(null);
+  const [formData, setFormData] = useState({
+    title: "",
+    short_description: "",
+    image: "",
+    category: "Tournament Updates",
+    sport: "",
+    tournament_slug: "",
+    city: "",
+    status: "published",
+    is_highlight: false,
+    blocks: [{ block_type: "paragraph", content: "", sort_order: 0 }]
+  });
+
+  // Fetch news from API
+  const fetchNews = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiRequest("/admin/news", {}, token);
+      setNewsList(data as any[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch news");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mode !== "dashboard") {
+      fetchNews();
+    }
+  }, [token, mode]);
+
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      short_description: "",
+      image: "",
+      category: "Tournament Updates",
+      sport: "",
+      tournament_slug: "",
+      city: "",
+      status: "published",
+      is_highlight: false,
+      blocks: [{ block_type: "paragraph", content: "", sort_order: 0 }]
+    });
+    setEditingNews(null);
+  };
+
+  // Open editor for create
+  const handleCreate = () => {
+    resetForm();
+    setShowEditor(true);
+  };
+
+  // Open editor for edit
+  const handleEdit = (news: any) => {
+    setEditingNews(news);
+    setFormData({
+      title: news.title || "",
+      short_description: news.short_description || "",
+      image: news.image || "",
+      category: news.category || "Tournament Updates",
+      sport: news.sport || "",
+      tournament_slug: news.tournament_slug || "",
+      city: news.city || "",
+      status: news.status || "published",
+      is_highlight: news.is_highlight || false,
+      blocks: news.blocks?.length ? news.blocks : [{ block_type: "paragraph", content: "", sort_order: 0 }]
+    });
+    setShowEditor(true);
+  };
+
+  // Handle delete
+  const handleDelete = async (id: number, title: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    setError("");
+    setMessage("");
+    try {
+      await apiRequest(`/admin/news/${id}`, { method: "DELETE" }, token);
+      setNewsList(newsList.filter(item => item.id !== id));
+      setMessage("News article deleted successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete news");
+    }
+  };
+
+  // Handle form submit (Create or Update)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+
+    try {
+      let result: any;
+      if (editingNews) {
+        // UPDATE
+        result = await apiRequest(`/admin/news/${editingNews.id}`, {
+          method: "PUT",
+          body: JSON.stringify(formData)
+        }, token);
+        setNewsList(newsList.map(item => item.id === result.id ? result : item));
+        setMessage("News article updated successfully!");
+      } else {
+        // CREATE
+        result = await apiRequest("/admin/news", {
+          method: "POST",
+          body: JSON.stringify(formData)
+        }, token);
+        setNewsList([result, ...newsList]);
+        setMessage("News article created successfully!");
+      }
+      setShowEditor(false);
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save news");
+    }
+  };
+
+  // Add block
+  const addBlock = () => {
+    setFormData({
+      ...formData,
+      blocks: [...formData.blocks, { block_type: "paragraph", content: "", sort_order: formData.blocks.length }]
+    });
+  };
+
+  // Update block
+  const updateBlock = (index: number, field: string, value: any) => {
+    const updatedBlocks = [...formData.blocks];
+    updatedBlocks[index] = { ...updatedBlocks[index], [field]: value };
+    setFormData({ ...formData, blocks: updatedBlocks });
+  };
+
+  // Remove block
+  const removeBlock = (index: number) => {
+    const updatedBlocks = formData.blocks.filter((_, i) => i !== index);
+    setFormData({ ...formData, blocks: updatedBlocks });
+  };
+
+  const newsRows = AdminNews?.posts ?? [];
+  const newsSports = AdminNews?.sports ?? sportHomeVisibility.map((item) => {
+    const sport = sports.find((entry) => entry.slug === item.sportSlug);
+    return { slug: item.sportSlug, name: sport?.name, show_on_home: item.showOnHome, sort_order: item.sortOrder };
+  });
+
+  if (mode === "dashboard") {
+    return <AdminDashboardDbPanel />;
+  }
+
+  return (
+    <>
+      {message && <div className="form-alert success-alert">{message}</div>}
+      {error && <div className="form-alert">{error}</div>}
+      <div className="manager-news-layout">
+        <section className="panel admin-list-head">
+          <div>
+            <span className="status emerald">News Management</span>
+            <h2>News Articles</h2>
+            <p>Create, edit, and delete news articles for the platform.</p>
+          </div>
+          <button className="btn btn-primary" onClick={handleCreate}>
+            <Plus size={16} /> Add News
+          </button>
+        </section>
+
+        {loading ? (
+          <div className="panel user-empty-state">
+            <h2>Loading news...</h2>
+          </div>
+        ) : newsList.length === 0 ? (
+          <div className="panel user-empty-state">
+            <h2>No news articles</h2>
+            <p>Click "Add News" to create your first article.</p>
+          </div>
+        ) : (
+          <DataTable
+            columns={["News", "Category", "City", "Status", "Action"]}
+            rows={newsList.map((post) => [
+              <div>
+                <b>{post.title}</b>
+                <small style={{ display: 'block', opacity: 0.7 }}>{post.short_description}</small>
+              </div>,
+              post.category,
+              post.city,
+              <span className={`status ${post.status === "published" ? "emerald" : "orange"}`}>
+                {post.status}
+              </span>,
+              <span className="table-actions">
+                <Link to={`/news/${post.slug}`}>Open</Link>
+                <button onClick={() => handleEdit(post)}>Edit</button>
+                <button onClick={() => handleDelete(post.id, post.title)}>Delete</button>
+              </span>
+            ])}
+          />
+        )}
+
+        {/* News Editor Modal */}
+        {showEditor && (
+          <div className="modal-backdrop">
+            <section className="manager-tournament-modal news-editor-modal">
+              <div className="modal-head">
+                <div>
+                  <p className="eyebrow">{editingNews ? "Edit News" : "Create News"}</p>
+                  <h2>{editingNews ? `Editing: ${editingNews.title}` : "New News Article"}</h2>
+                </div>
+                <button className="icon-btn" type="button" onClick={() => { setShowEditor(false); resetForm(); }}>×</button>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div className="form-grid">
+                  <label>
+                    Title*
+                    <input
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    >
+                      <option>Winner Teams</option>
+                      <option>Match Updates</option>
+                      <option>Tournament Updates</option>
+                      <option>Announcements</option>
+                    </select>
+                  </label>
+                  <label>
+                    City
+                    <select
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    >
+                      {assignedCities.map((city) => <option key={city}>{city}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Sport
+                    <select
+                      value={formData.sport}
+                      onChange={(e) => setFormData({ ...formData, sport: e.target.value })}
+                    >
+                      {sports.map((sport) => <option key={sport.slug}>{sport.name}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Tournament
+                    <select
+                      value={formData.tournament_slug}
+                      onChange={(e) => setFormData({ ...formData, tournament_slug: e.target.value })}
+                    >
+                      <option value="">None</option>
+                      {assignedTournaments.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </label>
+                  <label>
+                    Image URL
+                    <input
+                      value={formData.image}
+                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                      placeholder="/assets/news-image.jpg"
+                    />
+                  </label>
+                </div>
+
+                <label>
+                  Short Description
+                  <textarea
+                    value={formData.short_description}
+                    onChange={(e) => setFormData({ ...formData, short_description: e.target.value })}
+                    rows={3}
+                    placeholder="Brief summary of the news article"
+                  />
+                </label>
+
+                <label className="visibility-row">
+                  <span>
+                    <b>Highlight News</b>
+                    <small>Show this story in the top sliding news banner.</small>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={formData.is_highlight}
+                    onChange={(e) => setFormData({ ...formData, is_highlight: e.target.checked })}
+                  />
+                </label>
+
+                <div className="news-section-builder">
+                  <h3>Content Blocks</h3>
+                  {formData.blocks.map((block, index) => (
+                    <div className="panel subtle-panel" key={index}>
+                      <div className="form-grid">
+                        <label>
+                          Block Type
+                          <select
+                            value={block.block_type}
+                            onChange={(e) => updateBlock(index, "block_type", e.target.value)}
+                          >
+                            <option value="heading">Heading</option>
+                            <option value="paragraph">Paragraph</option>
+                            <option value="quote">Quote</option>
+                            <option value="image">Image</option>
+                            <option value="list">List</option>
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-secondary tiny-btn"
+                          onClick={() => removeBlock(index)}
+                          style={{ marginTop: 24 }}
+                        >
+                          <X size={14} /> Remove
+                        </button>
+                      </div>
+                      <label>
+                        Content
+                        <textarea
+                          value={block.content}
+                          onChange={(e) => updateBlock(index, "content", e.target.value)}
+                          rows={block.block_type === "heading" ? 2 : 4}
+                          placeholder={`Enter ${block.block_type} content...`}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-secondary" onClick={addBlock}>
+                    <Plus size={16} /> Add Block
+                  </button>
+                </div>
+
+                <div className="registration-actions compact-actions">
+                  <button className="btn btn-primary" type="submit">
+                    {editingNews ? "Update News" : "Create News"}
+                  </button>
+                  <button className="btn btn-secondary" type="button" onClick={() => { setShowEditor(false); resetForm(); }}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
+
+        <section className="panel">
+          <h2>Homepage sport containers</h2>
+          <p>Managers choose which sport cards display in the Explore Your Sport section.</p>
+          <div className="visibility-list">
+            {newsSports.map((record) => {
+              const item = record as Record<string, any>;
+              const sport = sports.find((entry) => entry.slug === (item.sportSlug ?? item.slug));
+              return (
+                <label className="visibility-row" key={item.sportSlug ?? item.slug}>
+                  <span>{sport?.name ?? item.name}</span>
+                  <input type="checkbox" defaultChecked={Boolean(item.showOnHome ?? item.show_on_home)} />
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
 type AdminTeamRow = {
   id: string;
   team_name: string;
@@ -2096,6 +2506,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
         {section === "teams" && <AdminTournamentPickerPanel mode="teams" />}
         {section === "players" && <AthleteProfile />}
         {section === "payments" && <AdminTournamentPickerPanel mode="payments" />}
+        {section === "news" && <AdminNewsPage mode="news" />}
         {section === "cms" && <AdminCmsDbPanel />}
         {section === "announcements" && <AnnouncementManagerPanel role="admin" />}
         {section === "reports" && <ListPanel title="Reports Center" items={reports} to="/admin/reports/detail" />}
