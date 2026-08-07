@@ -34,15 +34,12 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        run: |
-          npm run build
-          test -d dist
+        run: npm run build
 
       - name: Add GitHub Pages marker
         run: |
           touch frontend/dist/.nojekyll
           cp frontend/dist/index.html frontend/dist/404.html
-
       - name: Publish to gh-pages branch
         run: |
           cd frontend/dist
