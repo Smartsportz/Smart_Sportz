@@ -1,8 +1,8 @@
-import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search, Edit, Eye, EyeOff, Trash2 } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { logRows, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
@@ -11,8 +11,8 @@ import { apiRequest } from "../lib/api";
 import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 
+
 const noticeStorageKey = "smart-sportz-tournament-notices";
-const announcementStorageKey = "smart-sportz-announcements";
 
 // Define missing data structures
 const AdminNews = {
@@ -35,31 +35,22 @@ const newsPosts = AdminNews.posts;
 const assignedCities = ["Mumbai", "Bengaluru", "Mysuru"];
 const assignedTournaments = tournaments.slice(0, 3);
 
+// Updated AnnouncementRecord to match backend schema
 type AnnouncementRecord = {
   id: string;
   title: string;
   description: string;
   image: string;
-  dateFrom?: string;
-  dateTo?: string;
+  date_from?: string;
+  date_to?: string;
   published: boolean;
-  updatedBy?: string;
-  updatedAt?: string;
+  created_by?: string;
+  created_by_name?: string;
+  created_by_email?: string;
+  city?: string;
+  created_at?: string;
+  updated_at?: string;
 };
-
-function readAnnouncements(): AnnouncementRecord[] {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(announcementStorageKey) || "[]") as AnnouncementRecord[];
-  } catch {
-    return [];
-  }
-}
-
-function writeAnnouncements(records: AnnouncementRecord[]) {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(announcementStorageKey, JSON.stringify(records));
-}
 
 export function NoticeBuilder({ role = "admin" }: { role?: "admin" | "manager" }) {
   const [selectedSlug, setSelectedSlug] = useState(tournaments[0]?.slug ?? "");
@@ -852,6 +843,175 @@ function OptionalDataTable({ title, columns, rows }: { title: string; columns: s
   return <DataTable columns={columns} rows={rows} />;
 }
 
+// CMS Item Type Definitions
+type CMSItemType = 'discovery' | 'live-highlight' | 'sponsor';
+
+// CMS Edit Page Component
+export function AdminCMSEditPage() {
+  const { type, id } = useParams();
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [item, setItem] = useState<Record<string, any> | null>(null);
+  const [formData, setFormData] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (!type || !id) {
+      navigate('/admin/cms');
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    
+    // Determine the endpoint based on type
+    let endpoint = '';
+    if (type === 'discovery') endpoint = `/admin/home-content/discovery/${id}`;
+    else if (type === 'live-highlight') endpoint = `/admin/home-content/live-highlight/${id}`;
+    else if (type === 'sponsor') endpoint = `/admin/home-content/sponsor/${id}`;
+    else {
+      navigate('/admin/cms');
+      return;
+    }
+
+    apiRequest(endpoint, {}, token)
+      .then((data) => {
+        setItem(data);
+        setFormData(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load CMS item");
+        setLoading(false);
+      });
+  }, [type, id, token, navigate]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+
+    try {
+      let endpoint = '';
+      if (type === 'discovery') endpoint = `/admin/home-content/discovery/${id}`;
+      else if (type === 'live-highlight') endpoint = `/admin/home-content/live-highlight/${id}`;
+      else if (type === 'sponsor') endpoint = `/admin/home-content/sponsor/${id}`;
+      
+      await apiRequest(endpoint, {
+        method: "POST",
+        body: JSON.stringify(formData)
+      }, token);
+      
+      setMessage("CMS item updated successfully!");
+      setTimeout(() => navigate('/admin/cms'), 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update CMS item");
+    }
+  };
+
+  const getTypeLabel = () => {
+    if (type === 'discovery') return 'Discovery Card';
+    if (type === 'live-highlight') return 'Live Highlight';
+    if (type === 'sponsor') return 'Sponsor Logo';
+    return 'CMS Item';
+  };
+
+  if (loading) {
+    return (
+      <Page>
+        <PortalShell title="Edit CMS Item" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/cms">Back to CMS</Link>}>
+          <section className="panel user-empty-state">
+            <h2>Loading...</h2>
+          </section>
+        </PortalShell>
+      </Page>
+    );
+  }
+
+  return (
+    <Page>
+      <PortalShell 
+        title={`Edit ${getTypeLabel()}`} 
+        subtitle="" 
+        sidebar={sidebar} 
+        action={<Link className="btn btn-secondary" to="/admin/cms">Back to CMS</Link>}
+      >
+        {message && <div className="form-alert success-alert">{message}</div>}
+        {error && <div className="form-alert">{error}</div>}
+        
+        <form className="panel tournament-create-panel" onSubmit={handleSubmit}>
+          {/* Discovery Card Fields */}
+          {type === 'discovery' && (
+            <>
+              <div className="form-grid">
+                <label>Label<input value={formData.label || ""} onChange={(e) => setFormData({...formData, label: e.target.value})} /></label>
+                <label>Title<input value={formData.title || ""} onChange={(e) => setFormData({...formData, title: e.target.value})} /></label>
+                <label>Sport<input value={formData.sport || ""} onChange={(e) => setFormData({...formData, sport: e.target.value})} /></label>
+                <label>Tournament Slug<input value={formData.tournament_slug || ""} onChange={(e) => setFormData({...formData, tournament_slug: e.target.value})} /></label>
+                <label>Sponsor Name<input value={formData.sponsor_name || ""} onChange={(e) => setFormData({...formData, sponsor_name: e.target.value})} /></label>
+                <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
+                <label>Sponsor Image Path<input value={formData.sponsor_image || ""} onChange={(e) => setFormData({...formData, sponsor_image: e.target.value})} /></label>
+                <label>Event Date<input value={formData.event_date || ""} onChange={(e) => setFormData({...formData, event_date: e.target.value})} /></label>
+                <label>Register Path<input value={formData.register_path || ""} onChange={(e) => setFormData({...formData, register_path: e.target.value})} /></label>
+                <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
+              </div>
+              <label>Description<textarea rows={3} value={formData.description || ""} onChange={(e) => setFormData({...formData, description: e.target.value})} /></label>
+              <label>Sponsor Details<textarea rows={3} value={formData.sponsor_details || ""} onChange={(e) => setFormData({...formData, sponsor_details: e.target.value})} /></label>
+              <label className="checkbox-line">
+                <input type="checkbox" checked={Boolean(formData.published)} onChange={(e) => setFormData({...formData, published: e.target.checked})} /> Published
+              </label>
+            </>
+          )}
+
+          {/* Live Highlight Fields */}
+          {type === 'live-highlight' && (
+            <>
+              <div className="form-grid">
+                {["title", "stage_label", "home_team", "away_team", "home_score", "away_score", "image", "link_path", "match_id"].map((field) => (
+                  <label key={field}>
+                    {field.replace(/_/g, " ")}
+                    <input value={formData[field] || ""} onChange={(e) => setFormData({...formData, [field]: e.target.value})} />
+                  </label>
+                ))}
+                <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
+              </div>
+              <label>Description<textarea rows={3} value={formData.description || ""} onChange={(e) => setFormData({...formData, description: e.target.value})} /></label>
+              <label>Impact Notes<textarea rows={3} value={formData.impact_notes || ""} onChange={(e) => setFormData({...formData, impact_notes: e.target.value})} /></label>
+              <label className="checkbox-line">
+                <input type="checkbox" checked={Boolean(formData.published)} onChange={(e) => setFormData({...formData, published: e.target.checked})} /> Published
+              </label>
+            </>
+          )}
+
+          {/* Sponsor Logo Fields */}
+          {type === 'sponsor' && (
+            <>
+              <div className="form-grid">
+                <label>Name<input value={formData.name || ""} onChange={(e) => setFormData({...formData, name: e.target.value})} /></label>
+                <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
+                <label>Link URL<input value={formData.link_url || ""} onChange={(e) => setFormData({...formData, link_url: e.target.value})} /></label>
+                <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
+              </div>
+              <label className="checkbox-line">
+                <input type="checkbox" checked={Boolean(formData.published)} onChange={(e) => setFormData({...formData, published: e.target.checked})} /> Published
+              </label>
+            </>
+          )}
+
+          <div className="registration-actions compact-actions">
+            <button className="btn btn-primary" type="submit">Save Changes</button>
+            <Link className="btn btn-secondary" to="/admin/cms">Cancel</Link>
+          </div>
+        </form>
+      </PortalShell>
+    </Page>
+  );
+}
+
+// Fixed AdminCmsDbPanel with table-based display and Edit navigation
 function AdminCmsDbPanel() {
   const { token } = useAuth();
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
@@ -862,6 +1022,7 @@ function AdminCmsDbPanel() {
   }>({ discoveryCards: [], liveHighlights: [], sponsorLogos: [] });
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<'discovery' | 'live-highlight' | 'sponsor'>('discovery');
 
   useEffect(() => {
     let alive = true;
@@ -883,29 +1044,38 @@ function AdminCmsDbPanel() {
 
   if (error) return <div className="form-alert">{error}</div>;
 
-  async function saveHomeItem(kind: "discovery" | "live-highlight" | "sponsor", id: string, item: Record<string, any>) {
-    const endpoint = kind === "discovery"
-      ? `/admin/home-content/discovery/${id}`
-      : kind === "live-highlight"
-        ? `/admin/home-content/live-highlight/${id}`
-        : `/admin/home-content/sponsor/${id}`;
-    try {
-      await apiRequest(endpoint, {
-        method: "POST", 
-        body: JSON.stringify({ ...item, published: Boolean(item.published) }),
-      }, token);
-      setMessage("Homepage content updated.");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not save homepage content.");
-    }
-  }
+  // Table rows for Discovery Cards
+  const discoveryRows = homeContent.discoveryCards.map((item) => [
+    <span><b>{item.title || item.label || "Untitled"}</b><small style={{display: 'block', opacity: 0.7}}>{item.sport || "No sport"}</small></span>,
+    item.tournament_slug || "-",
+    <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
+    <span className="table-actions">
+      <Link to={`/admin/cms/edit/discovery/${item.slug}`}><Edit size={14} /> Edit</Link>
+      <Link to={item.register_path || "/"}><Eye size={14} /> View</Link>
+    </span>,
+  ]);
 
-  function updateHomeList(listName: keyof typeof homeContent, index: number, patch: Record<string, any>) {
-    setHomeContent((current) => ({
-      ...current,
-      [listName]: current[listName].map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
-    }));
-  }
+  // Table rows for Live Highlights
+  const liveHighlightRows = homeContent.liveHighlights.map((item) => [
+    <span><b>{item.title || "Untitled"}</b><small style={{display: 'block', opacity: 0.7}}>{item.home_team} vs {item.away_team}</small></span>,
+    item.stage_label || "-",
+    <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
+    <span className="table-actions">
+      <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><Edit size={14} /> Edit</Link>
+      <Link to={item.link_path || "/"}><Eye size={14} /> View</Link>
+    </span>,
+  ]);
+
+  // Table rows for Sponsor Logos
+  const sponsorRows = homeContent.sponsorLogos.map((item) => [
+    <span><b>{item.name || "Untitled"}</b></span>,
+    item.link_url || "-",
+    <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
+    <span className="table-actions">
+      <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><Edit size={14} /> Edit</Link>
+      {item.link_url && <Link to={item.link_url}><Eye size={14} /> View</Link>}
+    </span>,
+  ]);
 
   return (
     <div className="manager-news-layout">
@@ -917,6 +1087,8 @@ function AdminCmsDbPanel() {
           <p>Backend database records for public website sections, publish state, and page routes.</p>
         </div>
       </section>
+
+      {/* Main CMS Table */}
       <DataTable
         columns={["Section", "Type", "Path", "Status", "Action"]}
         rows={records.map((item) => [
@@ -924,159 +1096,291 @@ function AdminCmsDbPanel() {
           item.type,
           item.path,
           <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
-          <span className="table-actions"><Link to={`/admin/cms/${item.slug}`}>Edit</Link><Link to={item.path || "/"}>Preview</Link></span>,
+          <span className="table-actions">
+            <Link to={`/admin/cms/${item.slug}`}>Edit</Link>
+            <Link to={item.path || "/"}>Preview</Link>
+          </span>,
         ])}
       />
-      <section className="panel cms-home-editor">
-        <h2>Homepage discovery cards</h2>
-        <p>Edit sponsor/game/tournament cards displayed in Discover tournaments across categories.</p>
-        {homeContent.discoveryCards.map((item, index) => (
-          <div className="cms-home-row" key={item.slug}>
-            <div className="form-grid">
-              <label>Label<input value={item.label || ""} onChange={(event) => updateHomeList("discoveryCards", index, { label: event.target.value })} /></label>
-              <label>Title<input value={item.title || ""} onChange={(event) => updateHomeList("discoveryCards", index, { title: event.target.value })} /></label>
-              <label>Sport<input value={item.sport || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sport: event.target.value })} /></label>
-              <label>Tournament slug<input value={item.tournament_slug || ""} onChange={(event) => updateHomeList("discoveryCards", index, { tournament_slug: event.target.value })} /></label>
-              <label>Sponsor name<input value={item.sponsor_name || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_name: event.target.value })} /></label>
-              <label>Image<input type="file" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) updateHomeList("discoveryCards", index, { image: `/assets/${file.name}` });
-              }} /></label>
-              <label>Sponsor image<input type="file" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) updateHomeList("discoveryCards", index, { sponsor_image: `/assets/${file.name}` });
-              }} /></label>
-              <label>Event date<input value={item.event_date || ""} onChange={(event) => updateHomeList("discoveryCards", index, { event_date: event.target.value })} /></label>
-              <label>Register path<input value={item.register_path || ""} onChange={(event) => updateHomeList("discoveryCards", index, { register_path: event.target.value })} /></label>
-              <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("discoveryCards", index, { sort_order: Number(event.target.value) })} /></label>
-            </div>
-            <label>Image path<input value={item.image || ""} readOnly /></label>
-            <label>Description<textarea rows={3} value={item.description || ""} onChange={(event) => updateHomeList("discoveryCards", index, { description: event.target.value })} /></label>
-            <label>Sponsor details<textarea rows={3} value={item.sponsor_details || ""} onChange={(event) => updateHomeList("discoveryCards", index, { sponsor_details: event.target.value })} /></label>
-            <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("discoveryCards", index, { published: event.target.checked })} /> Published</label>
-            <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("discovery", item.slug, item)}>Save discovery card</button>
+
+      {/* Tab Navigation */}
+      <div className="admin-tabs" style={{ display: 'flex', gap: '8px', margin: '1rem 0', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+        <button 
+          className={`btn ${activeTab === 'discovery' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('discovery')}
+        >
+          Discovery Cards ({homeContent.discoveryCards.length})
+        </button>
+        <button 
+          className={`btn ${activeTab === 'live-highlight' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('live-highlight')}
+        >
+          Live Highlights ({homeContent.liveHighlights.length})
+        </button>
+        <button 
+          className={`btn ${activeTab === 'sponsor' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('sponsor')}
+        >
+          Sponsor Logos ({homeContent.sponsorLogos.length})
+        </button>
+      </div>
+
+      {/* Discovery Cards Table */}
+      {activeTab === 'discovery' && (
+        <section className="panel">
+          <div className="section-head-inline">
+            <h2>Homepage discovery cards</h2>
+            <span>{homeContent.discoveryCards.length} cards</span>
           </div>
-        ))}
-      </section>
-      <section className="panel cms-home-editor">
-        <h2>Homepage live highlight</h2>
-        {homeContent.liveHighlights.map((item, index) => (
-          <div className="cms-home-row" key={item.id}>
-            <div className="form-grid">
-              {["title", "stage_label", "home_team", "away_team", "home_score", "away_score", "image", "link_path", "match_id"].map((field) => (
-                <label key={field}>
-                  {field.replace(/_/g, " ")}
-                  {field === "image" ? (
-                    <input type="file" onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) updateHomeList("liveHighlights", index, { [field]: `/assets/${file.name}` });
-                    }} />
-                  ) : (
-                    <input value={item[field] || ""} onChange={(event) => updateHomeList("liveHighlights", index, { [field]: event.target.value })} />
-                  )}
-                </label>
-              ))}
-              <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("liveHighlights", index, { sort_order: Number(event.target.value) })} /></label>
+          <p>Edit sponsor/game/tournament cards displayed in Discover tournaments across categories.</p>
+          {homeContent.discoveryCards.length === 0 ? (
+            <div className="user-empty-state">
+              <h2>No discovery cards</h2>
+              <p>Create discovery cards from the tournament management section.</p>
             </div>
-            <label>Image path<input value={item.image || ""} readOnly /></label>
-            <label>Description<textarea rows={3} value={item.description || ""} onChange={(event) => updateHomeList("liveHighlights", index, { description: event.target.value })} /></label>
-            <label>Impact notes<textarea rows={3} value={item.impact_notes || ""} onChange={(event) => updateHomeList("liveHighlights", index, { impact_notes: event.target.value })} /></label>
-            <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("liveHighlights", index, { published: event.target.checked })} /> Published</label>
-            <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("live-highlight", item.id, item)}>Save live highlight</button>
+          ) : (
+            <DataTable
+              columns={["Card", "Tournament", "Status", "Action"]}
+              rows={discoveryRows}
+            />
+          )}
+        </section>
+      )}
+
+      {/* Live Highlights Table */}
+      {activeTab === 'live-highlight' && (
+        <section className="panel">
+          <div className="section-head-inline">
+            <h2>Homepage live highlights</h2>
+            <span>{homeContent.liveHighlights.length} highlights</span>
           </div>
-        ))}
-      </section>
-      <section className="panel cms-home-editor">
-        <h2>Sponsor company logos</h2>
-        {homeContent.sponsorLogos.map((item, index) => (
-          <div className="cms-home-row compact" key={item.slug}>
-            <div className="form-grid">
-              <label>Name<input value={item.name || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { name: event.target.value })} /></label>
-              <label>Image<input type="file" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) updateHomeList("sponsorLogos", index, { image: `/assets/${file.name}` });
-              }} /></label>
-              <label>Link<input value={item.link_url || ""} onChange={(event) => updateHomeList("sponsorLogos", index, { link_url: event.target.value })} /></label>
-              <label>Sort order<input type="number" value={item.sort_order || 1} onChange={(event) => updateHomeList("sponsorLogos", index, { sort_order: Number(event.target.value) })} /></label>
+          <p>Live match highlights displayed on the homepage.</p>
+          {homeContent.liveHighlights.length === 0 ? (
+            <div className="user-empty-state">
+              <h2>No live highlights</h2>
+              <p>Create live highlights from the match management section.</p>
             </div>
-            <label>Image path<input value={item.image || ""} readOnly /></label>
-            <label className="checkbox-line"><input type="checkbox" checked={Boolean(item.published)} onChange={(event) => updateHomeList("sponsorLogos", index, { published: event.target.checked })} /> Published</label>
-            <button className="btn btn-primary" type="button" onClick={() => saveHomeItem("sponsor", item.slug, item)}>Save sponsor</button>
+          ) : (
+            <DataTable
+              columns={["Match", "Stage", "Status", "Action"]}
+              rows={liveHighlightRows}
+            />
+          )}
+        </section>
+      )}
+
+      {/* Sponsor Logos Table */}
+      {activeTab === 'sponsor' && (
+        <section className="panel">
+          <div className="section-head-inline">
+            <h2>Sponsor company logos</h2>
+            <span>{homeContent.sponsorLogos.length} sponsors</span>
           </div>
-        ))}
-      </section>
+          <p>Sponsor logos displayed on the homepage.</p>
+          {homeContent.sponsorLogos.length === 0 ? (
+            <div className="user-empty-state">
+              <h2>No sponsor logos</h2>
+              <p>Add sponsor logos from the sponsor management section.</p>
+            </div>
+          ) : (
+            <DataTable
+              columns={["Sponsor", "Link", "Status", "Action"]}
+              rows={sponsorRows}
+            />
+          )}
+        </section>
+      )}
     </div>
   );
 }
 
+// Fixed AnnouncementManagerPanel with backend API integration
 export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | "manager" }) {
-  const [items, setItems] = useState<AnnouncementRecord[]>(() => readAnnouncements());
-  const [draft, setDraft] = useState<AnnouncementRecord>({
-    id: "",
+  const { token } = useAuth();
+  const [items, setItems] = useState<AnnouncementRecord[]>([]);
+  const [draft, setDraft] = useState<Partial<AnnouncementRecord>>({
     title: "",
     description: "",
     image: "",
-    dateFrom: "",
-    dateTo: "",
+    date_from: "",
+    date_to: "",
     published: true,
+    city: "",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<AnnouncementRecord | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+
+  // Load announcements from backend API
+  const loadAnnouncements = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiRequest<AnnouncementRecord[]>("/admin/announcements", {}, token);
+      setItems(data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load announcements");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setItems(readAnnouncements());
-  }, []);
+    loadAnnouncements();
+  }, [token]);
 
   function openDraft(item?: AnnouncementRecord) {
     if (item) {
-      setDraft(item);
+      setDraft({ ...item });
       setEditingId(item.id);
+      setImagePreview(item.image || "");
     } else {
       setDraft({
-        id: "",
         title: "",
         description: "",
         image: "",
-        dateFrom: "",
-        dateTo: "",
+        date_from: "",
+        date_to: "",
         published: true,
+        city: "",
       });
+      setImagePreview("");
       setEditingId(null);
     }
+    setError("");
+    setMessage("");
     setIsOpen(true);
   }
 
-  function saveDraft() {
-    const next: AnnouncementRecord = {
-      ...draft,
-      id: draft.id || `announcement_${Date.now()}`,
-      title: draft.title.trim() || "Tournament announcement",
-      description: draft.description.trim() || "Tournament operations update.",
-      image: draft.image.trim() || "/assets/poster.jpeg",
-      published: draft.published,
-      updatedBy: role,
-      updatedAt: new Date().toISOString(),
+  // Handle image file upload
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Create a preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+      
+      // Store the file path (in a real app, you'd upload to server and get URL)
+      setDraft((current) => ({ ...current, image: `/assets/${file.name}` }));
+    }
+  };
+
+  async function saveDraft() {
+    setError("");
+    setMessage("");
+    
+    if (!draft.title?.trim()) {
+      setError("Title is required.");
+      return;
+    }
+    
+    const payload = {
+      title: draft.title.trim(),
+      description: draft.description?.trim() || "Tournament operations update.",
+      image: draft.image?.trim() || "/assets/poster.jpeg",
+      date_from: draft.date_from || null,
+      date_to: draft.date_to || null,
+      published: draft.published ?? true,
+      city: draft.city || null,
     };
-    const nextItems = [next, ...items.filter((item) => item.id !== editingId && item.id !== next.id)];
-    setItems(nextItems);
-    writeAnnouncements(nextItems);
-    setIsOpen(false);
+
+    try {
+      let result: AnnouncementRecord;
+      if (editingId) {
+        // Update existing announcement
+        result = await apiRequest(`/admin/announcements/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload)
+        }, token);
+        setItems(items.map(item => item.id === result.id ? result : item));
+        setMessage("Announcement updated successfully!");
+      } else {
+        // Create new announcement
+        result = await apiRequest("/admin/announcements", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        }, token);
+        setItems([result, ...items]);
+        setMessage("Announcement created successfully!");
+      }
+      setIsOpen(false);
+      setDraft({ title: "", description: "", image: "", date_from: "", date_to: "", published: true, city: "" });
+      setImagePreview("");
+      setEditingId(null);
+      // Reload to refresh data
+      loadAnnouncements();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save announcement");
+    }
   }
 
-  function toggleVisibility(id: string) {
-    const nextItems = items.map((item) => item.id === id ? { ...item, published: !item.published, updatedAt: new Date().toISOString() } : item);
-    setItems(nextItems);
-    writeAnnouncements(nextItems);
+  async function toggleVisibility(id: string) {
+    try {
+      const updated = await apiRequest(`/admin/announcements/${id}/publish`, {
+        method: "PATCH",
+        body: JSON.stringify({})
+      }, token);
+      setItems(items.map(i => i.id === id ? updated : i));
+      setMessage(`Announcement ${updated.published ? "published" : "hidden"}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update announcement");
+    }
   }
 
-  function removeItem(id: string) {
-    const nextItems = items.filter((item) => item.id !== id);
-    setItems(nextItems);
-    writeAnnouncements(nextItems);
+  async function confirmDelete() {
+    if (!deleteConfirm) return;
+    
+    try {
+      await apiRequest(`/admin/announcements/${deleteConfirm.id}`, {
+        method: "DELETE"
+      }, token);
+      setItems(items.filter(item => item.id !== deleteConfirm.id));
+      setMessage(`${deleteConfirm.title} deleted successfully.`);
+      setDeleteConfirm(null);
+      loadAnnouncements();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete announcement");
+    }
   }
+
+  // Table columns for announcements
+  const columns = ["Title", "Description", "City", "Status", "Date Range", "Actions"];
+  const rows = items.map((item) => [
+    <span key={`title-${item.id}`}>
+      <b>{item.title}</b>
+      <small style={{ display: 'block', opacity: 0.7 }}>By: {item.created_by_name || "Unknown"}</small>
+    </span>,
+    <span key={`desc-${item.id}`} style={{ maxWidth: "200px", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {item.description || "-"}
+    </span>,
+    <span key={`city-${item.id}`}>{item.city || "-"}</span>,
+    <span key={`status-${item.id}`} className={`status ${item.published ? "emerald" : "orange"}`}>
+      {item.published ? "Published" : "Hidden"}
+    </span>,
+    <span key={`date-${item.id}`}>
+      {item.date_from || "-"} to {item.date_to || "-"}
+    </span>,
+    <span key={`actions-${item.id}`} className="table-actions">
+      <button className="btn btn-secondary tiny-btn" onClick={() => toggleVisibility(item.id)}>
+        {item.published ? <EyeOff size={14} /> : <Eye size={14} />}
+      </button>
+      <button className="btn btn-secondary tiny-btn" onClick={() => openDraft(item)}>Edit</button>
+      <button className="btn btn-danger tiny-btn" onClick={() => setDeleteConfirm(item)}>
+        <Trash2 size={14} />
+      </button>
+    </span>,
+  ]);
 
   return (
     <section className="panel admin-flow-panel">
+      {message && <div className="form-alert success-alert">{message}</div>}
+      {error && <div className="form-alert">{error}</div>}
+      
       <div className="admin-list-head">
         <div>
           <span className="status emerald">Announcements</span>
@@ -1084,64 +1388,162 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
           <p>Create, publish, hide, edit, and delete tournament announcements.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={() => openDraft()}>
-          <Plus size={16} />Add New Announcement
+          <Plus size={16} /> Add New Announcement
         </button>
       </div>
-      {items.length === 0 ? (
+      
+      {loading ? (
+        <div className="user-empty-state">
+          <h2>Loading announcements...</h2>
+        </div>
+      ) : items.length === 0 ? (
         <div className="user-empty-state">
           <h2>No announcements yet</h2>
-          <p>Use Add New Announcement to create the first entry.</p>
+          <p>Use "Add New Announcement" to create the first entry.</p>
         </div>
       ) : (
-        <div className="carousel-shell">
-          <div className="carousel-row wheel-horizontal">
-            {items.map((item) => (
-              <article className="panel news-card" key={item.id}>
-                <img src={item.image || "/assets/poster.jpeg"} alt="" className="news-card-media" style={{ width: "100%", height: 190, objectFit: "cover", borderRadius: 16 }} />
-                <span className={`status ${item.published ? "emerald" : "slate"}`}>{item.published ? "Displayed" : "Hidden"}</span>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-                <div className="registration-actions compact-actions">
-                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => toggleVisibility(item.id)}>
-                    {item.published ? "Not display" : "Display"}
-                  </button>
-                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => openDraft(item)}>Edit</button>
-                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => removeItem(item.id)}>Delete</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
+        <DataTable columns={columns} rows={rows} />
       )}
+
+      {/* Create/Edit Modal with scrollable content */}
       {isOpen && (
-        <div className="modal-backdrop" role="presentation">
-          <section className="confirm-modal panel" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
-            <div className="modal-head">
+        <div className="modal-backdrop" role="presentation" onClick={(e) => {
+          if (e.target === e.currentTarget) setIsOpen(false);
+        }}>
+          <section 
+            className="confirm-modal panel" 
+            role="dialog" 
+            aria-modal="true" 
+            aria-labelledby="announcement-title"
+            style={{ 
+              maxWidth: "600px", 
+              width: "90%", 
+              maxHeight: "85vh", 
+              overflowY: "auto",
+              padding: "1.5rem"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
               <div>
-                <span className="status emerald">Announcement popup</span>
+                <span className="status emerald">Announcement</span>
                 <h2 id="announcement-title">{editingId ? "Edit announcement" : "Add new announcement"}</h2>
                 <p>Title, description, and image are required. Date range is optional.</p>
               </div>
-              <button className="icon-btn" type="button" aria-label="Close announcement popup" onClick={() => setIsOpen(false)}><X size={16} /></button>
+              <button className="icon-btn" type="button" aria-label="Close announcement popup" onClick={() => setIsOpen(false)}><X size={20} /></button>
             </div>
-            <div className="form-grid">
-              <label>Title<input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} /></label>
-              <label>Image<input type="file" accept="image/*" onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) setDraft((current) => ({ ...current, image: `/assets/${file.name}` }));
-              }} /></label>
-              <label>Date from<input type="date" value={draft.dateFrom || ""} onChange={(event) => setDraft((current) => ({ ...current, dateFrom: event.target.value }))} /></label>
-              <label>Date to<input type="date" value={draft.dateTo || ""} onChange={(event) => setDraft((current) => ({ ...current, dateTo: event.target.value }))} /></label>
+            
+            {error && <div className="form-alert">{error}</div>}
+            
+            <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <label style={{ gridColumn: "span 2" }}>
+                Title*
+                <input 
+                  value={draft.title || ""} 
+                  onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} 
+                  placeholder="Announcement title"
+                />
+              </label>
+              
+              {/* Image Upload with Preview */}
+              <label style={{ gridColumn: "span 2" }}>
+                Image
+                <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ flex: 1 }}
+                  />
+                  {imagePreview && (
+                    <div style={{ 
+                      width: "80px", 
+                      height: "80px", 
+                      borderRadius: "8px", 
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      flexShrink: 0
+                    }}>
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <small style={{ color: "#6b7280", marginTop: "4px", display: "block" }}>
+                  Selected path: {draft.image || "No image selected"}
+                </small>
+              </label>
+              
+              <label style={{ gridColumn: "span 2" }}>
+                City (optional)
+                <input 
+                  value={draft.city || ""} 
+                  onChange={(event) => setDraft((current) => ({ ...current, city: event.target.value }))} 
+                  placeholder="Mumbai"
+                />
+              </label>
+              <label>
+                Date from
+                <input type="date" value={draft.date_from || ""} onChange={(event) => setDraft((current) => ({ ...current, date_from: event.target.value }))} />
+              </label>
+              <label>
+                Date to
+                <input type="date" value={draft.date_to || ""} onChange={(event) => setDraft((current) => ({ ...current, date_to: event.target.value }))} />
+              </label>
+              <label style={{ gridColumn: "span 2" }}>
+                Description
+                <textarea 
+                  value={draft.description || ""} 
+                  onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} 
+                  rows={4}
+                  placeholder="Announcement description"
+                />
+              </label>
+              <label className="visibility-row" style={{ gridColumn: "span 2" }}>
+                <span>
+                  <b>Publish announcement</b>
+                  <small>Turn on to show this announcement on user pages.</small>
+                </span>
+                <input 
+                  type="checkbox" 
+                  checked={draft.published ?? true} 
+                  onChange={(event) => setDraft((current) => ({ ...current, published: event.target.checked }))} 
+                />
+              </label>
             </div>
-            <label>Selected image path<input value={draft.image} readOnly /></label>
-            <label>Description<textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
-            <label className="visibility-row">
-              <span><b>Display announcement</b><small>Turn on to show this announcement on user pages.</small></span>
-              <input type="checkbox" checked={draft.published} onChange={(event) => setDraft((current) => ({ ...current, published: event.target.checked }))} />
-            </label>
-            <div className="registration-actions compact-actions">
-              <button className="btn btn-primary" type="button" onClick={saveDraft}>Save Announcement</button>
-              <button className="btn btn-secondary" type="button" onClick={() => setIsOpen(false)}>Cancel</button>
+            
+            <div className="registration-actions compact-actions" style={{ marginTop: "1rem" }}>
+              <button className="btn btn-primary" type="button" onClick={saveDraft}>
+                {editingId ? "Update Announcement" : "Create Announcement"}
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={() => {
+                setIsOpen(false);
+                setImagePreview("");
+              }}>Cancel</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="modal-backdrop" role="presentation" onClick={(e) => {
+          if (e.target === e.currentTarget) setDeleteConfirm(null);
+        }}>
+          <section className="panel confirm-modal" role="dialog" aria-modal="true" style={{ maxWidth: "450px", width: "90%" }} onClick={(e) => e.stopPropagation()}>
+            <h2>Delete Announcement?</h2>
+            <p style={{ marginBottom: "1rem" }}>
+              Are you sure you want to delete "<strong>{deleteConfirm.title}</strong>"? 
+              This action cannot be undone.
+            </p>
+            <div className="registration-actions compact-actions" style={{ justifyContent: "center" }}>
+              <button className="btn btn-danger" type="button" onClick={confirmDelete}>
+                <Trash2 size={16} /> Yes, Delete
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button>
             </div>
           </section>
         </div>
@@ -1814,19 +2216,52 @@ type AdminTeamRow = {
   players_count: number;
   latest_payment: number;
   team_logo?: string;
+  selected_jersey?: string;
+  jersey_size?: string;
+  age?: number;
+  members?: Array<{ name: string; age?: number; jersey_size?: string; role?: string }>;
 };
+
+// Get jersey display name from URL or data
+function getJerseyDisplayName(jerseyUrl?: string): string {
+  if (!jerseyUrl) return "Not Selected";
+  // Extract jersey name from URL or use stored value
+  if (jerseyUrl.includes("Home")) return "Home";
+  if (jerseyUrl.includes("Away")) return "Away";
+  if (jerseyUrl.includes("Third")) return "Third";
+  if (jerseyUrl.includes("Classic")) return "Classic";
+  // If the URL contains a name, extract it
+  const urlParts = jerseyUrl.split('/');
+  const fileName = urlParts[urlParts.length - 1];
+  const nameWithoutExt = fileName.split('.')[0];
+  // Return formatted name
+  return nameWithoutExt.replace(/-/g, ' ').replace(/_/g, ' ');
+}
 
 function AdminTeamsPanel() {
   const { token } = useAuth();
   const [teams, setTeams] = useState<AdminTeamRow[]>([]);
+  const [allTeams, setAllTeams] = useState<AdminTeamRow[]>([]);
   const [deleteCandidate, setDeleteCandidate] = useState<AdminTeamRow | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTournament, setSelectedTournament] = useState<string>("all");
+  const [selectedTeam, setSelectedTeam] = useState<AdminTeamRow | null>(null);
+  const [showTeamDetail, setShowTeamDetail] = useState(false);
+
+  // Get unique tournament names for filter
+  const tournamentOptions = useMemo(() => {
+    const names = allTeams.map(t => t.tournament_name).filter(Boolean);
+    return Array.from(new Set(names));
+  }, [allTeams]);
 
   async function loadTeams() {
     setError("");
     try {
-      setTeams(await apiRequest<AdminTeamRow[]>("/admin/teams", {}, token));
+      const data = await apiRequest<AdminTeamRow[]>("/admin/teams", {}, token);
+      setAllTeams(data);
+      setTeams(data);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load teams from database.");
     }
@@ -1836,16 +2271,44 @@ function AdminTeamsPanel() {
     loadTeams();
   }, [token]);
 
+  // Filter teams based on search and tournament selection
+  useEffect(() => {
+    let filtered = allTeams;
+    
+    // Filter by tournament
+    if (selectedTournament !== "all") {
+      filtered = filtered.filter(team => team.tournament_name === selectedTournament);
+    }
+    
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(team => 
+        team.team_name?.toLowerCase().includes(term) ||
+        team.captain_name?.toLowerCase().includes(term) ||
+        team.tournament_name?.toLowerCase().includes(term) ||
+        team.city?.toLowerCase().includes(term)
+      );
+    }
+    
+    setTeams(filtered);
+  }, [searchTerm, selectedTournament, allTeams]);
+
   async function deleteTeam() {
     if (!deleteCandidate) return;
     try {
       await apiRequest(`/admin/teams/${deleteCandidate.id}/delete`, { method: "POST" }, token);
-      setTeams((current) => current.filter((item) => item.id !== deleteCandidate.id));
+      setAllTeams((current) => current.filter((item) => item.id !== deleteCandidate.id));
       setMessage(`${deleteCandidate.team_name} deleted.`);
       setDeleteCandidate(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not delete team.");
     }
+  }
+
+  function handleViewTeam(team: AdminTeamRow) {
+    setSelectedTeam(team);
+    setShowTeamDetail(true);
   }
 
   return (
@@ -1859,23 +2322,140 @@ function AdminTeamsPanel() {
           <p>Open, edit, or delete database-backed team registrations without mixing data between tournaments.</p>
         </div>
       </section>
+
+      {/* Tournament Filter and Search Section */}
+      <section className="panel admin-payment-tools" style={{ marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", alignItems: "flex-end" }}>
+          {/* Tournament Name Containers */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", flex: "1", minWidth: "200px" }}>
+            <button 
+              className={`btn ${selectedTournament === "all" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setSelectedTournament("all")}
+              style={{ fontSize: "13px", padding: "6px 14px" }}
+            >
+              All Tournaments
+            </button>
+            {tournamentOptions.map((name) => (
+              <button 
+                key={name}
+                className={`btn ${selectedTournament === name ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setSelectedTournament(name)}
+                style={{ fontSize: "13px", padding: "6px 14px" }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Bar */}
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", minWidth: "200px" }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <Search size={16} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#999" }} />
+              <input 
+                value={searchTerm} 
+                onChange={(event) => setSearchTerm(event.target.value)} 
+                placeholder="Search teams, captains..." 
+                style={{ width: "100%", paddingLeft: "32px" }}
+              />
+            </div>
+            {(searchTerm || selectedTournament !== "all") && (
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => { setSearchTerm(""); setSelectedTournament("all"); }}
+                style={{ fontSize: "13px", padding: "6px 12px" }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={{ marginTop: "0.5rem", fontSize: "14px", color: "#666" }}>
+          {teams.length} team{teams.length !== 1 ? 's' : ''} found
+        </div>
+      </section>
+
       <DataTable
-        columns={["Team Name", "Tournament", "Captain", "City", "Players", "Payment", "Status", "Actions"]}
+        columns={["Team Name", "Tournament", "Captain", "City", "Jersey", "Players", "Payment", "Status", "Actions"]}
         rows={teams.map((team) => [
-          <span><b>{team.team_name}</b><small style={{ display: 'block', opacity: 0.7 }}>{team.user_email || team.sport}</small></span>,
+          <span>
+            <b>{team.team_name}</b>
+            <small style={{ display: 'block', opacity: 0.7 }}>{team.user_email || team.sport}</small>
+          </span>,
           team.tournament_name,
           team.captain_name,
           team.city,
-          team.players_count,
-          <span className={`status ${team.payment_status === "paid" ? "emerald" : "orange"}`}>{team.payment_status}</span>,
+          <span style={{ fontWeight: "500" }}>{getJerseyDisplayName(team.selected_jersey)}</span>,
+          team.players_count || 0,
+          <span className={`status ${team.payment_status === "paid" ? "emerald" : "orange"}`}>
+            {team.payment_status}
+          </span>,
           team.status,
-          <span className="table-action-group">
+          <span className="table-action-group" style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+            <button 
+              className="btn btn-secondary tiny-btn" 
+              onClick={() => handleViewTeam(team)}
+            >
+              View
+            </button>
             <Link className="inline-link" to={`/admin/teams/registrations/${team.id}`}>Open</Link>
             <Link className="inline-link" to={`/admin/teams/${team.id}/edit`}>Edit</Link>
             <button className="link-button danger-link" type="button" onClick={() => setDeleteCandidate(team)}>Delete</button>
           </span>,
         ])}
       />
+
+      {/* Team Detail Modal */}
+      {showTeamDetail && selectedTeam && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setShowTeamDetail(false)}>
+          <section className="panel confirm-modal" role="dialog" aria-modal="true" style={{ maxWidth: "700px", width: "90%", maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span className="status emerald">Team Detail</span>
+                <h2>{selectedTeam.team_name}</h2>
+              </div>
+              <button className="icon-btn" type="button" onClick={() => setShowTeamDetail(false)}>×</button>
+            </div>
+            
+            {/* Team Information */}
+            <div style={{ marginBottom: "1rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                <p><b>Tournament:</b> <span>{selectedTeam.tournament_name}</span></p>
+                <p><b>Sport:</b> <span>{selectedTeam.sport}</span></p>
+                <p><b>Captain:</b> <span>{selectedTeam.captain_name}</span></p>
+                <p><b>City:</b> <span>{selectedTeam.city}</span></p>
+                <p><b>Jersey:</b> <span style={{ fontWeight: "500" }}>{getJerseyDisplayName(selectedTeam.selected_jersey)}</span></p>
+                <p><b>Players:</b> <span>{selectedTeam.players_count || 0}</span></p>
+                <p><b>Payment:</b> <span className={`status ${selectedTeam.payment_status === "paid" ? "emerald" : "orange"}`}>{selectedTeam.payment_status}</span></p>
+                <p><b>Status:</b> <span>{selectedTeam.status}</span></p>
+              </div>
+            </div>
+
+            {/* Players Table with Age and Size */}
+            {selectedTeam.members && selectedTeam.members.length > 0 && (
+              <>
+                <h3 style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>Team Players</h3>
+                <DataTable
+                  columns={["#", "Player Name", "Age", "Jersey Size", "Role"]}
+                  rows={selectedTeam.members.map((player, index) => [
+                    index + 1,
+                    player.name || "-",
+                    player.age || "-",
+                    player.jersey_size || "-",
+                    player.role || "-"
+                  ])}
+                />
+              </>
+            )}
+
+            <div className="form-actions" style={{ marginTop: "1rem", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <Link className="btn btn-primary" to={`/admin/teams/registrations/${selectedTeam.id}`}>Open Full Details</Link>
+              <Link className="btn btn-secondary" to={`/admin/teams/${selectedTeam.id}/edit`}>Edit Team</Link>
+              <button className="btn btn-secondary" type="button" onClick={() => setShowTeamDetail(false)}>Close</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {deleteCandidate && (
         <div className="modal-backdrop" role="presentation">
           <section className="panel confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-team-title">
@@ -1967,10 +2547,28 @@ export function AdminRegistrationTeamDetailPage() {
                 <p><b>Coach</b><span>{registration.coach_name || "-"}</span></p>
                 <p><b>User Login</b><span>{registration.user_email || registration.email}</span></p>
                 <p><b>City</b><span>{registration.city}</span></p>
+                <p><b>Jersey</b><span>{getJerseyDisplayName(registration.selected_jersey)}</span></p>
                 <p><b>Status</b><span>{registration.status}</span></p>
               </div>
             </section>
-            <DataTable columns={["Player", "Role", "Jersey", "Contact"]} rows={data.players.map((player) => [player.name, player.role, player.jersey || "-", player.contact || "-"])} />
+            
+            {/* Players Table with Age and Size */}
+            {data.players.length > 0 && (
+              <>
+                <h3 style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>Players</h3>
+                <DataTable 
+                  columns={["Player", "Age", "Jersey Size", "Role", "Contact"]} 
+                  rows={data.players.map((player) => [
+                    player.name,
+                    player.age || "-",
+                    player.jersey_size || "-",
+                    player.role || "-",
+                    player.contact || "-"
+                  ])} 
+                />
+              </>
+            )}
+            
             <DataTable columns={["Payment", "Amount", "Method", "Status"]} rows={data.payments.map((payment) => [payment.receipt_number, formatAdminMoney(payment.amount), payment.method, payment.status])} />
             <DataTable columns={["Document", "File", "Status", "Uploaded"]} rows={data.documents.map((document) => [document.document_type, document.file_name, document.status, document.uploaded_at])} />
           </>
