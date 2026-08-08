@@ -47,7 +47,7 @@ class RefreshTokenRequest(BaseModel):
 class RegistrationMemberCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     role: str = Field(default="Player", max_length=40)
-    jersey: str | None = Field(default=None, max_length=2000000)
+    jersey: str | None = Field(default=None, max_length=20000000)
     contact: str | None = Field(default=None, max_length=40)
     age: int | None = Field(default=None, ge=0, le=120)
     jersey_size: str | None = Field(default=None, max_length=20)
@@ -56,7 +56,7 @@ class RegistrationMemberCreate(BaseModel):
 class RegistrationDocumentCreate(BaseModel):
     document_type: str = Field(min_length=2, max_length=80)
     file_name: str = Field(min_length=2, max_length=180)
-    file_path: str = Field(min_length=1, max_length=2000000)
+    file_path: str = Field(min_length=1, max_length=20000000)
     status: str = Field(default="uploaded", pattern="^(required|pending|uploaded)$")
 
 
@@ -71,8 +71,8 @@ class RegistrationCreate(BaseModel):
     phone: str = Field(min_length=7, max_length=20)
     city: str = Field(min_length=2, max_length=80)
     district_state: str = Field(default="", max_length=120)
-    team_logo: str = Field(default="", max_length=2000000)
-    selected_jersey_image: str = Field(default="", max_length=2000000)
+    team_logo: str = Field(default="", max_length=20000000)
+    selected_jersey_image: str = Field(default="", max_length=20000000)
     team_motto: str = Field(default="", max_length=180)
     category: str = Field(default="", max_length=80)
     members: list[RegistrationMemberCreate] = []
@@ -157,7 +157,7 @@ class TournamentCitiesPayload(BaseModel):
 
 class TournamentJerseyPayload(BaseModel):
     label: str = Field(min_length=1, max_length=80)
-    image: str = Field(min_length=3, max_length=2000000)
+    image: str = Field(default="", max_length=20000000)
 
 
 class TournamentJerseysPayload(BaseModel):
@@ -193,8 +193,8 @@ class TournamentUpsertPayload(BaseModel):
     min_age: int = Field(default=18, ge=0, le=120)
     max_age: int = Field(default=45, ge=0, le=120)
     prize: str = Field(default="INR 0", max_length=80)
-    image: str = Field(default="/assets/cricket-stadium.png", max_length=2000000)
-    poster: str = Field(default="/assets/poster.jpeg", max_length=2000000)
+    image: str = Field(default="/assets/cricket-stadium.png", max_length=20000000)
+    poster: str = Field(default="/assets/poster.jpeg", max_length=20000000)
     accent: str = Field(default="emerald", max_length=40)
     address: str = Field(default="", max_length=500)
     sport_description: str = Field(default="", max_length=1000)
@@ -217,7 +217,7 @@ class NewsBlockPayload(BaseModel):
 class NewsPostPayload(BaseModel):
     title: str = Field(min_length=3, max_length=160)
     short_description: str = Field(min_length=10, max_length=320)
-    image: str = Field(default="", max_length=2000000)
+    image: str = Field(default="", max_length=20000000)
     category: str = Field(pattern="^(Winner Teams|Match Updates|Tournament Updates|Announcements)$")
     sport: str = Field(min_length=2, max_length=80)
     tournament_slug: str | None = Field(default=None, max_length=120)
@@ -230,7 +230,7 @@ class NewsPostPayload(BaseModel):
 class GalleryAlbumPayload(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     description: str = Field(default="", max_length=1000)
-    image: str = Field(min_length=3, max_length=2000000)
+    image: str = Field(default="", max_length=20000000)
     sport: str = Field(default="Gallery", max_length=80)
     city: str = Field(default="", max_length=80)
     from_date: str = Field(default="", max_length=40)
@@ -284,7 +284,7 @@ class AdminTeamUpdatePayload(BaseModel):
     email: EmailStr
     phone: str = Field(default="", max_length=20)
     city: str = Field(min_length=2, max_length=80)
-    team_logo: str = Field(default="", max_length=2000000)
+    team_logo: str = Field(default="", max_length=20000000)
     team_motto: str = Field(default="", max_length=180)
 
 
@@ -329,8 +329,8 @@ class HomeDiscoveryCardUpdate(BaseModel):
     sport: str = Field(min_length=2, max_length=80)
     tournament_slug: str = Field(default="", max_length=120)
     sponsor_name: str = Field(min_length=2, max_length=140)
-    sponsor_image: str = Field(default="", max_length=2000000)
-    image: str = Field(min_length=2, max_length=2000000)
+    sponsor_image: str = Field(default="", max_length=20000000)
+    image: str = Field(default="", max_length=20000000)
     event_date: str = Field(min_length=2, max_length=120)
     description: str = Field(min_length=10, max_length=1600)
     sponsor_details: str = Field(min_length=5, max_length=1200)
@@ -357,7 +357,7 @@ class LiveHighlightUpdate(BaseModel):
 
 class SponsorLogoUpdate(BaseModel):
     name: str = Field(min_length=2, max_length=140)
-    image: str = Field(min_length=2, max_length=2000000)
+    image: str = Field(default="", max_length=20000000)
     link_url: str = Field(min_length=2, max_length=500)
     sort_order: int = Field(default=1, ge=1, le=999)
     published: bool = True

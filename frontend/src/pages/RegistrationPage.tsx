@@ -1,5 +1,5 @@
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, ExternalLink, FileText, ImagePlus, Printer, ShieldCheck, Smartphone, Trophy, Upload, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, ExternalLink, FileText, Printer, ShieldCheck, Smartphone, Trophy, Upload, UserPlus, Users } from "lucide-react";
 import { Page } from "../components/UI";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -69,13 +69,6 @@ type BackendRegistration = {
   members?: Array<{ name: string; role?: string; jersey?: string; contact?: string }>;
   documents?: Array<{ document_type: string; file_name: string; file_path: string; status: SavedDocument["status"] }>;
   prizes?: Array<{ position: number; label: string; amount: number }>;
-};
-
-type TournamentJerseyOption = {
-  id: string;
-  label: string;
-  image: string;
-  reserved?: boolean;
 };
 
 type RegistrationDraft = {
@@ -192,11 +185,6 @@ function fileToDataUrl(file: File): Promise<string> {
 
 const jerseySizeOptions = ["XS", "S", "M", "L", "XL"];
 
-function jerseyDisplayName(value: string, options: TournamentJerseyOption[] = []) {
-  if (!value) return "No jersey selected";
-  return options.find((jersey) => jersey.image === value)?.label ?? "Uploaded team kit";
-}
-
 function completedRecordFromBackend(registration: BackendRegistration, tournament: any) {
   const payment = registration.payments?.[0];
   if (!payment) return null;
@@ -248,7 +236,14 @@ function completedRecordFromBackend(registration: BackendRegistration, tournamen
   };
 }
 
-function amountForTournament(slug: string) {
+function amountForTournament(slug: string, tournament?: Record<string, any>) {
+  const feeLines = Array.isArray(tournament?.feeBreakdown)
+    ? tournament?.feeBreakdown
+    : Array.isArray(tournament?.fee_breakdown)
+      ? tournament?.fee_breakdown
+      : [];
+  const feeTotal = feeLines.reduce((total: number, line: any) => total + Number(line?.value || 0), 0);
+  if (feeTotal > 0) return feeTotal * 100;
   if (slug.includes("corporate")) return 129900;
   if (slug.includes("football")) return 349900;
   return 517900;
@@ -410,24 +405,13 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
 function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
   const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
-  if (uploadedRulesPdf) {
-    const link = document.createElement("a");
-    link.href = uploadedRulesPdf;
-    link.download = uploadedRulesPdf.split("/").pop() || `${tournament.slug}-rules-and-conditions.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    return;
-  }
-  const blob = new Blob([buildRulesPdf(tournament)], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
+  if (!uploadedRulesPdf) return;
   const link = document.createElement("a");
-  link.href = url;
-  link.download = `${tournament.slug}-rules-and-conditions.pdf`;
+  link.href = uploadedRulesPdf;
+  link.download = uploadedRulesPdf.split("/").pop() || `${tournament.slug}-rules-and-conditions.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 300);
 }
 
 function downloadSampleExcel() {
@@ -486,7 +470,7 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: (typeof tournaments)[number]; amount: number; showTimeline?: boolean }) {
+function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: Record<string, any>; amount: number; showTimeline?: boolean }) {
   const fees = Math.round(amount * 0.18);
   const total = totalPayableForAmount(amount);
   return (
@@ -706,6 +690,7 @@ function parseExcelFile(file: File): Promise<ImportedRosterEntry[]> {
 }
 
 function normalizeTournamentRecord(record: Record<string, any>, fallback: (typeof tournaments)[number]) {
+  const feeBreakdown = Array.isArray(record.fee_breakdown) ? record.fee_breakdown : Array.isArray(record.feeBreakdown) ? record.feeBreakdown : (fallback as any).feeBreakdown ?? [];
   return {
     ...fallback,
     ...record,
@@ -718,6 +703,7 @@ function normalizeTournamentRecord(record: Record<string, any>, fallback: (typeo
     sportDescription: record.sport_description ?? (fallback as any).sportDescription,
     rulesPdf: record.rules_pdf ?? (fallback as any).rulesPdf ?? "",
     rulesText: record.rules_text ?? (fallback as any).rulesText ?? "",
+    feeBreakdown,
     show_on_home: Boolean(record.show_on_home ?? (fallback as any).show_on_home),
     cities: Array.isArray(record.cities) && record.cities.length ? record.cities : fallback.cities,
   };
@@ -730,9 +716,8 @@ export function RegistrationPage() {
   const routeSlug = slug ?? tournaments[0].slug;
   const fallbackTournament = tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug };
   const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
-  const [jerseyOptions, setJerseyOptions] = useState<TournamentJerseyOption[]>([]);
   const tournament = withRuntimeTournamentStatus(remoteTournament ? normalizeTournamentRecord(remoteTournament, fallbackTournament) : fallbackTournament) as (typeof tournaments)[number];
-  const amount = amountForTournament(routeSlug);
+  const amount = amountForTournament(routeSlug, tournament);
   const savedDraft = useMemo(() => readRegistrationDraft(routeSlug), [routeSlug]);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
     if (index === 0) return "Captain";
@@ -751,7 +736,7 @@ export function RegistrationPage() {
     districtState: tournament.cities[0] ?? tournament.location,
     teamLogo: "",
     teamMotto: "",
-    selectedJersey: savedDraft?.teamDetails?.selectedJersey ?? "",
+    selectedJersey: "",
     category: `${tournament.sport} League`,
   });
   const [members, setMembers] = useState(() => {
@@ -773,7 +758,6 @@ export function RegistrationPage() {
   const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [rulesScrolled, setRulesScrolled] = useState(false);
-  const [jerseyPickerOpen, setJerseyPickerOpen] = useState(false);
   const [rosterImportOpen, setRosterImportOpen] = useState(false);
   const [rosterImportText, setRosterImportText] = useState("");
   const rosterFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -790,15 +774,6 @@ export function RegistrationPage() {
         if (active) setRemoteTournament(item);
       })
       .catch(() => undefined);
-    apiRequest<TournamentJerseyOption[]>(`/public/tournaments/${routeSlug}/jerseys`)
-      .then((items) => {
-        if (!active) return;
-        setJerseyOptions(items);
-        setTeamDetails((current) => current.selectedJersey || !items.length ? current : { ...current, selectedJersey: items[0].image });
-      })
-      .catch(() => {
-        if (active) setJerseyOptions([]);
-      });
     return () => {
       active = false;
     };
@@ -834,11 +809,6 @@ export function RegistrationPage() {
       }
       return next;
     });
-  }
-
-  function chooseJersey(value: string) {
-    updateTeamDetails("selectedJersey", value);
-    setJerseyPickerOpen(false);
   }
 
   function updateDocument(index: number, file?: File) {
@@ -981,11 +951,11 @@ export function RegistrationPage() {
           team_logo: teamDetails.teamLogo,
           team_motto: teamDetails.teamMotto,
           category: `${tournament.sport} League`,
-          selected_jersey_image: teamDetails.selectedJersey,
+          selected_jersey_image: "",
           members: members.map((name, index) => ({
             name: name.trim(),
             role: index === 0 ? "Captain" : index === 1 ? "Sub-captain" : "Player",
-            jersey: teamDetails.selectedJersey,
+            jersey: "",
             contact: index === 0 ? teamDetails.phone : "",
             age: memberAges[index] ? Number(memberAges[index]) : null,
             jersey_size: memberJerseySizes[index] ?? "",
@@ -1197,20 +1167,6 @@ export function RegistrationPage() {
                   </div>
                 </div>
 
-                <div className="jersey-row" style={{ marginTop: "2rem" }}>
-                  <div>
-                    <h3>Team Jersey</h3>
-                    <p>{jerseyOptions.length ? "Select the uploaded kit style for your team." : "No jersey images uploaded for this tournament."}</p>
-                  </div>
-                  <div className="registration-choice-card compact-card jersey-preview-card" style={{ margin: "10px 0" }}>
-                    {teamDetails.selectedJersey ? <img src={teamDetails.selectedJersey} alt="Selected jersey" style={{ width: "80px", height: "auto" }} /> : null}
-                    <div className="jersey-preview-copy">
-                      <p><strong>{jerseyDisplayName(teamDetails.selectedJersey, jerseyOptions)}</strong></p>
-                      <button className="btn btn-secondary btn-sm" type="button" disabled={!jerseyOptions.length} onClick={() => setJerseyPickerOpen(true)}>Change Kit</button>
-                    </div>
-                  </div>
-                </div>
-
                 <label className="acceptance-box">
                   <input type="checkbox" checked={tournamentAccepted} readOnly onClick={(event) => { event.preventDefault(); openRulesModal(); }} />
                   <span>I accept the tournament rules and verify that all player ages are accurate.</span>
@@ -1257,23 +1213,6 @@ export function RegistrationPage() {
               <div className="rules-modal-actions">
                 <button className="btn btn-secondary" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>Cancel</button>
                 <button className="btn btn-primary" type="button" onClick={handleRosterTextImport}>Import rows</button>
-              </div>
-            </article>
-          </div>
-        )}
-
-        {jerseyPickerOpen && (
-          <div className="rules-modal-backdrop" role="dialog" aria-modal="true">
-            <article className="rules-modal jersey-picker-modal">
-              <button className="rules-modal-close" type="button" onClick={() => setJerseyPickerOpen(false)}>x</button>
-              <h2>Choose your jersey</h2>
-              <div className="jersey-picker-grid">
-                {jerseyOptions.map((jersey) => (
-                  <button key={jersey.id || jersey.label} type="button" className={`jersey-option ${teamDetails.selectedJersey === jersey.image ? "selected" : ""}`} disabled={jersey.reserved} onClick={() => chooseJersey(jersey.image)}>
-                    <img src={jersey.image} alt={jersey.label} />
-                    <strong>{jersey.label}{jersey.reserved ? " - Reserved" : ""}</strong>
-                  </button>
-                ))}
               </div>
             </article>
           </div>
@@ -1349,9 +1288,11 @@ export function RegistrationPaymentPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const routeSlug = slug ?? tournaments[0].slug;
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const fallbackTournament = tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug };
+  const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
+  const tournament = withRuntimeTournamentStatus(remoteTournament ? normalizeTournamentRecord(remoteTournament, fallbackTournament) : fallbackTournament);
   const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
-  const amount = amountForTournament(routeSlug);
+  const amount = amountForTournament(routeSlug, tournament);
   const totalPayable = totalPayableForAmount(amount);
   const [method, setMethod] = useState<"upi" | "card">("upi");
   const [contact, setContact] = useState(saved?.phone ?? "");
@@ -1364,6 +1305,18 @@ export function RegistrationPaymentPage() {
     ? buildUpiIntent({ amount: totalPayable, registrationId: saved.registrationId, teamName: saved.teamName, tournamentName: tournament.name })
     : "";
   const upiAppLinks = useMemo(() => buildAppUpiLinks(upiIntent), [upiIntent]);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest<Record<string, any>>(`/public/tournaments/${routeSlug}`)
+      .then((item) => {
+        if (active) setRemoteTournament(item);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [routeSlug]);
 
   async function completePayment(selectedMethod: "upi" | "card") {
     if (!saved) return;

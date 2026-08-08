@@ -187,7 +187,7 @@ def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
             "liveMatches": rows("SELECT * FROM live_matches"),
         }
 
-    return ok(get_or_set_json(cache_key("management:dashboard", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
+    return ok(build())
 
 
 @router.get("/tournaments")
@@ -627,7 +627,7 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
     accepted = rows(
         """SELECT id, team_name AS name, captain_name, status
            FROM registrations
-           WHERE tournament_slug = ? AND status = 'accepted'
+           WHERE tournament_slug = ? AND status IN ('accepted', 'pending_approval', 'approved')
            ORDER BY created_at""",
         (tournament_slug,),
     )
@@ -649,7 +649,7 @@ def group_bracket_workspace(tournament_slug: str, user: dict = Depends(require_r
     accepted = rows(
         """SELECT id, team_name AS name, captain_name, status
            FROM registrations
-           WHERE tournament_slug = ? AND status = 'accepted'
+           WHERE tournament_slug = ? AND status IN ('accepted', 'pending_approval', 'approved')
            ORDER BY created_at""",
         (tournament_slug,),
     )

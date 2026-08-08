@@ -842,7 +842,6 @@ function AdminTournamentsDbPanel() {
                     const file = event.target.files?.[0];
                     if (file) void fileToDataUrl(file).then((image) => setAnnouncementDraft(prev => ({...prev, image})));
                   }} /></label>
-                  <label>Selected path<input value={announcementDraft.image} readOnly /></label>
                 </div>
                 <label>Description<textarea value={announcementDraft.description} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, description: event.target.value }))} /></label>
                 <div className="registration-actions compact-actions">
@@ -1028,12 +1027,10 @@ export function AdminCMSEditPage() {
                   const file = event.target.files?.[0];
                   if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, image })));
                 }} /></label>
-                <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
                 <label>Sponsor Image Upload<input type="file" accept="image/*" onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, sponsor_image: image })));
                 }} /></label>
-                <label>Sponsor Image Path<input value={formData.sponsor_image || ""} onChange={(e) => setFormData({...formData, sponsor_image: e.target.value})} /></label>
                 <label>Event Date<input value={formData.event_date || ""} onChange={(e) => setFormData({...formData, event_date: e.target.value})} /></label>
                 <label>Register Path<input value={formData.register_path || ""} onChange={(e) => setFormData({...formData, register_path: e.target.value})} /></label>
                 <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
@@ -1055,7 +1052,6 @@ export function AdminCMSEditPage() {
                   const file = event.target.files?.[0];
                   if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, image })));
                 }} /></label>
-                <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
                 <label>Link URL<input value={formData.link_url || ""} onChange={(e) => setFormData({...formData, link_url: e.target.value})} /></label>
                 <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
               </div>
@@ -1577,9 +1573,6 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
                     </div>
                   )}
                 </div>
-                <small style={{ color: "#6b7280", marginTop: "4px", display: "block" }}>
-                  Selected path: {draft.image || "No image selected"}
-                </small>
               </label>
               
               <label style={{ gridColumn: "span 2" }}>
@@ -2225,12 +2218,8 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
                     />
                   </label>
                   <label>
-                    Image URL / uploaded data
-                    <input
-                      value={formData.image}
-                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                      placeholder="/assets/news-image.jpg"
-                    />
+                    Image URL
+                    <input value={formData.image.startsWith("data:") ? "Uploaded image selected" : formData.image} onChange={(e) => setFormData({ ...formData, image: e.target.value })} placeholder="Optional image URL" />
                   </label>
                 </div>
 
@@ -2471,7 +2460,7 @@ export function GalleryManagerPanel() {
                   const file = event.target.files?.[0];
                   if (file) void fileToDataUrl(file).then((image) => setForm((current) => ({ ...current, image })));
                 }} /></label>
-                <label>Image URL / uploaded data<input value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} required /></label>
+                <label>Image URL<input value={form.image.startsWith("data:") ? "Uploaded image selected" : form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} placeholder="Optional image URL" /></label>
                 <label>Sort order<input type="number" value={form.sort_order} onChange={(event) => setForm({ ...form, sort_order: Number(event.target.value) })} /></label>
               </div>
               <label>Description<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={4} /></label>

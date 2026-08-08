@@ -983,6 +983,14 @@ textarea { width: 100%; min-height: 112px; padding: 12px 14px; border: 1px solid
 .metric-card .trend { position: absolute; top: 22px; right: 22px; padding: 6px 9px; border-radius: 999px; color: var(--primary-dark); background: rgba(11, 136, 82, .12); font-size: 12px; font-weight: 900; }
 .metric-card strong { display: block; font-size: 30px; margin: 8px 0 18px; }
 .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+.table-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 14px 0; }
+.table-actions button, .content-scroll-controls button, .news-category-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--brand); font-weight: 900; cursor: pointer; box-shadow: var(--shadow-soft); }
+.table-actions button { padding: 0 14px; }
+.content-scroll-controls { display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 12px; }
+.content-scroll-controls button, .news-category-actions button { width: 38px; }
+.content-scroll-row { display: flex !important; grid-template-columns: none !important; gap: 18px; overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none; padding: 2px 2px 14px; }
+.content-scroll-row::-webkit-scrollbar { display: none; }
+.content-scroll-row > * { flex: 0 0 min(360px, 86vw); scroll-snap-align: start; }
 table { width: 100%; border-collapse: collapse; min-width: 680px; }
 th, td { padding: 16px 18px; border-bottom: 1px solid var(--line); text-align: left; }
 th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }

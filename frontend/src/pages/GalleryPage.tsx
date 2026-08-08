@@ -1,5 +1,5 @@
 import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest } from "../lib/api";
@@ -34,6 +34,7 @@ export function GalleryPage() {
   useWheelHorizontal(".gallery-feed-grid");
   const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
   const [social, setSocial] = useState<GallerySocialState>({});
+  const galleryScroller = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     apiRequest<GalleryAlbum[]>("/public/gallery/albums")
@@ -65,12 +66,21 @@ export function GalleryPage() {
     await navigator.clipboard.writeText(url);
   }
 
+  function moveGallery(direction: -1 | 1) {
+    galleryScroller.current?.scrollBy({ left: direction * 380, behavior: "smooth" });
+  }
+
   return (
     <Page className="gallery-page">
       <section className="gallery-section gallery-section-first">
         <div className="gallery-simple-title"><h1>Gallery</h1></div>
         {albums.length ? (
-          <div className="gallery-feed-grid wheel-horizontal">
+          <>
+          <div className="content-scroll-controls">
+            <button type="button" onClick={() => moveGallery(-1)} aria-label="Previous gallery albums">&lt;</button>
+            <button type="button" onClick={() => moveGallery(1)} aria-label="Next gallery albums">&gt;</button>
+          </div>
+          <div className="gallery-feed-grid wheel-horizontal content-scroll-row" ref={galleryScroller}>
             {albums.map((album) => {
               const state = social[imageKey(album)] ?? { likes: 0, comments: [] };
               return (
@@ -90,6 +100,7 @@ export function GalleryPage() {
               );
             })}
           </div>
+          </>
         ) : (
           <div className="panel user-empty-state">
             <h2>No gallery published</h2>

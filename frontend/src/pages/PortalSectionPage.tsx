@@ -705,7 +705,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                     <label>Primary place
                       <select value={tournamentForm.location} onChange={(event) => patchTournamentForm({ location: event.target.value, cities: Array.from(new Set([...tournamentForm.cities, event.target.value])) })}>
                         {cityOptions.map((city) => <option key={city}>{city}</option>)}
-                        <option value="__new_city__">Add new place</option>
+                        {!assignedCities.length && <option value="__new_city__">Add new place</option>}
                       </select>
                     </label>
                     {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={() => tournamentForm.newCity && patchTournamentForm({ location: tournamentForm.newCity, cities: Array.from(new Set([...tournamentForm.cities, tournamentForm.newCity])) })} /></label>}

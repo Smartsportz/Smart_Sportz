@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronRight, Search, Settings } from "lucide-react";
+import { ArrowRight, ChevronRight, Download, Search, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
@@ -291,9 +291,37 @@ export function LiveMatchCard({ match }: { match: any }) {
   );
 }
 
+function cellText(value: React.ReactNode): string {
+  if (value === null || value === undefined || typeof value === "boolean") return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(cellText).join(" ").trim();
+  if (typeof value === "object" && "props" in value) return cellText((value as React.ReactElement<any>).props.children);
+  return "";
+}
+
+function downloadTableCsv(columns: string[], rows: Array<Array<React.ReactNode>>) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const csv = [
+    columns.map(escape).join(","),
+    ...rows.map((row) => columns.map((_, index) => escape(cellText(row[index]))).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `smart-sportz-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<React.ReactNode>> }) {
   return (
     <div className="table-wrap">
+      {rows.length > 0 && (
+        <div className="table-actions">
+          <button type="button" onClick={() => downloadTableCsv(columns, rows)}><Download size={16} /> Download</button>
+        </div>
+      )}
       <table>
         <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
         <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>

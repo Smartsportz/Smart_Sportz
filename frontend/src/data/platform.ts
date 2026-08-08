@@ -538,6 +538,7 @@ export const sidebar = [
   { label: "Users", path: "/admin/users", icon: Users },
   { label: "Managers", path: "/admin/managers", icon: ShieldCheck },
   { label: "Roles", path: "/admin/roles", icon: ShieldCheck, hidden: true },
+  { label: "Registrations", path: "/admin/registrations", icon: FileText },
   { label: "Teams", path: "/admin/teams", icon: Users },
   { label: "Players", path: "/admin/players", icon: Medal, hidden: true },
   { label: "Payments", path: "/admin/payments", icon: CircleDollarSign },

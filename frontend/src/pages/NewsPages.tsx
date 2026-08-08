@@ -1,5 +1,5 @@
 import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest } from "../lib/api";
@@ -58,6 +58,7 @@ export function NewsPage() {
   useWheelHorizontal();
   const [remotePosts, setRemotePosts] = useState<NewsPost[]>([]);
   const [social, setSocial] = useState<NewsSocial>({});
+  const categoryScrollers = useRef<Record<string, HTMLDivElement | null>>({});
   const posts = remotePosts;
   const categories = ["Match Updates", "Tournament Updates", "Announcements"];
   const visibleCategories = categories.filter((category) => posts.some((post) => post.category === category));
@@ -117,6 +118,10 @@ export function NewsPage() {
     await navigator.clipboard.writeText(`${payload.text}\n${url}`);
   }
 
+  function moveCategory(category: string, direction: -1 | 1) {
+    categoryScrollers.current[category]?.scrollBy({ left: direction * 380, behavior: "smooth" });
+  }
+
   return (
     <Page className="news-page">
       {activeHighlight ? <section className="news-highlight-section">
@@ -141,9 +146,11 @@ export function NewsPage() {
                 <h2>{category}</h2>
                 <div className="news-category-actions">
                   <span>{categoryPosts.length} updates</span>
+                  <button type="button" onClick={() => moveCategory(category, -1)} aria-label={`Previous ${category}`}>&lt;</button>
+                  <button type="button" onClick={() => moveCategory(category, 1)} aria-label={`Next ${category}`}>&gt;</button>
                 </div>
               </div>
-              <div className="news-list-grid wheel-horizontal news-category-carousel">
+              <div className="news-list-grid wheel-horizontal news-category-carousel content-scroll-row" ref={(node) => { categoryScrollers.current[category] = node; }}>
                 {categoryPosts.map((post) => (
                   <article className="news-card panel" key={post.slug}>
                     <Link className="click-card news-card-link" to={`/news/${post.slug}`}>

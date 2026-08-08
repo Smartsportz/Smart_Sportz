@@ -183,6 +183,7 @@ export default function App() {
           <Route path="/admin/managers/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminManagerDetailPage /></ProtectedRoute>} />
           <Route path="/admin/managers" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="managers" /></ProtectedRoute>} />
           <Route path="/admin/roles" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="roles" /></ProtectedRoute>} />
+          <Route path="/admin/registrations" element={<ProtectedRoute roles={["super_admin"]}><ManagementSectionPage section="registrations" /></ProtectedRoute>} />
           <Route path="/admin/teams/:id/edit" element={<ProtectedRoute roles={["super_admin"]}><AdminTeamEditPage /></ProtectedRoute>} />
           <Route path="/admin/teams/tournament/:slug" element={<ProtectedRoute roles={["super_admin"]}><AdminTournamentTeamsPage /></ProtectedRoute>} />
           <Route path="/admin/teams/registrations/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminRegistrationTeamDetailPage /></ProtectedRoute>} />
