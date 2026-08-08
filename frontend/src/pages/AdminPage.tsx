@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search, Edit2, Eye, EyeOff, Trash } from "lucide-react";
+import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
@@ -10,6 +10,52 @@ import type { TournamentNotice } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
+
+type IconProps = {
+  size?: number;
+  className?: string;
+};
+
+function EditIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function ViewIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M2.1 12a10 10 0 0 1 19.8 0 10 10 0 0 1-19.8 0" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function HideIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 10.6A2 2 0 0 0 12 16a2 2 0 0 0 1.4-.6" />
+      <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c5.5 0 9.5 4.8 10.7 8-0.4 1.1-1.2 2.6-2.5 4.1" />
+      <path d="M6.1 6.1C3.8 7.7 2.6 10 1.3 12c1.4 2.1 5.4 7 10.7 7 .9 0 1.8-.1 2.6-.3" />
+    </svg>
+  );
+}
+
+function DeleteIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 14h10l1-14" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
 
 
 const noticeStorageKey = "smart-sportz-tournament-notices";
@@ -1050,8 +1096,8 @@ function AdminCmsDbPanel() {
     item.tournament_slug || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
-      <Link to={`/admin/cms/edit/discovery/${item.slug}`}><Edit2 size={14} /> Edit</Link>
-      <Link to={item.register_path || "/"}><Eye size={14} /> View</Link>
+      <Link to={`/admin/cms/edit/discovery/${item.slug}`}><EditIcon size={14} /> Edit</Link>
+      <Link to={item.register_path || "/"}><ViewIcon size={14} /> View</Link>
     </span>,
   ]);
 
@@ -1061,8 +1107,8 @@ function AdminCmsDbPanel() {
     item.stage_label || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
-      <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><Edit2 size={14} /> Edit</Link>
-      <Link to={item.link_path || "/"}><Eye size={14} /> View</Link>
+      <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><EditIcon size={14} /> Edit</Link>
+      <Link to={item.link_path || "/"}><ViewIcon size={14} /> View</Link>
     </span>,
   ]);
 
@@ -1072,8 +1118,8 @@ function AdminCmsDbPanel() {
     item.link_url || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
-      <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><Edit2 size={14} /> Edit</Link>
-      {item.link_url && <Link to={item.link_url}><Eye size={14} /> View</Link>}
+      <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><EditIcon size={14} /> Edit</Link>
+      {item.link_url && <Link to={item.link_url}><ViewIcon size={14} /> View</Link>}
     </span>,
   ]);
 
@@ -1367,11 +1413,11 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
     </span>,
     <span key={`actions-${item.id}`} className="table-actions">
       <button className="btn btn-secondary tiny-btn" onClick={() => toggleVisibility(item.id)}>
-        {item.published ? <EyeOff size={14} /> : <Eye size={14} />}
+        {item.published ? <HideIcon size={14} /> : <ViewIcon size={14} />}
       </button>
       <button className="btn btn-secondary tiny-btn" onClick={() => openDraft(item)}>Edit</button>
       <button className="btn btn-danger tiny-btn" onClick={() => setDeleteConfirm(item)}>
-        <Trash size={14} />
+        <DeleteIcon size={14} />
       </button>
     </span>,
   ]);
@@ -1541,7 +1587,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
             </p>
             <div className="registration-actions compact-actions" style={{ justifyContent: "center" }}>
               <button className="btn btn-danger" type="button" onClick={confirmDelete}>
-                <Trash size={16} /> Yes, Delete
+                <DeleteIcon size={16} /> Yes, Delete
               </button>
               <button className="btn btn-secondary" type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button>
             </div>

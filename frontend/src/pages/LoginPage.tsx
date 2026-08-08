@@ -1,4 +1,4 @@
-import { Lock, Eye, EyeOff } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -6,6 +6,31 @@ import { useAuth, type OtpChallenge } from "../auth/AuthContext";
 import { Page } from "../components/UI";
 import { assets } from "../data/platform";
 import { apiRequest } from "../lib/api";
+
+type IconProps = {
+  size?: number;
+  className?: string;
+};
+
+function Eye({ size = 20, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M2.1 12a10 10 0 0 1 19.8 0 10 10 0 0 1-19.8 0" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOff({ size = 20, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 10.6A2 2 0 0 0 12 16a2 2 0 0 0 1.4-.6" />
+      <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c5.5 0 9.5 4.8 10.7 8-0.4 1.1-1.2 2.6-2.5 4.1" />
+      <path d="M6.1 6.1C3.8 7.7 2.6 10 1.3 12c1.4 2.1 5.4 7 10.7 7 .9 0 1.8-.1 2.6-.3" />
+    </svg>
+  );
+}
 
 const GOOGLE_CLIENT_ID = "1052442707513-ht85fnn4ag34pvna47vv6cnorv4bto7c.apps.googleusercontent.com";
 
