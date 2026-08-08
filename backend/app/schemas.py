@@ -329,8 +329,8 @@ class HomeDiscoveryCardUpdate(BaseModel):
     sport: str = Field(min_length=2, max_length=80)
     tournament_slug: str = Field(default="", max_length=120)
     sponsor_name: str = Field(min_length=2, max_length=140)
-    sponsor_image: str = Field(default="", max_length=500)
-    image: str = Field(min_length=2, max_length=500)
+    sponsor_image: str = Field(default="", max_length=2000000)
+    image: str = Field(min_length=2, max_length=2000000)
     event_date: str = Field(min_length=2, max_length=120)
     description: str = Field(min_length=10, max_length=1600)
     sponsor_details: str = Field(min_length=5, max_length=1200)
@@ -357,8 +357,15 @@ class LiveHighlightUpdate(BaseModel):
 
 class SponsorLogoUpdate(BaseModel):
     name: str = Field(min_length=2, max_length=140)
-    image: str = Field(min_length=2, max_length=500)
+    image: str = Field(min_length=2, max_length=2000000)
     link_url: str = Field(min_length=2, max_length=500)
+    sort_order: int = Field(default=1, ge=1, le=999)
+    published: bool = True
+
+
+class OrganizerCardUpdate(BaseModel):
+    title: str = Field(min_length=2, max_length=140)
+    description: str = Field(min_length=5, max_length=500)
     sort_order: int = Field(default=1, ge=1, le=999)
     published: bool = True
 

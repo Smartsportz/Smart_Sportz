@@ -916,7 +916,7 @@ function OptionalDataTable({ title, columns, rows }: { title: string; columns: s
 }
 
 // CMS Item Type Definitions
-type CMSItemType = 'discovery' | 'live-highlight' | 'sponsor';
+type CMSItemType = 'discovery' | 'sponsor' | 'organizer';
 
 // CMS Edit Page Component
 export function AdminCMSEditPage() {
@@ -942,8 +942,8 @@ export function AdminCMSEditPage() {
     // Determine the endpoint based on type
     let endpoint = '';
     if (type === 'discovery') endpoint = `/admin/home-content/discovery/${id}`;
-    else if (type === 'live-highlight') endpoint = `/admin/home-content/live-highlight/${id}`;
     else if (type === 'sponsor') endpoint = `/admin/home-content/sponsor/${id}`;
+    else if (type === 'organizer') endpoint = `/admin/home-content/organizer/${id}`;
     else {
       navigate('/admin/cms');
       return;
@@ -969,11 +969,11 @@ export function AdminCMSEditPage() {
     try {
       let endpoint = '';
       if (type === 'discovery') endpoint = `/admin/home-content/discovery/${id}`;
-      else if (type === 'live-highlight') endpoint = `/admin/home-content/live-highlight/${id}`;
       else if (type === 'sponsor') endpoint = `/admin/home-content/sponsor/${id}`;
+      else if (type === 'organizer') endpoint = `/admin/home-content/organizer/${id}`;
       
       await apiRequest(endpoint, {
-        method: "POST",
+        method: "PATCH",
         body: JSON.stringify(formData)
       }, token);
       
@@ -986,8 +986,8 @@ export function AdminCMSEditPage() {
 
   const getTypeLabel = () => {
     if (type === 'discovery') return 'Discovery Card';
-    if (type === 'live-highlight') return 'Live Highlight';
     if (type === 'sponsor') return 'Sponsor Logo';
+    if (type === 'organizer') return 'Organizer Card';
     return 'CMS Item';
   };
 
@@ -1024,7 +1024,15 @@ export function AdminCMSEditPage() {
                 <label>Sport<input value={formData.sport || ""} onChange={(e) => setFormData({...formData, sport: e.target.value})} /></label>
                 <label>Tournament Slug<input value={formData.tournament_slug || ""} onChange={(e) => setFormData({...formData, tournament_slug: e.target.value})} /></label>
                 <label>Sponsor Name<input value={formData.sponsor_name || ""} onChange={(e) => setFormData({...formData, sponsor_name: e.target.value})} /></label>
+                <label>Image Upload<input type="file" accept="image/*" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, image })));
+                }} /></label>
                 <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
+                <label>Sponsor Image Upload<input type="file" accept="image/*" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, sponsor_image: image })));
+                }} /></label>
                 <label>Sponsor Image Path<input value={formData.sponsor_image || ""} onChange={(e) => setFormData({...formData, sponsor_image: e.target.value})} /></label>
                 <label>Event Date<input value={formData.event_date || ""} onChange={(e) => setFormData({...formData, event_date: e.target.value})} /></label>
                 <label>Register Path<input value={formData.register_path || ""} onChange={(e) => setFormData({...formData, register_path: e.target.value})} /></label>
@@ -1038,35 +1046,32 @@ export function AdminCMSEditPage() {
             </>
           )}
 
-          {/* Live Highlight Fields */}
-          {type === 'live-highlight' && (
+          {/* Sponsor Logo Fields */}
+          {type === 'sponsor' && (
             <>
               <div className="form-grid">
-                {["title", "stage_label", "home_team", "away_team", "home_score", "away_score", "image", "link_path", "match_id"].map((field) => (
-                  <label key={field}>
-                    {field.replace(/_/g, " ")}
-                    <input value={formData[field] || ""} onChange={(e) => setFormData({...formData, [field]: e.target.value})} />
-                  </label>
-                ))}
+                <label>Name<input value={formData.name || ""} onChange={(e) => setFormData({...formData, name: e.target.value})} /></label>
+                <label>Image Upload<input type="file" accept="image/*" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, image })));
+                }} /></label>
+                <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
+                <label>Link URL<input value={formData.link_url || ""} onChange={(e) => setFormData({...formData, link_url: e.target.value})} /></label>
                 <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
               </div>
-              <label>Description<textarea rows={3} value={formData.description || ""} onChange={(e) => setFormData({...formData, description: e.target.value})} /></label>
-              <label>Impact Notes<textarea rows={3} value={formData.impact_notes || ""} onChange={(e) => setFormData({...formData, impact_notes: e.target.value})} /></label>
               <label className="checkbox-line">
                 <input type="checkbox" checked={Boolean(formData.published)} onChange={(e) => setFormData({...formData, published: e.target.checked})} /> Published
               </label>
             </>
           )}
 
-          {/* Sponsor Logo Fields */}
-          {type === 'sponsor' && (
+          {type === 'organizer' && (
             <>
               <div className="form-grid">
-                <label>Name<input value={formData.name || ""} onChange={(e) => setFormData({...formData, name: e.target.value})} /></label>
-                <label>Image Path<input value={formData.image || ""} onChange={(e) => setFormData({...formData, image: e.target.value})} /></label>
-                <label>Link URL<input value={formData.link_url || ""} onChange={(e) => setFormData({...formData, link_url: e.target.value})} /></label>
+                <label>Title<input value={formData.title || ""} onChange={(e) => setFormData({...formData, title: e.target.value})} /></label>
                 <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
               </div>
+              <label>Description<textarea rows={3} value={formData.description || ""} onChange={(e) => setFormData({...formData, description: e.target.value})} /></label>
               <label className="checkbox-line">
                 <input type="checkbox" checked={Boolean(formData.published)} onChange={(e) => setFormData({...formData, published: e.target.checked})} /> Published
               </label>
@@ -1089,19 +1094,19 @@ function AdminCmsDbPanel() {
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
   const [homeContent, setHomeContent] = useState<{
     discoveryCards: Array<Record<string, any>>;
-    liveHighlights: Array<Record<string, any>>;
     sponsorLogos: Array<Record<string, any>>;
-  }>({ discoveryCards: [], liveHighlights: [], sponsorLogos: [] });
+    organizerCards: Array<Record<string, any>>;
+  }>({ discoveryCards: [], sponsorLogos: [], organizerCards: [] });
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<'discovery' | 'live-highlight' | 'sponsor'>('discovery');
+  const [activeTab, setActiveTab] = useState<'discovery' | 'sponsor' | 'organizer'>('discovery');
 
   useEffect(() => {
     let alive = true;
     setError("");
     Promise.all([
       apiRequest<Array<Record<string, any>>>("/admin/cms", {}, token),
-      apiRequest<{ discoveryCards: Array<Record<string, any>>; liveHighlights: Array<Record<string, any>>; sponsorLogos: Array<Record<string, any>> }>("/admin/home-content", {}, token),
+      apiRequest<{ discoveryCards: Array<Record<string, any>>; sponsorLogos: Array<Record<string, any>>; organizerCards: Array<Record<string, any>> }>("/admin/home-content", {}, token),
     ])
       .then(([cmsPayload, homePayload]) => {
         if (!alive) return;
@@ -1117,24 +1122,24 @@ function AdminCmsDbPanel() {
   if (error) return <div className="form-alert">{error}</div>;
 
   async function reloadHomeContent() {
-    const payload = await apiRequest<{ discoveryCards: Array<Record<string, any>>; liveHighlights: Array<Record<string, any>>; sponsorLogos: Array<Record<string, any>> }>("/admin/home-content", {}, token);
+    const payload = await apiRequest<{ discoveryCards: Array<Record<string, any>>; sponsorLogos: Array<Record<string, any>>; organizerCards: Array<Record<string, any>> }>("/admin/home-content", {}, token);
     setHomeContent(payload);
   }
 
-  async function createHomeItem(type: "discovery" | "live-highlight" | "sponsor") {
+  async function createHomeItem(type: "discovery" | "sponsor" | "organizer") {
     setMessage("");
     if (type === "discovery") {
-      await apiRequest("/admin/home-content/discovery", { method: "POST", body: JSON.stringify({ label: "New Card", title: "New Discovery Card", sport: "Gallery", tournament_slug: "", sponsor_name: "Smart Sportz", sponsor_image: "", image: "/assets/logo.png", event_date: "Upcoming", description: "Edit this discovery card description.", sponsor_details: "Edit sponsor details.", register_path: "/tournaments", sort_order: homeContent.discoveryCards.length + 1, published: false }) }, token);
-    } else if (type === "live-highlight") {
-      await apiRequest("/admin/home-content/live-highlight", { method: "POST", body: JSON.stringify({ match_id: "", title: "New Live Highlight", stage_label: "Live", home_team: "Team A", away_team: "Team B", home_score: "0", away_score: "0", image: "/assets/logo.png", description: "Edit this live highlight description.", impact_notes: "Edit impact notes.", link_path: "/live", sort_order: homeContent.liveHighlights.length + 1, published: false }) }, token);
+      await apiRequest("/admin/home-content/discovery", { method: "POST", body: JSON.stringify({ label: "New Card", title: "New Discovery Card", sport: "Gallery", tournament_slug: "", sponsor_name: "Smart Sportz", sponsor_image: "", image: "/assets/logo.png", event_date: "Upcoming", description: "Edit this discovery card description.", sponsor_details: "Edit sponsor details.", register_path: "/tournaments", sort_order: homeContent.discoveryCards.length + 1, published: true }) }, token);
+    } else if (type === "sponsor") {
+      await apiRequest("/admin/home-content/sponsor", { method: "POST", body: JSON.stringify({ name: "New Sponsor", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/", sort_order: homeContent.sponsorLogos.length + 1, published: true }) }, token);
     } else {
-      await apiRequest("/admin/home-content/sponsor", { method: "POST", body: JSON.stringify({ name: "New Sponsor", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/", sort_order: homeContent.sponsorLogos.length + 1, published: false }) }, token);
+      await apiRequest("/admin/home-content/organizer", { method: "POST", body: JSON.stringify({ title: "New Organizer Tool", description: "Edit this organizer workflow card.", sort_order: homeContent.organizerCards.length + 1, published: true }) }, token);
     }
     await reloadHomeContent();
     setMessage("CMS record created. Use Edit to update the details.");
   }
 
-  async function deleteHomeItem(type: "discovery" | "live-highlight" | "sponsor", id: string, title: string) {
+  async function deleteHomeItem(type: "discovery" | "sponsor" | "organizer", id: string, title: string) {
     if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
     await apiRequest(`/admin/home-content/${type}/${id}`, { method: "DELETE" }, token);
     await reloadHomeContent();
@@ -1154,19 +1159,6 @@ function AdminCmsDbPanel() {
     </span>,
   ]);
 
-  // Table rows for Live Highlights
-  const liveHighlightRows = homeContent.liveHighlights.map((item) => [
-    item.title || "Untitled",
-    "Homepage live highlight",
-    item.link_path || "/live",
-    <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
-    <span className="table-actions">
-      <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><EditIcon size={14} /> Edit</Link>
-      <Link to={item.link_path || "/"}><ViewIcon size={14} /> View</Link>
-      <button className="danger-link" type="button" onClick={() => void deleteHomeItem("live-highlight", item.id, item.title)}>Delete</button>
-    </span>,
-  ]);
-
   // Table rows for Sponsor Logos
   const sponsorRows = homeContent.sponsorLogos.map((item) => [
     item.name || "Untitled",
@@ -1177,6 +1169,18 @@ function AdminCmsDbPanel() {
       <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><EditIcon size={14} /> Edit</Link>
       {item.link_url && <Link to={item.link_url}><ViewIcon size={14} /> View</Link>}
       <button className="danger-link" type="button" onClick={() => void deleteHomeItem("sponsor", item.slug, item.name)}>Delete</button>
+    </span>,
+  ]);
+
+  const organizerRows = homeContent.organizerCards.map((item) => [
+    item.title || "Untitled",
+    "Organizer card",
+    "Home page",
+    <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
+    <span className="table-actions">
+      <Link to={`/admin/cms/edit/organizer/${item.slug}`}><EditIcon size={14} /> Edit</Link>
+      <Link to="/"><ViewIcon size={14} /> View</Link>
+      <button className="danger-link" type="button" onClick={() => void deleteHomeItem("organizer", item.slug, item.title)}>Delete</button>
     </span>,
   ]);
 
@@ -1214,17 +1218,17 @@ function AdminCmsDbPanel() {
         >
           Discovery Cards ({homeContent.discoveryCards.length})
         </button>
-        <button 
-          className={`btn ${activeTab === 'live-highlight' ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setActiveTab('live-highlight')}
-        >
-          Live Highlights ({homeContent.liveHighlights.length})
-        </button>
-        <button 
+        <button
           className={`btn ${activeTab === 'sponsor' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('sponsor')}
         >
           Sponsor Logos ({homeContent.sponsorLogos.length})
+        </button>
+        <button
+          className={`btn ${activeTab === 'organizer' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('organizer')}
+        >
+          Organizer Cards ({homeContent.organizerCards.length})
         </button>
       </div>
 
@@ -1250,28 +1254,6 @@ function AdminCmsDbPanel() {
         </section>
       )}
 
-      {/* Live Highlights Table */}
-      {activeTab === 'live-highlight' && (
-        <section className="panel">
-          <div className="section-head-inline">
-            <h2>Homepage live highlights</h2>
-            <button className="btn btn-secondary" type="button" onClick={() => void createHomeItem("live-highlight")}><Plus size={16} /> Create</button>
-          </div>
-          <p>Live match highlights displayed on the homepage.</p>
-          {homeContent.liveHighlights.length === 0 ? (
-            <div className="user-empty-state">
-              <h2>No live highlights</h2>
-              <p>Create live highlights from the match management section.</p>
-            </div>
-          ) : (
-            <DataTable
-              columns={["Section", "Type", "Path", "Status", "Action"]}
-              rows={liveHighlightRows}
-            />
-          )}
-        </section>
-      )}
-
       {/* Sponsor Logos Table */}
       {activeTab === 'sponsor' && (
         <section className="panel">
@@ -1289,6 +1271,26 @@ function AdminCmsDbPanel() {
             <DataTable
               columns={["Section", "Type", "Path", "Status", "Action"]}
               rows={sponsorRows}
+            />
+          )}
+        </section>
+      )}
+      {activeTab === 'organizer' && (
+        <section className="panel">
+          <div className="section-head-inline">
+            <h2>Empowering Tournament Organizers</h2>
+            <button className="btn btn-secondary" type="button" onClick={() => void createHomeItem("organizer")}><Plus size={16} /> Create</button>
+          </div>
+          <p>Organizer workflow cards displayed in the homepage organizer section.</p>
+          {homeContent.organizerCards.length === 0 ? (
+            <div className="user-empty-state">
+              <h2>No organizer cards</h2>
+              <p>Create organizer cards to show this homepage section.</p>
+            </div>
+          ) : (
+            <DataTable
+              columns={["Section", "Type", "Path", "Status", "Action"]}
+              rows={organizerRows}
             />
           )}
         </section>

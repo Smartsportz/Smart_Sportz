@@ -319,6 +319,14 @@ CREATE TABLE IF NOT EXISTS sponsor_logos (
   published INTEGER NOT NULL DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS home_organizer_cards (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS news_posts (
   slug TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -685,6 +693,13 @@ CREATE TABLE IF NOT EXISTS sponsor_logos (
   name TEXT NOT NULL,
   image TEXT NOT NULL,
   link_url TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS home_organizer_cards (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 1,
   published INTEGER NOT NULL DEFAULT 1
 );

@@ -7,6 +7,7 @@ import { ScreenLoader } from "./loading/ScreenLoader";
 import { useLoading } from "./loading/LoadingContext";
 import {
   AdminPage,
+  AdminCMSEditPage,
   AdminManagerCreatePage,
   AdminManagerDetailPage,
   AdminRegistrationTeamDetailPage,
@@ -193,6 +194,7 @@ export default function App() {
           <Route path="/admin/news" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="news" /></ProtectedRoute>} />
           <Route path="/admin/gallery" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="gallery" /></ProtectedRoute>} />
           <Route path="/admin/cms" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="cms" /></ProtectedRoute>} />
+          <Route path="/admin/cms/edit/:type/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminCMSEditPage /></ProtectedRoute>} />
           <Route path="/admin/cms/:section" element={<ProtectedRoute roles={["super_admin"]}><CmsSectionPage /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="reports" /></ProtectedRoute>} />
           <Route path="/admin/reports/detail" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-reports" /></ProtectedRoute>} />

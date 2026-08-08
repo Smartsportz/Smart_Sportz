@@ -15,6 +15,7 @@ from app.schemas import BracketSavePayload, GalleryAlbumPayload, GroupBracketSav
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
 from app.services.notifications import send_whatsapp_message
+from app.services.runtime_state import runtime_state
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -39,6 +40,8 @@ def manager_tournament_slugs(user: dict) -> list[str]:
 
 
 def ensure_city_access(user: dict, city: str) -> None:
+    if not city:
+        return
     if user["role"] == "super_admin":
         return
     if city.lower() not in [item.lower() for item in manager_cities(user)]:
@@ -59,6 +62,19 @@ def ensure_tournament_access(user: dict, item: dict) -> None:
 def slugify(title: str) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return value or f"news-{uuid4().hex[:8]}"
+
+
+def clear_public_cache(*slugs: str) -> None:
+    keys = [
+        cache_key("public:home"),
+        cache_key("public:tournaments"),
+        cache_key("content:news"),
+    ]
+    keys.extend(cache_key("public:tournament", slug) for slug in slugs if slug)
+    keys.extend(cache_key("public:bracket", slug) for slug in slugs if slug)
+    keys.extend(cache_key("content:news-detail", slug) for slug in slugs if slug)
+    for key in keys:
+        runtime_state.delete(key)
 
 
 def tournament_slugify(title: str) -> str:
@@ -251,6 +267,7 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     )
     _save_tournament_children(tournament_slug, payload)
     log(user["email"], "tournament_created", "tournament", tournament_slug, f"Created {payload.name}")
+    clear_public_cache(tournament_slug)
     return ok(_tournament_detail(tournament_slug), "Tournament created")
 
 
@@ -304,6 +321,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     )
     _save_tournament_children(tournament_slug, payload)
     log(user["email"], "tournament_updated", "tournament", tournament_slug, f"Updated {payload.name}")
+    clear_public_cache(tournament_slug)
     return ok(_tournament_detail(tournament_slug), "Tournament updated")
 
 
@@ -326,6 +344,7 @@ def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("
         execute(f"DELETE FROM {table} WHERE tournament_slug = ?", (tournament_slug,))
     execute("DELETE FROM tournaments WHERE slug = ?", (tournament_slug,))
     log(user["email"], "tournament_deleted", "tournament", tournament_slug, f"Deleted {item['name']}")
+    clear_public_cache(tournament_slug)
     return ok({"deleted": True, "slug": tournament_slug}, "Tournament deleted")
 
 
@@ -376,6 +395,7 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
     if statements:
         execute_many(statements)
     log(user["email"], "news_created", "news", slug, f"News post created for {payload.city}")
+    clear_public_cache(slug)
     return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post created")
 
 
@@ -405,6 +425,7 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
     if statements:
         execute_many(statements)
     log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
+    clear_public_cache(slug)
     return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post updated")
 
 
@@ -437,6 +458,7 @@ def create_gallery_album(payload: GalleryAlbumPayload, user: dict = Depends(requ
         (slug, payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, 1, payload.image, payload.description, payload.sort_order, int(payload.published)),
     )
     log(user["email"], "gallery_created", "gallery", slug, f"Gallery album created: {payload.title}")
+    clear_public_cache()
     return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery created")
 
 
@@ -458,6 +480,7 @@ def update_gallery_album(slug: str, payload: GalleryAlbumPayload, user: dict = D
         (payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, payload.image, payload.description, payload.sort_order, int(payload.published), slug),
     )
     log(user["email"], "gallery_updated", "gallery", slug, f"Gallery album updated: {payload.title}")
+    clear_public_cache()
     return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery updated")
 
 
@@ -471,6 +494,7 @@ def delete_gallery_album(slug: str, user: dict = Depends(require_roles("super_ad
     execute("DELETE FROM gallery_social WHERE image_key = ?", (f"album:{slug}",))
     execute("DELETE FROM gallery_albums WHERE slug = ?", (slug,))
     log(user["email"], "gallery_deleted", "gallery", slug, f"Gallery album deleted: {item['title']}")
+    clear_public_cache()
     return ok({"deleted": True, "slug": slug}, "Gallery deleted")
 
 @router.patch("/sports/{sport_slug}/home-visibility")

@@ -24,10 +24,13 @@ from app.schemas import (
     ManagerCreatePayload,
     ManagerUpdatePayload,
     NewsPostPayload,
+    OrganizerCardUpdate,
     SponsorLogoUpdate,
 )
 from app.services.audit import log
+from app.services.cache import cache_key
 from app.services.database_architecture import compare_primary_mirror, database_status, export_json_backups
+from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -38,8 +41,21 @@ def slugify(title: str) -> str:
     return value or f"news-{uuid4().hex[:8]}"
 
 
+def clear_public_cache(*news_slugs: str) -> None:
+    keys = [
+        cache_key("public:home"),
+        cache_key("public:tournaments"),
+        cache_key("content:news"),
+    ]
+    keys.extend(cache_key("content:news-detail", slug) for slug in news_slugs if slug)
+    for key in keys:
+        runtime_state.delete(key)
+
+
 def ensure_city_access(user: dict, city: str) -> None:
     """Ensure the user has access to the given city."""
+    if not city:
+        return
     if user["role"] == "super_admin":
         return
     allowed_cities = [c.lower() for c in manager_cities(user)]
@@ -846,6 +862,7 @@ def create_news(
             "SELECT * FROM news_blocks WHERE post_slug = ? ORDER BY sort_order",
             (slug,)
         )
+        clear_public_cache(slug)
 
         return ok(result, "News post created successfully")
     except HTTPException:
@@ -985,6 +1002,7 @@ def update_news(
             "SELECT * FROM news_blocks WHERE post_slug = ? ORDER BY sort_order",
             (slug,)
         )
+        clear_public_cache(news["slug"], slug)
 
         return ok(result, "News post updated successfully")
     except HTTPException:
@@ -1024,6 +1042,7 @@ def delete_news(
             news["slug"],
             f"News post deleted: {news['title']}"
         )
+        clear_public_cache(news["slug"])
 
         return ok({"deleted": True, "slug": news["slug"]}, "News post deleted successfully")
     except HTTPException:
@@ -1677,8 +1696,8 @@ def update_cms(
 def admin_home_content(_: dict = Depends(require_roles("super_admin"))):
     return ok({
         "discoveryCards": rows("SELECT * FROM home_discovery_cards ORDER BY sort_order, title"),
-        "liveHighlights": rows("SELECT * FROM live_highlights ORDER BY sort_order, title"),
         "sponsorLogos": rows("SELECT * FROM sponsor_logos ORDER BY sort_order, name"),
+        "organizerCards": rows("SELECT * FROM home_organizer_cards ORDER BY sort_order, title"),
     })
 
 
@@ -1697,7 +1716,16 @@ def create_home_discovery(payload: HomeDiscoveryCardUpdate, user: dict = Depends
         (slug, payload.label, payload.title, payload.sport, payload.tournament_slug, payload.sponsor_name, payload.sponsor_image, payload.image, payload.event_date, payload.description, payload.sponsor_details, payload.register_path, payload.sort_order, int(payload.published)),
     )
     log(user["email"], "home_discovery_created", "home_discovery", slug, "Home discovery card created")
+    clear_public_cache()
     return ok(row("SELECT * FROM home_discovery_cards WHERE slug = ?", (slug,)), "Discovery card created")
+
+
+@router.get("/home-content/discovery/{slug}")
+def get_home_discovery(slug: str, _: dict = Depends(require_roles("super_admin"))):
+    item = row("SELECT * FROM home_discovery_cards WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Discovery card not found")
+    return ok(item)
 
 
 @router.patch("/home-content/discovery/{slug}")
@@ -1734,6 +1762,7 @@ def update_home_discovery(
             slug,
         ),
     )
+    clear_public_cache()
     log(
         user["email"],
         "home_discovery_updated",
@@ -1753,6 +1782,7 @@ def delete_home_discovery(slug: str, user: dict = Depends(require_roles("super_a
         raise HTTPException(status_code=404, detail="Discovery card not found")
     execute("DELETE FROM home_discovery_cards WHERE slug = ?", (slug,))
     log(user["email"], "home_discovery_deleted", "home_discovery", slug, "Home discovery card deleted")
+    clear_public_cache()
     return ok({"deleted": True, "slug": slug}, "Discovery card deleted")
 
 
@@ -1767,7 +1797,16 @@ def create_live_highlight(payload: LiveHighlightUpdate, user: dict = Depends(req
         (item_id, payload.match_id, payload.title, payload.stage_label, payload.home_team, payload.away_team, payload.home_score, payload.away_score, payload.image, payload.description, payload.impact_notes, payload.link_path, payload.sort_order, int(payload.published)),
     )
     log(user["email"], "live_highlight_created", "live_highlight", item_id, "Homepage live highlight created")
+    clear_public_cache()
     return ok(row("SELECT * FROM live_highlights WHERE id = ?", (item_id,)), "Live highlight created")
+
+
+@router.get("/home-content/live-highlight/{item_id}")
+def get_live_highlight(item_id: str, _: dict = Depends(require_roles("super_admin"))):
+    item = row("SELECT * FROM live_highlights WHERE id = ?", (item_id,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Live highlight not found")
+    return ok(item)
 
 
 @router.patch("/home-content/live-highlight/{item_id}")
@@ -1803,6 +1842,7 @@ def update_live_highlight(
             item_id,
         ),
     )
+    clear_public_cache()
     log(
         user["email"],
         "live_highlight_updated",
@@ -1822,6 +1862,7 @@ def delete_live_highlight(item_id: str, user: dict = Depends(require_roles("supe
         raise HTTPException(status_code=404, detail="Live highlight not found")
     execute("DELETE FROM live_highlights WHERE id = ?", (item_id,))
     log(user["email"], "live_highlight_deleted", "live_highlight", item_id, "Homepage live highlight deleted")
+    clear_public_cache()
     return ok({"deleted": True, "id": item_id}, "Live highlight deleted")
 
 
@@ -1837,7 +1878,16 @@ def create_sponsor_logo(payload: SponsorLogoUpdate, user: dict = Depends(require
         (slug, payload.name, payload.image, payload.link_url, payload.sort_order, int(payload.published)),
     )
     log(user["email"], "sponsor_logo_created", "sponsor", slug, "Sponsor logo created")
+    clear_public_cache()
     return ok(row("SELECT * FROM sponsor_logos WHERE slug = ?", (slug,)), "Sponsor logo created")
+
+
+@router.get("/home-content/sponsor/{slug}")
+def get_sponsor_logo(slug: str, _: dict = Depends(require_roles("super_admin"))):
+    item = row("SELECT * FROM sponsor_logos WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Sponsor logo not found")
+    return ok(item)
 
 
 @router.patch("/home-content/sponsor/{slug}")
@@ -1856,6 +1906,7 @@ def update_sponsor_logo(
         """,
         (payload.name, payload.image, payload.link_url, payload.sort_order, int(payload.published), slug),
     )
+    clear_public_cache()
     log(
         user["email"],
         "sponsor_logo_updated",
@@ -1875,7 +1926,55 @@ def delete_sponsor_logo(slug: str, user: dict = Depends(require_roles("super_adm
         raise HTTPException(status_code=404, detail="Sponsor logo not found")
     execute("DELETE FROM sponsor_logos WHERE slug = ?", (slug,))
     log(user["email"], "sponsor_logo_deleted", "sponsor", slug, "Sponsor logo deleted")
+    clear_public_cache()
     return ok({"deleted": True, "slug": slug}, "Sponsor logo deleted")
+
+
+@router.post("/home-content/organizer")
+def create_organizer_card(payload: OrganizerCardUpdate, user: dict = Depends(require_roles("super_admin"))):
+    slug = slugify(payload.title)
+    counter = 2
+    while row("SELECT slug FROM home_organizer_cards WHERE slug = ?", (slug,)):
+        slug = f"{slugify(payload.title)}-{counter}"
+        counter += 1
+    execute(
+        "INSERT INTO home_organizer_cards(slug, title, description, sort_order, published) VALUES (?, ?, ?, ?, ?)",
+        (slug, payload.title, payload.description, payload.sort_order, int(payload.published)),
+    )
+    log(user["email"], "organizer_card_created", "home_organizer", slug, "Organizer card created")
+    clear_public_cache()
+    return ok(row("SELECT * FROM home_organizer_cards WHERE slug = ?", (slug,)), "Organizer card created")
+
+
+@router.get("/home-content/organizer/{slug}")
+def get_organizer_card(slug: str, _: dict = Depends(require_roles("super_admin"))):
+    item = row("SELECT * FROM home_organizer_cards WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Organizer card not found")
+    return ok(item)
+
+
+@router.patch("/home-content/organizer/{slug}")
+def update_organizer_card(slug: str, payload: OrganizerCardUpdate, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT slug FROM home_organizer_cards WHERE slug = ?", (slug,)):
+        raise HTTPException(status_code=404, detail="Organizer card not found")
+    execute(
+        "UPDATE home_organizer_cards SET title = ?, description = ?, sort_order = ?, published = ? WHERE slug = ?",
+        (payload.title, payload.description, payload.sort_order, int(payload.published), slug),
+    )
+    log(user["email"], "organizer_card_updated", "home_organizer", slug, "Organizer card updated")
+    clear_public_cache()
+    return ok(row("SELECT * FROM home_organizer_cards WHERE slug = ?", (slug,)), "Organizer card updated")
+
+
+@router.delete("/home-content/organizer/{slug}")
+def delete_organizer_card(slug: str, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT slug FROM home_organizer_cards WHERE slug = ?", (slug,)):
+        raise HTTPException(status_code=404, detail="Organizer card not found")
+    execute("DELETE FROM home_organizer_cards WHERE slug = ?", (slug,))
+    log(user["email"], "organizer_card_deleted", "home_organizer", slug, "Organizer card deleted")
+    clear_public_cache()
+    return ok({"deleted": True, "slug": slug}, "Organizer card deleted")
 
 
 @router.get("/logs")

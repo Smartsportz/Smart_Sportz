@@ -46,19 +46,6 @@ const featureLinks = [
   "Role-based dashboards",
 ];
 
-function FeaturedTournamentMiniCard({ item }: { item: any }) {
-  return (
-    <Link className="featured-mini-card click-card" to={`/tournaments/${item.slug}`}>
-      <img src={assetUrl(item.image)} alt="" />
-      <div>
-        <h3>{item.name}</h3>
-        <p><MapPin size={15} />{item.location}</p>
-        {item.tournamentDescription && <small>{item.tournamentDescription}</small>}
-      </div>
-    </Link>
-  );
-}
-
 const sportStoryImages: Record<string, string> = {
   chess: "/assets/generated/sport-chess-sponsor.png",
   cricket: assets.cricket,
@@ -173,6 +160,7 @@ export function HomePage() {
     discoveryCards?: Array<Record<string, any>>;
     liveHighlight?: Record<string, any> | null;
     sponsorLogos?: Array<Record<string, any>>;
+    organizerCards?: Array<Record<string, any>>;
     announcements?: Array<Record<string, any>>;
     newsPosts?: Array<Record<string, any>>;
   }>({});
@@ -188,10 +176,9 @@ export function HomePage() {
     {
       key: "featured",
       title: "Upcoming Tournament",
-      text: "Manager-selected upcoming tournaments shown with title and place only.",
+      text: "Upcoming tournaments created by admin or manager.",
       ref: upcomingTournamentsRef,
-      compact: true,
-      items: runtimeTournaments.filter((item: any) => item.featureOnly || item.show_on_home === true).slice(0, 8),
+      items: runtimeTournaments.filter((item) => item.status === "Upcoming").slice(0, 8),
     },
     {
       key: "upcoming",
@@ -224,17 +211,9 @@ export function HomePage() {
   const sponsorLogos = homeContent.sponsorLogos ?? [];
   const sponsorQueue = sponsorLogos.length > 1 ? [...sponsorLogos, ...sponsorLogos] : sponsorLogos;
 
+  const organizerCards = homeContent.organizerCards ?? [];
+  const organizerQueue = organizerCards.length > 1 ? [...organizerCards, ...organizerCards] : organizerCards;
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
-  const organizerTools = [
-    "Online Registration",
-    "Secure Payments",
-    "Automated Brackets",
-    "Live Scoring App",
-    "Advanced Analytics",
-    "Social Hub",
-    "Anti-Fraud Engine",
-    "E-Certificates",
-  ];
 
   const selectedLeaders = useMemo(
     () => leaderboardRecords.filter((record) => record.sport === leaderboardSport).sort((a, b) => a.rank - b.rank),
@@ -272,6 +251,7 @@ export function HomePage() {
       discoveryCards: Array<Record<string, any>>;
       liveHighlight: Record<string, any> | null;
       sponsorLogos: Array<Record<string, any>>;
+      organizerCards: Array<Record<string, any>>;
       announcements: Array<Record<string, any>>;
       newsPosts: Array<Record<string, any>>;
     }>("/public/home")
@@ -418,10 +398,7 @@ export function HomePage() {
               </div>
               <div className="carousel-shell">
                 <div className="card-grid carousel-row wheel-horizontal featured-carousel featured-status-carousel" ref={group.ref}>
-                  {group.items.map((item) => group.compact
-                    ? <FeaturedTournamentMiniCard key={item.slug} item={item} />
-                    : <TournamentCard key={item.slug} item={item} />,
-                  )}
+                  {group.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
                 </div>
               </div>
             </section>
@@ -466,8 +443,7 @@ export function HomePage() {
         </motion.div>
       </section>}
 
-      {oldMatchNews.length > 0 && <>
-      <section className="section">
+      {organizerQueue.length > 0 && <section className="section">
         <div className="section-title row-title">
           <div>
             <h2>Empowering Tournament Organizers</h2>
@@ -482,19 +458,19 @@ export function HomePage() {
             <button type="button" aria-label="Scroll organizer tools right" onClick={() => scrollQueue(organizerEl, "right")}>›</button>
           </div>
           <div className="queue-track organizer-grid wheel-horizontal" ref={setOrganizerEl}>
-          {[...organizerTools, ...organizerTools].map((tool, index) => (
+          {organizerQueue.map((tool, index) => (
             <div
               className={`panel organizer-card ${index === organizerIndex ? "is-active" : ""}`}
-              key={`${tool}-${index}`}
+              key={`${tool.slug ?? tool.title}-${index}`}
             >
-              <ShieldCheck size={18} /><h3>{tool}</h3><p>Premium workflow controls for secure tournament operations.</p>
+              <ShieldCheck size={18} /><h3>{tool.title}</h3><p>{tool.description}</p>
             </div>
           ))}
         </div>
         </div>
-      </section>
+      </section>}
 
-      <section className="section">
+      {oldMatchNews.length > 0 && <section className="section">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Old Match News</p>
@@ -521,8 +497,7 @@ export function HomePage() {
           ))}
         </div>
         </div>
-      </section>
-      </>}
+      </section>}
 
       <section className="section split">
         <motion.div {...fade}>

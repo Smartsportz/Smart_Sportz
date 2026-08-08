@@ -1,12 +1,50 @@
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
-import { useMemo, useState } from "react";
-import { archiveForTournament, individualScores, liveMatches, tournaments, withRuntimeTournamentStatus } from "../data/platform";
+import { useEffect, useState } from "react";
+import { archiveForTournament, individualScores, liveMatches, withRuntimeTournamentStatus } from "../data/platform";
 import { InfoPanel, Metric } from "./shared";
+import { apiRequest } from "../lib/api";
 
 export function TournamentDetailPage() {
   const params = useParams();
-  const item = withRuntimeTournamentStatus(tournaments.find((t) => t.slug === params.slug) ?? tournaments[0]);
+  const [remoteItem, setRemoteItem] = useState<any | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [selectedArchiveMatchId, setSelectedArchiveMatchId] = useState("");
+
+  useEffect(() => {
+    if (!params.slug) return;
+    setNotFound(false);
+    apiRequest<any>(`/public/tournaments/${params.slug}`)
+      .then((item) => setRemoteItem(item))
+      .catch(() => {
+        setRemoteItem(null);
+        setNotFound(true);
+      });
+  }, [params.slug]);
+
+  if (notFound) {
+    return (
+      <Page>
+        <section className="panel user-empty-state">
+          <h2>Tournament not found</h2>
+          <p>This tournament is not available in the database.</p>
+          <Link className="btn btn-primary" to="/tournaments">Back to tournaments</Link>
+        </section>
+      </Page>
+    );
+  }
+
+  if (!remoteItem) {
+    return <Page><section className="panel user-empty-state"><h2>Loading tournament</h2><p>Fetching tournament details from the database.</p></section></Page>;
+  }
+
+  const item = withRuntimeTournamentStatus({
+    ...remoteItem,
+    registrationStart: remoteItem.registrationStart ?? remoteItem.registration_start,
+    registrationEnd: remoteItem.registrationEnd ?? remoteItem.registration_end,
+    tournamentDescription: remoteItem.tournamentDescription ?? remoteItem.tournament_description,
+    feeBreakdown: remoteItem.feeBreakdown ?? remoteItem.fee_breakdown ?? [],
+  });
   const isLive = item.phase === "live";
   const isExisting = item.phase === "existing";
   const isFeatureOnly = Boolean((item as any).featureOnly);
@@ -15,8 +53,7 @@ export function TournamentDetailPage() {
   const isRegistrationClosed = item.status === "Registration Closed";
   const liveMatch = liveMatches.find((match) => match.tournament === item.name) ?? liveMatches[0];
   const archive = archiveForTournament(item.slug);
-  const archivedMatches = useMemo(() => archive?.rounds.flatMap((round) => round.matches) ?? [], [archive]);
-  const [selectedArchiveMatchId, setSelectedArchiveMatchId] = useState(archivedMatches[0]?.id ?? "");
+  const archivedMatches = archive?.rounds.flatMap((round) => round.matches) ?? [];
   const selectedArchiveMatch = archivedMatches.find((match) => match.id === selectedArchiveMatchId) ?? archivedMatches[0];
 
   const action = isFeatureOnly ? null : isLive ? (

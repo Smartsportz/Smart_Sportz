@@ -1,4 +1,4 @@
-import { Filter, MapPin, Search } from "lucide-react";
+import { Filter, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Page, TournamentCard } from "../components/UI";
@@ -6,19 +6,6 @@ import { withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
-
-function FeaturedTournamentMiniCard({ item }: { item: any }) {
-  return (
-    <Link className="featured-mini-card click-card" to={`/tournaments/${item.slug}`}>
-      <img src={item.image} alt="" />
-      <div>
-        <h3>{item.name}</h3>
-        <p><MapPin size={15} />{item.location}</p>
-        {item.tournamentDescription && <small>{item.tournamentDescription}</small>}
-      </div>
-    </Link>
-  );
-}
 
 export function TournamentsPage() {
   useWheelHorizontal();
@@ -84,14 +71,13 @@ export function TournamentsPage() {
   const sections = [
     {
       key: "featured",
-      title: "Featured tournaments",
-      text: "Manager-selected tournament cards with only the event title and place.",
-      compact: true,
-      items: filteredTournaments.filter((item: any) => item.featureOnly || item.show_on_home === true).slice(0, 8),
+      title: "Upcoming tournaments",
+      text: "Upcoming tournaments created by admin or manager.",
+      items: filteredTournaments.filter((item) => item.status === "Upcoming").slice(0, 8),
     },
     {
       key: "upcoming",
-      title: "Upcoming tournaments",
+      title: "Registration Open",
       text: "Open registration tournaments available for team entry now.",
       items: filteredTournaments.filter((item) => item.status === "Registration Open"),
     },
@@ -171,10 +157,7 @@ export function TournamentsPage() {
             </div>
             <div className="carousel-shell">
               <div className="card-grid carousel-row wheel-horizontal featured-carousel featured-status-carousel">
-                {section.items.map((item) => section.compact
-                  ? <FeaturedTournamentMiniCard key={item.slug} item={item} />
-                  : <TournamentCard key={item.slug} item={item} />,
-                )}
+                {section.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
               </div>
             </div>
           </section>
