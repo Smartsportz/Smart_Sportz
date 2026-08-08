@@ -105,21 +105,7 @@ def tournament_jersey_options(tournament_slug: str) -> list[dict]:
             (tournament_slug,),
         )
     }
-    if uploaded:
-        options = uploaded
-    else:
-        colors = ["#0b8852", "#1d4ed8", "#ea580c", "#7c3aed", "#dc2626", "#0891b2", "#4d7c0f", "#9333ea"]
-        count = max(1, int(tournament.get("capacity") or 4))
-        options = [
-            {
-                "id": f"default-{index + 1}",
-                "label": f"Jersey {index + 1}",
-                "image": default_jersey_svg(str(index + 1), colors[index % len(colors)]),
-                "sort_order": index + 1,
-            }
-            for index in range(count)
-        ]
-    return [{**item, "reserved": item["image"] in reserved} for item in options]
+    return [{**item, "reserved": item["image"] in reserved} for item in uploaded]
 
 
 @router.get("/home")

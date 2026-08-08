@@ -71,6 +71,13 @@ type BackendRegistration = {
   prizes?: Array<{ position: number; label: string; amount: number }>;
 };
 
+type TournamentJerseyOption = {
+  id: string;
+  label: string;
+  image: string;
+  reserved?: boolean;
+};
+
 type RegistrationDraft = {
   activeStep: number;
   teamDetails: {
@@ -174,29 +181,20 @@ function teamGroupImageDocument(restored: SavedDocument[] | undefined): SavedDoc
   return [match ?? { documentType: "Team Group Image", fileName: "", filePath: "", status: "required" }];
 }
 
-function jerseySvg(label: string, color: string) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
-      <rect width="320" height="220" rx="26" fill="#f5fbf6"/>
-      <path d="M111 31h98l22 18 34 12-17 35-25-8v96H77V88l-25 8-17-35 34-12 22-18z" fill="${color}" stroke="#0b1b33" stroke-width="6" />
-      <path d="M121 31c10 18 24 26 39 26s29-8 39-26" fill="none" stroke="#0b1b33" stroke-width="6" stroke-linecap="round"/>
-      <text x="160" y="188" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="700" fill="#0b1b33">${label}</text>
-    </svg>
-  `;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
-
-const jerseyOptions = [
-  { label: "Home", image: jerseySvg("Home", "#0b8852") },
-  { label: "Away", image: jerseySvg("Away", "#1d4ed8") },
-  { label: "Third", image: jerseySvg("Third", "#ea580c") },
-  { label: "Classic", image: jerseySvg("Classic", "#7c3aed") },
-];
 
 const jerseySizeOptions = ["XS", "S", "M", "L", "XL"];
 
-function jerseyDisplayName(value: string) {
-  return jerseyOptions.find((jersey) => jersey.image === value)?.label ?? "Selected team kit";
+function jerseyDisplayName(value: string, options: TournamentJerseyOption[] = []) {
+  if (!value) return "No jersey selected";
+  return options.find((jersey) => jersey.image === value)?.label ?? "Uploaded team kit";
 }
 
 function completedRecordFromBackend(registration: BackendRegistration, tournament: any) {
@@ -729,11 +727,13 @@ export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const fallbackTournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const routeSlug = slug ?? tournaments[0].slug;
+  const fallbackTournament = tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug };
   const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
+  const [jerseyOptions, setJerseyOptions] = useState<TournamentJerseyOption[]>([]);
   const tournament = withRuntimeTournamentStatus(remoteTournament ? normalizeTournamentRecord(remoteTournament, fallbackTournament) : fallbackTournament) as (typeof tournaments)[number];
-  const amount = amountForTournament(tournament.slug);
-  const savedDraft = useMemo(() => readRegistrationDraft(tournament.slug), [tournament.slug]);
+  const amount = amountForTournament(routeSlug);
+  const savedDraft = useMemo(() => readRegistrationDraft(routeSlug), [routeSlug]);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
     if (index === 0) return "Captain";
     if (index === 1) return "Sub-captain";
@@ -751,7 +751,7 @@ export function RegistrationPage() {
     districtState: tournament.cities[0] ?? tournament.location,
     teamLogo: "",
     teamMotto: "",
-    selectedJersey: savedDraft?.teamDetails?.selectedJersey ?? tournament.poster ?? tournament.image,
+    selectedJersey: savedDraft?.teamDetails?.selectedJersey ?? "",
     category: `${tournament.sport} League`,
   });
   const [members, setMembers] = useState(() => {
@@ -783,17 +783,26 @@ export function RegistrationPage() {
   const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!routeSlug) return;
     let active = true;
-    apiRequest<Record<string, any>>(`/public/tournaments/${slug}`)
+    apiRequest<Record<string, any>>(`/public/tournaments/${routeSlug}`)
       .then((item) => {
         if (active) setRemoteTournament(item);
       })
       .catch(() => undefined);
+    apiRequest<TournamentJerseyOption[]>(`/public/tournaments/${routeSlug}/jerseys`)
+      .then((items) => {
+        if (!active) return;
+        setJerseyOptions(items);
+        setTeamDetails((current) => current.selectedJersey || !items.length ? current : { ...current, selectedJersey: items[0].image });
+      })
+      .catch(() => {
+        if (active) setJerseyOptions([]);
+      });
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [routeSlug]);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
@@ -805,8 +814,8 @@ export function RegistrationPage() {
       documents,
       tournamentAccepted,
     };
-    localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify(draft));
-  }, [activeStep, teamDetails, members, memberAges, memberJerseySizes, documents, tournamentAccepted, tournament.slug]);
+    localStorage.setItem(registrationDraftKey(routeSlug), JSON.stringify(draft));
+  }, [activeStep, teamDetails, members, memberAges, memberJerseySizes, documents, tournamentAccepted, routeSlug]);
 
   function showMissing(message: string) {
     setError(message);
@@ -834,13 +843,25 @@ export function RegistrationPage() {
 
   function updateDocument(index: number, file?: File) {
     const fileName = file?.name ?? "";
-    setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
-      ...item,
-      fileName,
-      fileSize: file?.size,
-      filePath: fileName ? `/local-team-images/${encodeURIComponent(fileName)}` : "",
-      status: fileName ? "uploaded" : "required",
-    } : item));
+    if (!file) {
+      setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
+        ...item,
+        fileName: "",
+        fileSize: undefined,
+        filePath: "",
+        status: "required",
+      } : item));
+      return;
+    }
+    void fileToDataUrl(file).then((filePath) => {
+      setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
+        ...item,
+        fileName,
+        fileSize: file.size,
+        filePath,
+        status: "uploaded",
+      } : item));
+    });
   }
 
   function openRulesModal() {
@@ -947,7 +968,7 @@ export function RegistrationPage() {
       const created = await apiRequest<BackendRegistration>("/registrations", {
         method: "POST",
         body: JSON.stringify({
-          tournament_slug: tournament.slug,
+          tournament_slug: routeSlug,
           team_name: teamDetails.teamName,
           team_code: "",
           captain_name: teamDetails.captainName,
@@ -980,7 +1001,7 @@ export function RegistrationPage() {
       const payload: SavedRegistration = {
         registrationId: created.id,
         tournament: tournament.name,
-        tournamentSlug: tournament.slug,
+        tournamentSlug: routeSlug,
         ...teamDetails,
         teamCode: "",
         members,
@@ -988,8 +1009,8 @@ export function RegistrationPage() {
         memberJerseySizes,
         documents,
       };
-      writeSavedRegistration(tournament.slug, payload);
-      localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify({
+      writeSavedRegistration(routeSlug, payload);
+      localStorage.setItem(registrationDraftKey(routeSlug), JSON.stringify({
         activeStep: 1,
         teamDetails: { ...teamDetails, teamCode: "" },
         members,
@@ -998,7 +1019,7 @@ export function RegistrationPage() {
         documents,
         tournamentAccepted,
       } satisfies RegistrationDraft));
-      navigate(`/tournaments/${tournament.slug}/register/roster`);
+      navigate(`/tournaments/${routeSlug}/register/roster`);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Registration could not be saved.";
       setError(message);
@@ -1028,7 +1049,7 @@ export function RegistrationPage() {
   function goBack() {
     setError("");
     if (activeStep === 0) {
-      navigate(`/tournaments/${tournament.slug}`);
+      navigate(`/tournaments/${routeSlug}`);
       return;
     }
     setActiveStep(0);
@@ -1179,13 +1200,13 @@ export function RegistrationPage() {
                 <div className="jersey-row" style={{ marginTop: "2rem" }}>
                   <div>
                     <h3>Team Jersey</h3>
-                    <p>Select the kit style for your team.</p>
+                    <p>{jerseyOptions.length ? "Select the uploaded kit style for your team." : "No jersey images uploaded for this tournament."}</p>
                   </div>
                   <div className="registration-choice-card compact-card jersey-preview-card" style={{ margin: "10px 0" }}>
-                    <img src={teamDetails.selectedJersey} alt="Selected jersey" style={{ width: "80px", height: "auto" }} />
+                    {teamDetails.selectedJersey ? <img src={teamDetails.selectedJersey} alt="Selected jersey" style={{ width: "80px", height: "auto" }} /> : null}
                     <div className="jersey-preview-copy">
-                      <p><strong>{jerseyDisplayName(teamDetails.selectedJersey)}</strong></p>
-                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => setJerseyPickerOpen(true)}>Change Kit</button>
+                      <p><strong>{jerseyDisplayName(teamDetails.selectedJersey, jerseyOptions)}</strong></p>
+                      <button className="btn btn-secondary btn-sm" type="button" disabled={!jerseyOptions.length} onClick={() => setJerseyPickerOpen(true)}>Change Kit</button>
                     </div>
                   </div>
                 </div>
@@ -1248,9 +1269,9 @@ export function RegistrationPage() {
               <h2>Choose your jersey</h2>
               <div className="jersey-picker-grid">
                 {jerseyOptions.map((jersey) => (
-                  <button key={jersey.label} type="button" className={`jersey-option ${teamDetails.selectedJersey === jersey.image ? "selected" : ""}`} onClick={() => chooseJersey(jersey.image)}>
+                  <button key={jersey.id || jersey.label} type="button" className={`jersey-option ${teamDetails.selectedJersey === jersey.image ? "selected" : ""}`} disabled={jersey.reserved} onClick={() => chooseJersey(jersey.image)}>
                     <img src={jersey.image} alt={jersey.label} />
-                    <strong>{jersey.label}</strong>
+                    <strong>{jersey.label}{jersey.reserved ? " - Reserved" : ""}</strong>
                   </button>
                 ))}
               </div>
@@ -1281,8 +1302,9 @@ export function RegistrationPage() {
 
 export function RegistrationRosterPage() {
   const { slug } = useParams();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
 
   return (
     <RegistrationShell>
@@ -1294,7 +1316,7 @@ export function RegistrationRosterPage() {
       <RegistrationStepper activeIndex={1} />
       {!saved ? (
         <section className="panel">
-          <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back to registration</Link>
+          <Link className="btn btn-primary" to={`/tournaments/${routeSlug}/register`}>Back to registration</Link>
         </section>
       ) : (
         <div className="detail-grid">
@@ -1306,7 +1328,7 @@ export function RegistrationRosterPage() {
               <p><b>Email</b><span>{saved.email}</span></p>
               <p><b>City</b><span>{saved.city}</span></p>
             </div>
-            <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register/payment`}>Continue to payment</Link>
+            <Link className="btn btn-primary" to={`/tournaments/${routeSlug}/register/payment`}>Continue to payment</Link>
           </section>
           <section className="panel">
             <h2>Roster</h2>
@@ -1326,9 +1348,10 @@ export function RegistrationRosterPage() {
 export function RegistrationPaymentPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
-  const amount = amountForTournament(tournament.slug);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
+  const amount = amountForTournament(routeSlug);
   const totalPayable = totalPayableForAmount(amount);
   const [method, setMethod] = useState<"upi" | "card">("upi");
   const [contact, setContact] = useState(saved?.phone ?? "");
@@ -1349,7 +1372,7 @@ export function RegistrationPaymentPage() {
     try {
       const intent = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi"; status: string }>("/payments/local-intent", {
         method: "POST",
-        body: JSON.stringify({ tournament_slug: tournament.slug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
+        body: JSON.stringify({ tournament_slug: routeSlug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
       });
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await apiRequest(`/payments/local-intent/${intent.id}/confirm`, { method: "POST", body: JSON.stringify({ status: "paid", method: selectedMethod }) });
@@ -1357,10 +1380,10 @@ export function RegistrationPaymentPage() {
         method: "POST", body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable }),
       });
       const updatedRegistration = await apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`);
-      writeSavedRegistration(tournament.slug, { ...saved, teamCode: updatedRegistration.team_code || "" });
+      writeSavedRegistration(routeSlug, { ...saved, teamCode: updatedRegistration.team_code || "" });
       const payment: SavedPayment = { id: registrationPayment.id, receiptNumber: registrationPayment.receipt_number, amount: registrationPayment.amount, method: registrationPayment.method, status: "paid", paidAt: new Date().toISOString() };
-      writeSavedPayment(tournament.slug, payment);
-      navigate(`/tournaments/${tournament.slug}/register/review`);
+      writeSavedPayment(routeSlug, payment);
+      navigate(`/tournaments/${routeSlug}/register/review`);
     } catch (caught) {
       setStatus("idle");
       setError("Payment failed. Please try again.");
@@ -1379,7 +1402,7 @@ export function RegistrationPaymentPage() {
       </section>
       <RegistrationStepper activeIndex={4} />
       {!saved ? (
-        <section className="panel"><Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back</Link></section>
+        <section className="panel"><Link className="btn btn-primary" to={`/tournaments/${routeSlug}/register`}>Back</Link></section>
       ) : (
         <div className="payment-layout">
           <section className="panel payment-panel">
@@ -1431,9 +1454,10 @@ export function RegistrationPaymentPage() {
 
 export function RegistrationReviewPage() {
   const { slug } = useParams();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
-  const payment = useMemo(() => readSavedPayment(tournament.slug), [tournament.slug]);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
+  const payment = useMemo(() => readSavedPayment(routeSlug), [routeSlug]);
   const [backendRegistration, setBackendRegistration] = useState<BackendRegistration | null>(null);
 
   useEffect(() => {
@@ -1451,7 +1475,7 @@ export function RegistrationReviewPage() {
   useEffect(() => {
     if (saved && payment) {
       saveCompletedRegistration({
-        tournamentSlug: tournament.slug,
+        tournamentSlug: routeSlug,
         tournamentName: tournament.name,
         registrationId: saved.registrationId,
         confirmationCode,
@@ -1506,21 +1530,22 @@ export function RegistrationReviewPage() {
 export function RegistrationPassPage() {
   const { slug } = useParams();
   const { token } = useAuth();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const [completed, setCompleted] = useState(() => getCompletedRegistration(tournament.slug));
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const [completed, setCompleted] = useState(() => getCompletedRegistration(routeSlug));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!completed && token) {
       setLoading(true);
-      apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`)
+      apiRequest<BackendRegistration>(`/registrations/by-tournament/${routeSlug}/mine`)
         .then((reg) => {
           const rec = completedRecordFromBackend(reg, tournament);
           if (rec) { saveCompletedRegistration(rec); setCompleted(rec); }
         })
         .finally(() => setLoading(false));
     }
-  }, [token, tournament.slug]);
+  }, [token, routeSlug]);
 
   return (
     <RegistrationShell>

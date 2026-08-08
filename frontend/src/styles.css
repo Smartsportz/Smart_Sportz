@@ -1103,9 +1103,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .gallery-simple-title { padding: 4px 0 18px; }
 .gallery-simple-title h1 { margin: 0; font-family: Poppins, sans-serif; font-size: clamp(34px, 5vw, 58px); line-height: 1; letter-spacing: -0.05em; }
 .gallery-feed-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 18px; align-items: start; }
-.gallery-feed-card { display: grid; gap: 0; overflow: hidden; border: 1px solid rgba(11, 136, 82, .16); border-radius: 20px; background: rgba(255, 255, 255, .94); box-shadow: var(--shadow-soft); color: var(--text); transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
+.gallery-feed-card { display: grid; grid-template-rows: auto 1fr auto; gap: 0; overflow: hidden; border: 1px solid rgba(11, 136, 82, .16); border-radius: 20px; background: rgba(255, 255, 255, .94); box-shadow: var(--shadow-soft); color: var(--text); transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
 .gallery-feed-card:hover { transform: translateY(-4px); border-color: rgba(11, 136, 82, .30); box-shadow: 0 22px 52px rgba(15, 23, 42, .13); }
 .gallery-feed-card h3 { margin: 0; padding: 13px 14px 12px; font-family: Poppins, sans-serif; font-size: 18px; line-height: 1.15; letter-spacing: -0.03em; }
+.gallery-feed-card p { margin: 0; padding: 0 14px 12px; min-height: 48px; color: var(--muted); line-height: 1.45; }
+.gallery-feed-card small { display: inline-flex; align-items: center; gap: 6px; padding: 0 14px 14px; color: var(--muted); font-weight: 800; }
 .gallery-tournament-timeline { position: relative; display: grid; gap: 44px; padding-left: 24px; }
 .gallery-tournament-timeline::before { content: ""; position: absolute; left: 7px; top: 18px; bottom: 8px; width: 2px; background: rgba(11, 136, 82, .22); }
 .gallery-month-section { position: relative; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 22px; align-items: start; }
@@ -1131,16 +1133,18 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .gallery-round-card small, .gallery-round-card strong { display: block; margin-top: 10px; }
 .interactive-gallery-grid .gallery-image-card { display: grid; transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease; }
 .interactive-gallery-grid .gallery-image-card:hover { transform: translateY(-4px) scale(1.015); border-color: rgba(11, 136, 82, .32); box-shadow: 0 22px 48px rgba(15, 23, 42, .13); }
-.gallery-image-open { display: grid; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.gallery-image-open { display: grid; grid-template-rows: auto auto 1fr auto; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; text-decoration: none; }
 .gallery-winner-card { overflow: hidden; display: grid; align-self: stretch; border: 1px solid rgba(11, 136, 82, .16); border-radius: 20px; background: rgba(255, 255, 255, .90); box-shadow: var(--shadow-soft); color: var(--text); }
 .gallery-winner-card .gallery-image-open { width: 100%; }
 .gallery-winner-media { overflow: hidden; height: 260px; background: var(--surface-soft); }
 .gallery-winner-media img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform .28s ease; }
 .gallery-winner-card:hover .gallery-winner-media img { transform: scale(1.045); }
 .gallery-winner-card .gallery-album-copy { padding: 14px; }
-.gallery-social-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 14px 14px; }
-.gallery-social-row button, .gallery-modal-actions button, .gallery-comment-form button { min-height: 36px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 900; cursor: pointer; }
+.gallery-social-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 0 14px 14px; }
+.gallery-social-row button, .gallery-social-row a, .gallery-modal-actions button, .gallery-comment-form button { min-height: 36px; width: 100%; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 900; cursor: pointer; text-decoration: none; }
 .gallery-social-row button.active, .gallery-modal-actions button.active { color: #be123c; background: rgba(225, 29, 72, .08); border-color: rgba(225, 29, 72, .18); }
+.admin-team-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.admin-team-actions .inline-link, .admin-team-actions .link-button { min-height: 30px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 999px; }
 .gallery-modal-backdrop { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 18px; background: rgba(5, 12, 18, .54); backdrop-filter: blur(12px); animation: modalFade .22s ease both; }
 .gallery-modal-card { position: relative; width: min(760px, 100%); max-height: min(92vh, 860px); overflow: auto; padding: 18px; border: 1px solid rgba(255, 255, 255, .68); border-radius: 26px; background: rgba(255, 255, 255, .96); box-shadow: 0 32px 90px rgba(0, 0, 0, .34); animation: galleryModalIn .28s ease both; }
 .gallery-modal-close { position: absolute; top: 12px; right: 12px; z-index: 5; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 999px; background: #fff; display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-soft); }

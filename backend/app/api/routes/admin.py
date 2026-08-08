@@ -52,6 +52,11 @@ def clear_public_cache(*news_slugs: str) -> None:
         runtime_state.delete(key)
 
 
+def optional_tournament_slug(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
 def ensure_city_access(user: dict, city: str) -> None:
     """Ensure the user has access to the given city."""
     if not city:
@@ -555,6 +560,7 @@ def admin_tournament_teams(
           r.category,
           r.status,
           r.payment_status,
+          r.selected_jersey_image AS selected_jersey,
           r.amount,
           r.created_at,
           u.name AS user_name,
@@ -569,6 +575,11 @@ def admin_tournament_teams(
         """,
         (tournament_slug,),
     )
+    for registration in registrations:
+        registration["members"] = rows(
+            "SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ? ORDER BY id",
+            (registration["id"],),
+        )
     return ok({"tournament": tournament, "teams": registrations})
 
 
@@ -590,6 +601,7 @@ def admin_teams(_: dict = Depends(require_roles("super_admin"))):
           r.city,
           r.status,
           r.payment_status,
+          r.selected_jersey_image AS selected_jersey,
           r.team_logo,
           r.team_motto,
           r.created_at,
@@ -610,6 +622,11 @@ def admin_teams(_: dict = Depends(require_roles("super_admin"))):
         ORDER BY r.created_at DESC
         """
     )
+    for record in records:
+        record["members"] = rows(
+            "SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ? ORDER BY id",
+            (record["id"],),
+        )
     return ok(records)
 
 
@@ -634,7 +651,7 @@ def admin_registration_team_detail(
     return ok({
         "registration": registration,
         "players": rows(
-            "SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ? ORDER BY id",
+            "SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ? ORDER BY id",
             (registration_id,)
         ),
         "documents": rows(
@@ -816,7 +833,7 @@ def create_news(
                 payload.image,
                 payload.category,
                 payload.sport,
-                payload.tournament_slug,
+                optional_tournament_slug(payload.tournament_slug),
                 payload.city,
                 payload.status,
                 int(payload.is_highlight),
@@ -956,7 +973,7 @@ def update_news(
                 payload.image,
                 payload.category,
                 payload.sport,
-                payload.tournament_slug,
+                optional_tournament_slug(payload.tournament_slug),
                 payload.city,
                 payload.status,
                 int(payload.is_highlight),

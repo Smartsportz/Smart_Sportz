@@ -77,6 +77,11 @@ def clear_public_cache(*slugs: str) -> None:
         runtime_state.delete(key)
 
 
+def optional_tournament_slug(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned or None
+
+
 def tournament_slugify(title: str) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return value or f"tournament-{uuid4().hex[:8]}"
@@ -383,7 +388,7 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
     execute(
         """INSERT INTO news_posts(slug, title, short_description, image, category, sport, tournament_slug, city, status, is_highlight, author_id, published_at, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, int(payload.is_highlight), user["id"], published_at, now, now),
+        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, optional_tournament_slug(payload.tournament_slug), payload.city, payload.status, int(payload.is_highlight), user["id"], published_at, now, now),
     )
     statements = [
         (
@@ -412,7 +417,7 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
         """UPDATE news_posts
            SET title = ?, short_description = ?, image = ?, category = ?, sport = ?, tournament_slug = ?, city = ?, status = ?, is_highlight = ?, published_at = ?, updated_at = ?
            WHERE slug = ?""",
-        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, int(payload.is_highlight), published_at, now, slug),
+        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, optional_tournament_slug(payload.tournament_slug), payload.city, payload.status, int(payload.is_highlight), published_at, now, slug),
     )
     execute("DELETE FROM news_blocks WHERE post_slug = ?", (slug,))
     statements = [

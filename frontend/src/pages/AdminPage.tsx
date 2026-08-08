@@ -157,7 +157,7 @@ export function NoticeBuilder({ role = "admin" }: { role?: "admin" | "manager" }
         <label>Notice title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Registration notice title" /></label>
         <label>Notice image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) setImage(`/assets/${file.name}`);
+          if (file) void fileToDataUrl(file).then(setImage);
         }} /></label>
         <label>Description<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Write the notice shown to website visitors." /></label>
       </div>
@@ -708,11 +708,11 @@ function AdminTournamentsDbPanel() {
               <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
               <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) patchForm({ image: `/assets/${file.name}` });
+                if (file) void fileToDataUrl(file).then((image) => patchForm({ image }));
               }} /></label>
               <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) patchForm({ poster: `/assets/${file.name}` });
+                if (file) void fileToDataUrl(file).then((poster) => patchForm({ poster }));
               }} /></label>
             </div>
             <section className="mini-table-card manager-allocation-card">
@@ -797,7 +797,7 @@ function AdminTournamentsDbPanel() {
                   <label>Category<select value={newsDraft.category} onChange={(event) => setNewsDraft((current) => ({ ...current, category: event.target.value }))}><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
                   <label>Main image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) readImageFile(file, (image) => setNewsDraft((current) => ({ ...current, image: `/assets/${file.name}` })));
+                    if (file) void fileToDataUrl(file).then((image) => setNewsDraft((current) => ({ ...current, image })));
                   }} /></label>
                   <label>Image URL<input value={newsDraft.image} readOnly /></label>
                   <label>Sub header<input value={newsDraft.subHeader} onChange={(event) => setNewsDraft((current) => ({ ...current, subHeader: event.target.value }))} /></label>
@@ -812,7 +812,7 @@ function AdminTournamentsDbPanel() {
                         <label>Sub title<input value={section.subHeader} onChange={(event) => updateNewsSection(index, { subHeader: event.target.value })} /></label>
                         <label>Optional image<input type="file" accept="image/*" onChange={(event) => {
                           const file = event.target.files?.[0];
-                          if (file) updateNewsSection(index, { image: `/assets/${file.name}` });
+                          if (file) void fileToDataUrl(file).then((image) => updateNewsSection(index, { image }));
                         }} /></label>
                       </div>
                       <label>Sub title description<textarea value={section.description} onChange={(event) => updateNewsSection(index, { description: event.target.value })} /></label>
@@ -840,7 +840,7 @@ function AdminTournamentsDbPanel() {
                   <label>Title<input value={announcementDraft.title} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))} /></label>
                   <label>Image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) setAnnouncementDraft(prev => ({...prev, image: `/assets/${file.name}`}));
+                    if (file) void fileToDataUrl(file).then((image) => setAnnouncementDraft(prev => ({...prev, image})));
                   }} /></label>
                   <label>Selected path<input value={announcementDraft.image} readOnly /></label>
                 </div>
@@ -1371,7 +1371,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
       setImagePreview(previewUrl);
       
       // Store the file path (in a real app, you'd upload to server and get URL)
-      setDraft((current) => ({ ...current, image: `/assets/${file.name}` }));
+      void fileToDataUrl(file).then((image) => setDraft((current) => ({ ...current, image })));
     }
   };
 
@@ -1786,7 +1786,7 @@ export function AdminTournamentEditorPage() {
                   <label>Title<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Upcoming tournament title" /></label>
                 <label>Image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) patchForm({ image: `/assets/${file.name}` });
+                    if (file) void fileToDataUrl(file).then((image) => patchForm({ image }));
                   }} /></label>
                   <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short upcoming tournament description" /></label>
                 </div>
@@ -1811,8 +1811,8 @@ export function AdminTournamentEditorPage() {
                   <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
                   <label>Min age<input type="number" value={form.minAge} onChange={(event) => patchForm({ minAge: Number(event.target.value) })} /></label>
                   <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
-                  <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ image: `/assets/${file.name}` }); }} /></label>
-                  <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ poster: `/assets/${file.name}` }); }} /></label>
+                  <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((image) => patchForm({ image })); }} /></label>
+                  <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((poster) => patchForm({ poster })); }} /></label>
                   <label>Manager allocation
                     <select multiple value={form.assignedManagerIds} onChange={(event) => patchForm({ assignedManagerIds: Array.from(event.target.selectedOptions).map((option) => option.value) })}>
                       {managers.map((manager) => <option value={manager.id} key={manager.id}>{manager.name} - {manager.email}</option>)}
@@ -2009,13 +2009,13 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
   };
 
   // Handle delete
-  const handleDelete = async (id: number, title: string) => {
+  const handleDelete = async (slug: string, title: string) => {
     if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
     setError("");
     setMessage("");
     try {
-      await apiRequest(`/admin/news/${id}`, { method: "DELETE" }, token);
-      setNewsList(newsList.filter(item => item.id !== id));
+      await apiRequest(`/admin/news/${slug}`, { method: "DELETE" }, token);
+      setNewsList(newsList.filter(item => item.slug !== slug));
       setMessage("News article deleted successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete news");
@@ -2027,22 +2027,31 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
     e.preventDefault();
     setError("");
     setMessage("");
+    const payload = {
+      ...formData,
+      short_description: formData.short_description.trim() || "News update from SmartSportz.",
+      image: formData.image.trim(),
+      tournament_slug: formData.tournament_slug || null,
+      blocks: formData.blocks
+        .map((block) => ({ ...block, content: String(block.content || "").trim() }))
+        .filter((block) => block.content.length > 0),
+    };
 
     try {
       let result: any;
       if (editingNews) {
         // UPDATE
-        result = await apiRequest(`/admin/news/${editingNews.id}`, {
+        result = await apiRequest(`/admin/news/${editingNews.slug}`, {
           method: "PATCH",
-          body: JSON.stringify(formData)
+          body: JSON.stringify(payload)
         }, token);
-        setNewsList(newsList.map(item => item.id === result.id ? result : item));
+        setNewsList(newsList.map(item => item.slug === editingNews.slug ? result : item));
         setMessage("News article updated successfully!");
       } else {
         // CREATE
         result = await apiRequest("/admin/news", {
           method: "POST",
-          body: JSON.stringify(formData)
+          body: JSON.stringify(payload)
         }, token);
         setNewsList([result, ...newsList]);
         setMessage("News article created successfully!");
@@ -2126,7 +2135,7 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
               <span className="table-actions">
                 <Link to={`/news/${post.slug}`}>Open</Link>
                 <button onClick={() => handleEdit(post)}>Edit</button>
-                <button onClick={() => handleDelete(post.id, post.title)}>Delete</button>
+                <button onClick={() => handleDelete(post.slug, post.title)}>Delete</button>
               </span>
             ])}
           />
@@ -2141,7 +2150,7 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
                   <p className="eyebrow">{editingNews ? "Edit News" : "Create News"}</p>
                   <h2>{editingNews ? `Editing: ${editingNews.title}` : "New News Article"}</h2>
                 </div>
-                <button className="icon-btn" type="button" onClick={() => { setShowEditor(false); resetForm(); }}>×</button>
+                <button className="icon-btn" type="button" onClick={() => { setShowEditor(false); resetForm(); }}>x</button>
               </div>
 
               <form onSubmit={handleSubmit}>
@@ -2502,6 +2511,7 @@ type AdminTeamRow = {
 // Get jersey display name from URL or data
 function getJerseyDisplayName(jerseyUrl?: string): string {
   if (!jerseyUrl) return "Not Selected";
+  if (jerseyUrl.startsWith("data:")) return "Uploaded team kit";
   // Extract jersey name from URL or use stored value
   if (jerseyUrl.includes("Home")) return "Home";
   if (jerseyUrl.includes("Away")) return "Away";
@@ -2513,6 +2523,17 @@ function getJerseyDisplayName(jerseyUrl?: string): string {
   const nameWithoutExt = fileName.split('.')[0];
   // Return formatted name
   return nameWithoutExt.replace(/-/g, ' ').replace(/_/g, ' ');
+}
+
+function teamAgeSummary(team: AdminTeamRow): string {
+  const ages = (team.members ?? []).map((member) => member.age).filter((age): age is number => Number(age) > 0);
+  if (!ages.length) return "-";
+  return ages.length === 1 ? `${ages[0]} yrs` : `${Math.min(...ages)}-${Math.max(...ages)} yrs`;
+}
+
+function teamJerseySizeSummary(team: AdminTeamRow): string {
+  const sizes = Array.from(new Set((team.members ?? []).map((member) => member.jersey_size).filter(Boolean)));
+  return sizes.length ? sizes.join(", ") : "-";
 }
 
 function AdminTeamsPanel() {
@@ -2652,7 +2673,7 @@ function AdminTeamsPanel() {
       </section>
 
       <DataTable
-        columns={["Team Name", "Tournament", "Captain", "City", "Jersey", "Players", "Payment", "Status", "Actions"]}
+        columns={["Team Name", "Tournament", "Captain", "City", "Jersey", "Age", "Size", "Players", "Payment", "Status", "Actions"]}
         rows={teams.map((team) => [
           <span>
             <b>{team.team_name}</b>
@@ -2662,12 +2683,14 @@ function AdminTeamsPanel() {
           team.captain_name,
           team.city,
           <span style={{ fontWeight: "500" }}>{getJerseyDisplayName(team.selected_jersey)}</span>,
+          teamAgeSummary(team),
+          teamJerseySizeSummary(team),
           team.players_count || 0,
           <span className={`status ${team.payment_status === "paid" ? "emerald" : "orange"}`}>
             {team.payment_status}
           </span>,
           team.status,
-          <span className="table-action-group" style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+          <span className="table-action-group admin-team-actions">
             <button 
               className="btn btn-secondary tiny-btn" 
               onClick={() => handleViewTeam(team)}
@@ -2690,7 +2713,7 @@ function AdminTeamsPanel() {
                 <span className="status emerald">Team Detail</span>
                 <h2>{selectedTeam.team_name}</h2>
               </div>
-              <button className="icon-btn" type="button" onClick={() => setShowTeamDetail(false)}>×</button>
+              <button className="icon-btn" type="button" onClick={() => setShowTeamDetail(false)}>x</button>
             </div>
             
             {/* Team Information */}
@@ -2701,6 +2724,8 @@ function AdminTeamsPanel() {
                 <p><b>Captain:</b> <span>{selectedTeam.captain_name}</span></p>
                 <p><b>City:</b> <span>{selectedTeam.city}</span></p>
                 <p><b>Jersey:</b> <span style={{ fontWeight: "500" }}>{getJerseyDisplayName(selectedTeam.selected_jersey)}</span></p>
+                <p><b>Age:</b> <span>{teamAgeSummary(selectedTeam)}</span></p>
+                <p><b>Jersey Sizes:</b> <span>{teamJerseySizeSummary(selectedTeam)}</span></p>
                 <p><b>Players:</b> <span>{selectedTeam.players_count || 0}</span></p>
                 <p><b>Payment:</b> <span className={`status ${selectedTeam.payment_status === "paid" ? "emerald" : "orange"}`}>{selectedTeam.payment_status}</span></p>
                 <p><b>Status:</b> <span>{selectedTeam.status}</span></p>
@@ -2775,10 +2800,13 @@ export function AdminTournamentTeamsPage() {
               <Metric label="City" value={data.tournament.location} />
             </div>
             <DataTable
-              columns={["Team", "Captain", "Players", "Payment", "Status", "Action"]}
+              columns={["Team", "Captain", "Jersey", "Age", "Size", "Players", "Payment", "Status", "Action"]}
               rows={data.teams.map((team) => [
                 team.team_name,
                 team.captain_name,
+                getJerseyDisplayName(team.selected_jersey),
+                teamAgeSummary(team as AdminTeamRow),
+                teamJerseySizeSummary(team as AdminTeamRow),
                 team.players_count,
                 <span className={`status ${team.payment_status === "paid" ? "emerald" : "orange"}`}>{team.payment_status}</span>,
                 team.status,
