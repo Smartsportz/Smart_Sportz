@@ -3,8 +3,7 @@ import { BarChart3, CheckCircle2, MapPin, Radio, ShieldCheck, Trophy, Zap } from
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
-import { assets, leaderboardRecords, newsPosts, sportHomeVisibility, sports, tournamentNotices, tournaments, withRuntimeTournamentStatus } from "../data/platform";
-import type { TournamentNotice } from "../data/platform";
+import { assets, leaderboardRecords, sports, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
@@ -46,17 +45,6 @@ const featureLinks = [
   "CMS and sponsor content",
   "Role-based dashboards",
 ];
-
-const noticeStorageKey = "smart-sportz-tournament-notices";
-
-function readStoredNotices() {
-  try {
-    const raw = localStorage.getItem(noticeStorageKey);
-    return raw ? JSON.parse(raw) as TournamentNotice[] : [];
-  } catch {
-    return [];
-  }
-}
 
 function FeaturedTournamentMiniCard({ item }: { item: any }) {
   return (
@@ -180,14 +168,22 @@ export function HomePage() {
   const [organizerIndex, setOrganizerIndex] = useState(0);
   const [isOrganizerHovered, setIsOrganizerHovered] = useState(false);
   const [isDiscoveryHovered, setIsDiscoveryHovered] = useState(false);
-  const [activeNotice, setActiveNotice] = useState<TournamentNotice | null>(null);
+  const [activeNotice, setActiveNotice] = useState<Record<string, any> | null>(null);
   const [homeContent, setHomeContent] = useState<{
     discoveryCards?: Array<Record<string, any>>;
     liveHighlight?: Record<string, any> | null;
     sponsorLogos?: Array<Record<string, any>>;
+    announcements?: Array<Record<string, any>>;
+    newsPosts?: Array<Record<string, any>>;
   }>({});
+  const [publicTournaments, setPublicTournaments] = useState<any[]>([]);
 
-  const runtimeTournaments = tournaments.map((item) => withRuntimeTournamentStatus(item));
+  const runtimeTournaments = publicTournaments.map((item) => withRuntimeTournamentStatus({
+    ...item,
+    registrationStart: item.registrationStart ?? item.registration_start,
+    registrationEnd: item.registrationEnd ?? item.registration_end,
+    tournamentDescription: item.tournamentDescription ?? item.tournament_description,
+  }));
   const featuredGroups = [
     {
       key: "featured",
@@ -222,34 +218,10 @@ export function HomePage() {
 
   const visibleFeaturedGroups = featuredGroups.filter((group) => ["featured", "upcoming"].includes(group.key));
 
-  const homeSports = sportHomeVisibility
-    .filter((item) => item.showOnHome)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((visibility) => sports.find((sport) => sport.slug === visibility.sportSlug))
-    .filter(Boolean) as typeof sports;
-
-  const oldMatchNews = newsPosts.filter((item) => item.category === "Winner Teams").slice(0, 3);
-
-  const discoveryCards = homeContent.discoveryCards?.length ? homeContent.discoveryCards : homeSports.map((sport) => {
-    const story = sportStoryCopy[sport.slug] ?? sportStoryCopy.cricket;
-    return {
-      slug: sport.slug,
-      label: sport.name,
-      title: story.title,
-      sponsor_name: story.sponsor,
-      event_date: story.date,
-      image: sportStoryImages[sport.slug] ?? assets.cricket,
-    };
-  });
-
-  // Doubling cards to ensure smooth infinite scroll
+  const oldMatchNews = (homeContent.newsPosts ?? []).filter((item) => item.category === "Winner Teams").slice(0, 3);
+  const discoveryCards = homeContent.discoveryCards ?? [];
   const discoveryQueue = discoveryCards.length > 1 ? [...discoveryCards, ...discoveryCards] : discoveryCards;
-
-  const sponsorLogos = homeContent.sponsorLogos?.length ? homeContent.sponsorLogos : [
-    { slug: "smartsportz", name: "SmartSportz", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/" },
-    { slug: "brillaris", name: "Brillaris", image: "https://brillaris.pro/assets/img/Logo1.png", link_url: "https://brillaris.pro" },
-    { slug: "machaxi", name: "Machaxi", image: "https://machaxiprod.blob.core.windows.net/frontend-machaxi/logomark.webp", link_url: "https://machaxi.com" },
-  ];
+  const sponsorLogos = homeContent.sponsorLogos ?? [];
   const sponsorQueue = sponsorLogos.length > 1 ? [...sponsorLogos, ...sponsorLogos] : sponsorLogos;
 
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
@@ -280,16 +252,13 @@ export function HomePage() {
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("screenshot") === "1") return;
-    const allNotices = [...readStoredNotices(), ...tournamentNotices]
-      .filter((notice) => notice.published)
-      .filter((notice, index, list) => list.findIndex((item) => item.id === notice.id) === index);
-    const notice = allNotices[0];
+    const notice = homeContent.announcements?.find((item) => item.published);
     if (!notice) return;
     const dismissedKey = `smart-sportz-notice-dismissed:${notice.id}`;
     if (sessionStorage.getItem(dismissedKey)) return;
     const timer = window.setTimeout(() => setActiveNotice(notice), 650);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [homeContent.announcements]);
 
   function closeNotice() {
     if (activeNotice) {
@@ -303,9 +272,14 @@ export function HomePage() {
       discoveryCards: Array<Record<string, any>>;
       liveHighlight: Record<string, any> | null;
       sponsorLogos: Array<Record<string, any>>;
+      announcements: Array<Record<string, any>>;
+      newsPosts: Array<Record<string, any>>;
     }>("/public/home")
       .then(setHomeContent)
       .catch(() => setHomeContent({}));
+    apiRequest<any[]>("/public/tournaments")
+      .then(setPublicTournaments)
+      .catch(() => setPublicTournaments([]));
   }, []);
 
   return (
@@ -319,7 +293,7 @@ export function HomePage() {
               <span className="status emerald">Tournament Notice</span>
               <h2 id="home-notice-title">{activeNotice.title}</h2>
               <p>{activeNotice.description}</p>
-              <Link className="btn btn-primary" to={`/tournaments/${activeNotice.tournamentSlug}`} onClick={closeNotice}>Open Tournament</Link>
+              <Link className="btn btn-primary" to="/tournaments" onClick={closeNotice}>Open Tournament</Link>
             </div>
           </article>
         </div>
@@ -393,7 +367,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="section">
+      {discoveryQueue.length > 0 && <section className="section">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Explore Your Sport</p>
@@ -423,9 +397,9 @@ export function HomePage() {
           ))}
           </div>
         </div>
-      </section>
+      </section>}
 
-      <section className="section">
+      {visibleFeaturedGroups.length > 0 && <section className="section">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Tournament Discovery</p>
@@ -453,7 +427,7 @@ export function HomePage() {
             </section>
           ))}
         </div>
-      </section>
+      </section>}
 
       <section className="section lifecycle-section">
         <SectionTitle title="The Tournament Lifecycle" text="A connected flow from registration to certificates." />
@@ -467,31 +441,32 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="section split live-analytics-section">
+      {homeContent.liveHighlight && <section className="section split live-analytics-section">
         <motion.div className="live-video-card" {...fade}>
-          <img src={homeContent.liveHighlight?.image || assets.football} alt="Live analytics match" />
+          <img src={homeContent.liveHighlight.image} alt="Live analytics match" />
           <button type="button"><Radio size={24} /></button>
         </motion.div>
         <motion.div {...fade}>
-          <span className="live-dot">{homeContent.liveHighlight?.stage_label || "Live Now"}</span>
-          <h2>{homeContent.liveHighlight?.title || "Experience Every Match Live with Pro Analytics"}</h2>
+          <span className="live-dot">{homeContent.liveHighlight.stage_label || "Live Now"}</span>
+          <h2>{homeContent.liveHighlight.title}</h2>
           <div className="live-action-row">
             <div className="score-mini-card">
-              <span>{homeContent.liveHighlight?.home_team || "Wings SC"}</span>
-              <strong>{homeContent.liveHighlight ? `${homeContent.liveHighlight.home_score} - ${homeContent.liveHighlight.away_score}` : "128 - 110"}</strong>
-              <span>{homeContent.liveHighlight?.away_team || "Titans Acad."}</span>
+              <span>{homeContent.liveHighlight.home_team}</span>
+              <strong>{homeContent.liveHighlight.home_score} - {homeContent.liveHighlight.away_score}</strong>
+              <span>{homeContent.liveHighlight.away_team}</span>
             </div>
             <Link className="btn btn-primary live-center-btn" to={homeContent.liveHighlight?.link_path || "/live"}>Open Match Center</Link>
           </div>
-          <p className="live-highlight-copy">{homeContent.liveHighlight?.description || "High-impact live moments surface automatically from semi-finals, finals, and active match centers."}</p>
+          <p className="live-highlight-copy">{homeContent.liveHighlight.description}</p>
           <div className="feature-list">
-            {(homeContent.liveHighlight?.impact_notes ? String(homeContent.liveHighlight.impact_notes).split(/\.|\|/).filter(Boolean).slice(0, 2) : ["Instant AI-powered highlights for every match", "Heatmaps and advanced performance telemetry"]).map((feature) => (
+            {String(homeContent.liveHighlight.impact_notes || "").split(/\.|\|/).filter(Boolean).slice(0, 2).map((feature) => (
               <div className="feature-label" key={feature}><CheckCircle2 size={18} />{feature}</div>
             ))}
           </div>
         </motion.div>
-      </section>
+      </section>}
 
+      {oldMatchNews.length > 0 && <>
       <section className="section">
         <div className="section-title row-title">
           <div>
@@ -535,18 +510,19 @@ export function HomePage() {
           {oldMatchNews.map((post) => (
             <Link className="panel news-card home-news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
               <div className="news-card-media">
-                <img src={post.image} alt="" />
+                <img src={assetUrl(post.image)} alt="" />
               </div>
               <div className="news-card-copy">
                 <span className="status emerald">{post.category}</span>
                 <h3>{post.title}</h3>
-                <p>{post.shortDescription}</p>
+                <p>{post.short_description}</p>
               </div>
             </Link>
           ))}
         </div>
         </div>
       </section>
+      </>}
 
       <section className="section split">
         <motion.div {...fade}>
@@ -580,7 +556,7 @@ export function HomePage() {
         </motion.div>
       </section>
 
-      <section className="section sponsor-logo-section">
+      {sponsorQueue.length > 0 && <section className="section sponsor-logo-section">
         <SectionTitle eyebrow="Partner Network" title="Sponsor Companies" text="Official platform, technology, experience, and archive partners connected to Smart Sportz." />
         <div className="queue-shell sponsor-logo-shell">
           <div className="queue-controls left">
@@ -597,7 +573,7 @@ export function HomePage() {
           ))}
           </div>
         </div>
-      </section>
+      </section>}
     </Page>
   );
 }

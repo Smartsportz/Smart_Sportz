@@ -18,7 +18,7 @@ from app.core.security import create_token, decode_token, hash_password, verify_
 from app.db.database import execute, row
 from app.schemas import ForgotPasswordResetRequest, ForgotPasswordStartRequest, GoogleLoginRequest, LoginOtpVerifyRequest, LoginRequest, RefreshTokenRequest, SignupStartRequest, SignupVerifyRequest
 from app.services.audit import log
-from app.services.notifications import check_sms_otp, generate_otp, send_email_otp, send_resend_sdk_test_email, send_sms_otp
+from app.services.notifications import check_sms_otp, generate_otp, send_email_otp, send_resend_sdk_test_email, send_sms_otp, send_whatsapp_message
 from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -106,8 +106,8 @@ def _deliver_otp(channel: str, target: str, code: str):
     if settings.otp_delivery_mode == "local":
         return "local", f"Local OTP: {code}"
     if channel == "sms":
-        delivery = send_sms_otp(target, code)
-        provider = "twilio_verify" if delivery.ok else "local"
+        delivery = send_whatsapp_message(target, f"Your Smart Sportz WhatsApp verification code is {code}.")
+        provider = "whatsapp" if delivery.ok else "local"
         return provider, delivery.message
     delivery = send_email_otp(target, code)
     return "local", delivery.message

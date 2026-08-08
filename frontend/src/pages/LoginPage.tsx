@@ -61,7 +61,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [loginPreset, setLoginPreset] = useState<"super_admin" | "management" | "participant" | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+916374409006");
-  const [channel, setChannel] = useState<"email" | "sms">("email");
+  const [channel] = useState<"email" | "sms">("sms");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const [otp, setOtp] = useState("");
@@ -223,7 +223,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
               : recovery
                 ? "Enter your email and we will send an OTP for password recovery."
                 : mode === "signup"
-                  ? "Create a participant account and verify it by email or SMS before opening your dashboard."
+                  ? "Create a participant account and verify it by WhatsApp before opening your dashboard."
                   : "Please enter your credentials to access your dashboard."}
           </p>
           {!challenge && mode === "signup" && <label>Full name<input placeholder="Team captain name" value={name} onChange={(event) => setName(event.target.value)} /></label>}
@@ -262,12 +262,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
               )}
             </div>
           )}
-          {!challenge && mode === "signup" && (
-            <div className="otp-channel-group" role="radiogroup" aria-label="Verification method">
-              <button type="button" className={channel === "email" ? "active" : ""} onClick={() => setChannel("email")}>Verify by Email</button>
-              <button type="button" className={channel === "sms" ? "active" : ""} onClick={() => setChannel("sms")}>Verify by SMS</button>
-            </div>
-          )}
+          {!challenge && mode === "signup" && <div className="otp-channel-group"><button type="button" className="active">Verify by WhatsApp</button></div>}
           {challenge && <label>OTP code<input placeholder="4 digit code" value={otp} onChange={(event) => setOtp(event.target.value)} maxLength={8} /></label>}
           {challenge && recovery && <label>New password<input placeholder="New secure password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>}
           {challenge?.deliveryMessage?.startsWith("Local OTP:") && !recovery && <div className="otp-local-box">{challenge.deliveryMessage}</div>}

@@ -257,27 +257,15 @@ def send_email_otp(to_email: str, code: str) -> DeliveryResult:
 
 
 def send_registration_payment_success(to_email: str, phone: str, details: dict[str, Any]) -> list[DeliveryResult]:
-    members = details.get("members", [])
-    member_items = "".join(f"<li>{member.get('role', 'Player')}: {member.get('name', '')}</li>" for member in members)
-    html = f"""
-    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#0b1b33">
-      <h2>Payment successful - Smart Sportz registration confirmed</h2>
-      <p><b>Tournament:</b> {details.get('tournamentName')}</p>
-      <p><b>Team:</b> {details.get('teamName')} ({details.get('teamCode')})</p>
-      <p><b>Captain:</b> {details.get('captainName')}</p>
-      <p><b>Receipt:</b> {details.get('receiptNumber')}</p>
-      <p><b>Unique Code:</b> <span style="font-size:20px;font-weight:800;color:#007a4d">{details.get('confirmationCode')}</span></p>
-      <p><b>QR Payload:</b></p>
-      <pre style="white-space:pre-wrap;background:#f3faf6;border:1px solid #cde7dc;border-radius:8px;padding:12px">{details.get('qrPayload')}</pre>
-      <h3>Registered Members</h3>
-      <ul>{member_items}</ul>
-    </div>
-    """
-    text = f"Payment successful. Team {details.get('teamName')} registration code: {details.get('confirmationCode')}. Receipt: {details.get('receiptNumber')}."
-    results = [send_email(to_email, "Smart Sportz payment successful and registration code", html, text)]
-    sms_message = f"Smart Sportz paid: {details.get('teamName')} code {details.get('confirmationCode')} receipt {details.get('receiptNumber')}"
-    results.append(send_sms_message(phone or settings.twilio_default_to, sms_message))
-    results.append(send_whatsapp_message(phone or settings.twilio_default_to, sms_message))
-    if not results[-1].ok:
-        results[-1].message = f"{results[-1].message}; WhatsApp text fallback: {sms_message}"
-    return results
+    whatsapp_message = (
+        "Smart Sportz registration complete.\n"
+        f"Tournament: {details.get('tournamentName')}\n"
+        f"Team: {details.get('teamName')} ({details.get('teamCode')})\n"
+        f"Unique ID: {details.get('confirmationCode')}\n"
+        f"Receipt: {details.get('receiptNumber')}\n"
+        f"QR: {details.get('qrPayload')}"
+    )
+    result = send_whatsapp_message(phone or settings.twilio_default_to, whatsapp_message)
+    if not result.ok:
+        result.message = f"{result.message}; WhatsApp text fallback: {whatsapp_message}"
+    return [result]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,7 +14,7 @@ from app.db.database import execute, execute_many, row, rows
 from app.schemas import BracketSavePayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
-from app.services.notifications import send_sms_message, send_whatsapp_message
+from app.services.notifications import send_whatsapp_message
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -647,20 +647,53 @@ def advance_winner(tournament_slug: str, payload: WinnerAdvancePayload, user: di
 @router.post("/brackets/{tournament_slug}/notify")
 def notify_bracket(tournament_slug: str, payload: NotificationSendPayload, user: dict = Depends(require_roles("super_admin", "management"))):
     event_id = f"notify_{uuid4().hex[:12]}"
-    delivery_results = []
-    if "sms" in payload.channels:
-        delivery_results.append(send_sms_message(settings.twilio_default_to or "", payload.message))
-    if "whatsapp" in payload.channels:
-        delivery_results.append(send_whatsapp_message(settings.twilio_default_to or "", payload.message))
+    delivery_results = [send_whatsapp_message(settings.twilio_default_to or "", payload.message)]
     execute(
         "INSERT INTO notification_events(id, tournament_slug, audience, channels, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (event_id, tournament_slug, payload.audience, ",".join(payload.channels), payload.message, "local_sent", datetime.now(timezone.utc).isoformat()),
+        (event_id, tournament_slug, payload.audience, "whatsapp", payload.message, "local_sent", datetime.now(timezone.utc).isoformat()),
     )
-    log(user["email"], "manual_notification_sent", "notification", event_id, f"Sent bracket notification via {', '.join(payload.channels)}")
+    log(user["email"], "manual_notification_sent", "notification", event_id, "Sent bracket notification via WhatsApp")
     return ok({
         "event": row("SELECT * FROM notification_events WHERE id = ?", (event_id,)),
         "deliveries": [{"provider": item.provider, "ok": item.ok, "message": item.message} for item in delivery_results],
     }, "Manual notification stored locally")
+
+
+@router.post("/group-brackets/{tournament_slug}/send-reminders")
+def send_group_bracket_reminders(tournament_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    now = datetime.now(timezone.utc)
+    from_time = (now + timedelta(days=2)).date().isoformat()
+    to_time = (now + timedelta(days=3)).date().isoformat()
+    matches = rows(
+        """SELECT round, team_1, team_2, starts_at, ends_at, status
+           FROM group_bracket_matches
+           WHERE tournament_slug = ? AND published = 1 AND starts_at >= ? AND starts_at < ?
+           ORDER BY starts_at, sort_order""",
+        (tournament_slug, from_time, to_time),
+    )
+    deliveries = []
+    for match in matches:
+        message = (
+            "Smart Sportz match reminder.\n"
+            f"Tournament: {item['name']}\n"
+            f"Round: {match['round']}\n"
+            f"Teams: {match['team_1'] or 'TBD'} vs {match['team_2'] or 'TBD'}\n"
+            f"Match time: {match['starts_at'] or 'TBA'} to {match['ends_at'] or 'TBA'}\n"
+            "Reminder: your match is scheduled in 2 days."
+        )
+        event_id = f"notify_{uuid4().hex[:12]}"
+        result = send_whatsapp_message(settings.twilio_default_to or "", message)
+        execute(
+            "INSERT INTO notification_events(id, tournament_slug, audience, channels, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (event_id, tournament_slug, f"{match['team_1']}, {match['team_2']}", "whatsapp", message, "local_sent", datetime.now(timezone.utc).isoformat()),
+        )
+        deliveries.append({"provider": result.provider, "ok": result.ok, "message": result.message})
+    log(user["email"], "match_reminders_sent", "notification", tournament_slug, f"{len(deliveries)} WhatsApp reminders")
+    return ok({"count": len(deliveries), "deliveries": deliveries}, "WhatsApp reminders processed")
 
 
 @router.get("/matches")

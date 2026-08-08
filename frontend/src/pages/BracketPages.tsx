@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { managementSidebar, sidebar, tournaments } from "../data/platform";
+import { managementSidebar, sidebar } from "../data/platform";
 import { apiRequest } from "../lib/api";
 
 type TeamSeed = { id?: string; name: string; seed?: number };
@@ -55,11 +55,14 @@ function statusAccent(status: string) {
 
 export function TournamentRoundsPage() {
   const { slug } = useParams();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const [tournament, setTournament] = useState<Record<string, any> | null>(null);
   const [matches, setMatches] = useState<GroupMatch[]>([]);
 
   useEffect(() => {
     if (!slug) return;
+    apiRequest<Record<string, any>>(`/public/tournaments/${slug}`)
+      .then(setTournament)
+      .catch(() => setTournament(null));
     apiRequest<{ matches?: GroupMatch[] }>(`/public/tournaments/${slug}/bracket`)
       .then((payload) => setMatches(payload.matches ?? []))
       .catch(() => setMatches([]));
@@ -68,11 +71,11 @@ export function TournamentRoundsPage() {
   return (
     <Page>
       <section className="page-hero bracket-page-hero">
-        <p className="eyebrow">{tournament.status} Rounds</p>
-        <h1>{tournament.name} Rounds</h1>
+        <p className="eyebrow">{tournament?.status ?? "Tournament"} Rounds</p>
+        <h1>{tournament?.name ?? slug} Rounds</h1>
         <p>Published group bracket rounds are listed with teams, match timing, and current status.</p>
         <div className="hero-actions">
-          <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}`}>Tournament detail</Link>
+          <Link className="btn btn-primary" to={`/tournaments/${slug}`}>Tournament detail</Link>
           <Link className="btn btn-secondary" to="/live">Live hub</Link>
         </div>
       </section>
@@ -113,7 +116,7 @@ export function BracketWorkspacePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const selectedTournament = useMemo(
-    () => records.find((item) => item.slug === slug) ?? tournaments.find((item) => item.slug === slug),
+    () => records.find((item) => item.slug === slug),
     [records, slug],
   );
 
@@ -194,14 +197,34 @@ export function BracketWorkspacePage() {
       await apiRequest(`/management/brackets/${slug}/notify`, {
         method: "POST",
         body: JSON.stringify({
-          channels: ["sms", "whatsapp"],
+          channels: ["whatsapp"],
           audience: selectedTeams.join(", "),
-          message: `Group bracket updated for ${selectedTournament?.name ?? slug}: ${selectedTeams.join(", ")}`,
+          message: [
+            `Smart Sportz match selection update.`,
+            `Tournament: ${selectedTournament?.name ?? slug}`,
+            ...matches
+              .filter((match) => match.team_1 || match.team_2)
+              .map((match) => `${match.round || "Round"}: ${match.team_1 || "TBD"} vs ${match.team_2 || "TBD"} from ${match.starts_at || "TBA"} to ${match.ends_at || "TBA"} (${statusLabel(match.status)})`),
+          ].join("\n"),
         }),
       }, token);
       setMessage("Message sent for selected bracket teams.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not send team message.");
+    }
+  }
+
+  async function sendTwoDayReminders() {
+    if (!slug) return;
+    setMessage("");
+    setError("");
+    try {
+      const result = await apiRequest<{ count: number }>(`/management/group-brackets/${slug}/send-reminders`, {
+        method: "POST",
+      }, token);
+      setMessage(`${result.count} WhatsApp reminder${result.count === 1 ? "" : "s"} processed for matches two days away.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not send match reminders.");
     }
   }
 
@@ -278,6 +301,7 @@ export function BracketWorkspacePage() {
           <div className="registration-actions compact-actions">
             <button className="btn btn-primary" type="button" onClick={saveGroupBracket}>Save and Publish</button>
             <button className="btn btn-secondary" type="button" onClick={sendMessage}><Bell size={16} /> Send selected teams message</button>
+            <button className="btn btn-secondary" type="button" onClick={sendTwoDayReminders}><Bell size={16} /> Send 2-day WhatsApp reminders</button>
           </div>
         </section>
       </PortalShell>

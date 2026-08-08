@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { managementSidebar, newsPosts, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
+import { managementSidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 import { AnnouncementManagerPanel } from "./AdminPage";
@@ -28,6 +28,7 @@ const managementContent = {
   players: ["Roster management", "Eligibility status", "Player documents", "Captain updates"],
   announcements: ["Tournament notices", "Team broadcast", "Schedule change alert", "Delivery status"],
   news: ["Create winner-team news", "Upload match update image", "Format article sections", "Publish city-scoped updates"],
+  cms: ["Gallery albums", "Homepage cards", "Live highlights", "Sponsor logos"],
   reports: ["Revenue reports", "Registration funnel", "Live score audit", "Export center"],
 };
 
@@ -591,7 +592,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
         <p>Managers publish only for assigned cities. Rich sections are stored as structured blocks.</p>
         <RichTextToolbarPreview />
         <div className="form-grid">
-          <label>Image<select>{(newsRows.length ? newsRows : newsPosts).map((post) => <option key={post.slug}>{post.image}</option>)}</select></label>
+          <label>Image<select>{newsRows.map((post) => <option key={post.slug}>{post.image}</option>)}</select></label>
           <label>Category<select><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
           <label>Title<input placeholder="Winner team headline" /></label>
           <label>City<select>{(assignedCities.length ? assignedCities : ["Bengaluru", "Mysuru", "Mumbai"]).map((city) => <option key={city}>{city}</option>)}</select></label>
@@ -627,7 +628,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       </section>
       <DataTable
         columns={["News", "Category", "City", "Status", "Action"]}
-        rows={(newsRows.length ? newsRows : newsPosts).map((post) => [
+        rows={newsRows.map((post) => [
           post.title,
           post.category,
           post.city,
@@ -644,6 +645,11 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     )
   ) : section === "announcements" ? (
     <AnnouncementManagerPanel role="manager" />
+  ) : section === "cms" ? (
+    <section className="panel user-empty-state">
+      <h2>Gallery CMS</h2>
+      <p>Published gallery and homepage CMS records are loaded from the database only. Use the admin CMS table for full create, edit, and delete controls.</p>
+    </section>
   ) : section === "reports" ? (
     sectionRecords.length === 0 ? (
       <section className="panel user-empty-state"><h2>No reports available</h2><p>Reports will appear after registrations, payments, and live scoring generate records.</p></section>

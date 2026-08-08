@@ -138,9 +138,16 @@ def home():
             "discoveryCards": rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"),
             "liveHighlight": row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1"),
             "sponsorLogos": rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"),
+            "announcements": rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"),
+            "newsPosts": rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"),
         }
 
     return ok(get_or_set_json(cache_key("public:home"), build))
+
+
+@router.get("/announcements")
+def published_announcements():
+    return ok(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC"))
 
 
 @router.get("/gallery/social")

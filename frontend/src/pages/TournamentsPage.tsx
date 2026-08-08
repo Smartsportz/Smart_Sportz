@@ -1,8 +1,9 @@
 import { Filter, MapPin, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Page, TournamentCard } from "../components/UI";
-import { sports, tournaments, withRuntimeTournamentStatus } from "../data/platform";
+import { withRuntimeTournamentStatus } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
 
@@ -21,6 +22,7 @@ function FeaturedTournamentMiniCard({ item }: { item: any }) {
 
 export function TournamentsPage() {
   useWheelHorizontal();
+  const [tournamentRows, setTournamentRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
@@ -28,7 +30,22 @@ export function TournamentsPage() {
   const [selectedPlaces, setSelectedPlaces] = useState<string[]>([]);
   const [featuredOnly, setFeaturedOnly] = useState(false);
 
-  const runtimeTournaments = useMemo(() => tournaments.map((item) => withRuntimeTournamentStatus(item)), []);
+  useEffect(() => {
+    apiRequest<any[]>("/public/tournaments")
+      .then(setTournamentRows)
+      .catch(() => setTournamentRows([]));
+  }, []);
+
+  const runtimeTournaments = useMemo(() => tournamentRows.map((item) => withRuntimeTournamentStatus({
+    ...item,
+    registrationStart: item.registrationStart ?? item.registration_start,
+    registrationEnd: item.registrationEnd ?? item.registration_end,
+    tournamentDescription: item.tournamentDescription ?? item.tournament_description,
+  })), [tournamentRows]);
+  const sportOptions = useMemo(
+    () => Array.from(new Set(runtimeTournaments.map((item) => item.sport).filter(Boolean))).sort(),
+    [runtimeTournaments],
+  );
   const placeOptions = useMemo(
     () => Array.from(new Set(runtimeTournaments.flatMap((item) => [item.location, ...(item.cities ?? [])]))).sort(),
     [runtimeTournaments],
@@ -120,9 +137,9 @@ export function TournamentsPage() {
           <div className="filter-group">
             <h3>Sports</h3>
             <div className="filter-chip-grid">
-              {sports.map((sport) => (
-                <button type="button" className={selectedSports.includes(sport.name) ? "active" : ""} onClick={() => setSelectedSports((current) => toggleValue(current, sport.name))} key={sport.slug}>
-                  {sport.name}
+              {sportOptions.map((sport) => (
+                <button type="button" className={selectedSports.includes(sport) ? "active" : ""} onClick={() => setSelectedSports((current) => toggleValue(current, sport))} key={sport}>
+                  {sport}
                 </button>
               ))}
             </div>

@@ -542,6 +542,8 @@ export const sidebar = [
   { label: "Players", path: "/admin/players", icon: Medal, hidden: true },
   { label: "Payments", path: "/admin/payments", icon: CircleDollarSign },
   { label: "CMS", path: "/admin/cms", icon: FileText },
+  { label: "News", path: "/admin/news", icon: GalleryHorizontal },
+  { label: "Gallery", path: "/admin/gallery", icon: GalleryHorizontal },
   { label: "Announcements", path: "/admin/announcements", icon: FileText },
   { label: "Reports", path: "/admin/reports", icon: BarChart3 },
   { label: "Logs", path: "/admin/logs", icon: ShieldCheck },
@@ -565,6 +567,7 @@ export const managementSidebar = [
   { label: "Players", path: "/management/players", icon: Users },
   { label: "Announcements", path: "/management/announcements", icon: FileText },
   { label: "News", path: "/management/news", icon: GalleryHorizontal },
+  { label: "Gallery", path: "/management/gallery", icon: GalleryHorizontal },
   { label: "Reports", path: "/management/reports", icon: BarChart3 },
 ];
 
