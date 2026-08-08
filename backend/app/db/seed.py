@@ -187,29 +187,10 @@ def seed_data() -> None:
         ("e-sports", "E-Sports", 29, "orange"),
         ("athletics", "Athletics", 14, "emerald"),
     ]
-    tournaments = [
-        ("mumbai-premier-bash", "Mumbai Premier Bash 2026", "Cricket", "Registration Open", "Mumbai", "Aug 14 - Sep 02", "Jul 24, 2026", "Aug 10, 2026", 32, 48, 16, "INR 25,00,000", "/assets/cricket-stadium.png", "emerald"),
-        ("bangalore-corporate-t20", "Bangalore Corporate T20", "Cricket", "Live", "Bengaluru", "Jul 25 - Aug 05", "Jul 01, 2026", "Jul 20, 2026", 18, 24, 16, "INR 12,00,000", "/assets/cricket-stadium.png", "orange"),
-        ("national-youth-football", "National Youth Football Cup", "Football", "Upcoming", "Delhi", "Sep 12 - Sep 20", "Aug 01, 2026", "Sep 05, 2026", 24, 32, 22, "INR 8,50,000", "/assets/football-match.png", "blue"),
-        ("pro-elite-basketball", "Pro Elite Basketball Series", "Basketball", "Registration Open", "Chennai", "Oct 04 - Oct 12", "Jul 24, 2026", "Sep 25, 2026", 16, 16, 12, "INR 10,00,000", "/assets/basketball-match.png", "emerald"),
-    ]
-    teams = [
-        ("mumbai-mavericks", "Mumbai Mavericks", "#01", "Cricket", 18, 15, 92, "/assets/cricket-stadium.png"),
-        ("bangalore-blaze", "Bangalore Blaze", "#04", "Football", 22, 12, 88, "/assets/football-match.png"),
-        ("chennai-chargers", "Chennai Chargers", "#12", "Basketball", 15, 9, 81, "/assets/basketball-match.png"),
-        ("kerala-spikers", "Kerala Spikers", "#07", "Volleyball", 12, 10, 86, "/assets/volleyball-match.png"),
-    ]
-    matches = [
-        ("match-48", "Bangalore Corporate T20", "Cricket", "India Forge", "England XI", "156/4", "Yet to bat", "Over 18.4", "Live Now", "/assets/cricket-stadium.png"),
-        ("match-72", "Pro Elite Basketball Series", "Basketball", "Titans United", "Phoenix Fire", "58", "62", "Q3 08:39", "Live Now", "/assets/basketball-match.png"),
-        ("match-21", "Youth Football Cup", "Football", "Bengaluru Bulls", "Mumbai Mavericks", "2", "1", "78 min", "Second Half", "/assets/football-match.png"),
-    ]
-    timeline = [
-        ("match-48", "18.4", "FOUR", "Rohan Sharma drives through extra cover. The chasing side tightens control.", "156/4", now()),
-        ("match-48", "17.6", "WICKET", "Clean catch at deep square leg after a slower ball variation.", "148/4", now()),
-        ("match-48", "16.2", "SIX", "Massive hit over long-on. Crowd volume spikes in the live feed.", "139/3", now()),
-        ("match-48", "15.1", "COMMENTARY", "Bowling team changes field to protect the off-side boundary.", "126/3", now()),
-    ]
+    tournaments: list[tuple] = []
+    teams: list[tuple] = []
+    matches: list[tuple] = []
+    timeline: list[tuple] = []
     cms = [
         ("ai-sports-analytics", "The Future of AI in Professional Sports Analytics", "Article", "Smart Sportz can support match intelligence, reports, and live insights after the core backend is stable.", "/blog/ai-sports-analytics", 1),
         ("regional-masters-highlights", "Regional Masters Photo Highlights", "Gallery", "Public gallery content managed through the CMS module.", "/gallery", 1),
@@ -235,10 +216,6 @@ def seed_data() -> None:
         """,
         item,
     ) for item in tournaments]
-    statements += prize_rows("mumbai-premier-bash", 250000000)
-    statements += prize_rows("bangalore-corporate-t20", 120000000)
-    statements += prize_rows("national-youth-football", 85000000)
-    statements += prize_rows("pro-elite-basketball", 100000000)
     statements += [("INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in teams]
     statements += [(
         """
@@ -258,6 +235,7 @@ def seed_data() -> None:
 
 
 def seed_operational_data() -> None:
+    return
     operational_ready = (
         row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",))
         and row("SELECT slug FROM news_posts LIMIT 1")

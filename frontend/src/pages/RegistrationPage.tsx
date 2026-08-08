@@ -333,6 +333,14 @@ function isAgeInRange(age: number, tournament: (typeof tournaments)[number]): bo
 }
 
 function tournamentRulesText(tournament: (typeof tournaments)[number]) {
+  const customRules = String((tournament as any).rulesText ?? (tournament as any).rules_text ?? "").trim();
+  if (customRules) {
+    return [
+      `${tournament.name} - Rules And Conditions`,
+      "",
+      customRules,
+    ].join("\n");
+  }
   const description = (tournament as any).tournamentDescription || `${tournament.name} follows SmartSportz registration, roster verification, payment, fair-play, and event operations rules.`;
   return [
     `${tournament.name} - Rules And Conditions`,
@@ -403,6 +411,16 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
 
 function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
+  const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
+  if (uploadedRulesPdf) {
+    const link = document.createElement("a");
+    link.href = uploadedRulesPdf;
+    link.download = uploadedRulesPdf.split("/").pop() || `${tournament.slug}-rules-and-conditions.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
+  }
   const blob = new Blob([buildRulesPdf(tournament)], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -689,11 +707,31 @@ function parseExcelFile(file: File): Promise<ImportedRosterEntry[]> {
   });
 }
 
+function normalizeTournamentRecord(record: Record<string, any>, fallback: (typeof tournaments)[number]) {
+  return {
+    ...fallback,
+    ...record,
+    registrationStart: record.registration_start ?? fallback.registrationStart,
+    registrationEnd: record.registration_end ?? fallback.registrationEnd,
+    teamSize: Number(record.team_size ?? record.max_team_size ?? fallback.teamSize),
+    minAge: Number(record.min_age ?? fallback.minAge ?? 0),
+    maxAge: Number(record.max_age ?? fallback.maxAge ?? 0),
+    tournamentDescription: record.tournament_description ?? fallback.tournamentDescription,
+    sportDescription: record.sport_description ?? (fallback as any).sportDescription,
+    rulesPdf: record.rules_pdf ?? (fallback as any).rulesPdf ?? "",
+    rulesText: record.rules_text ?? (fallback as any).rulesText ?? "",
+    show_on_home: Boolean(record.show_on_home ?? (fallback as any).show_on_home),
+    cities: Array.isArray(record.cities) && record.cities.length ? record.cities : fallback.cities,
+  };
+}
+
 export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
+  const fallbackTournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
+  const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
+  const tournament = withRuntimeTournamentStatus(remoteTournament ? normalizeTournamentRecord(remoteTournament, fallbackTournament) : fallbackTournament) as (typeof tournaments)[number];
   const amount = amountForTournament(tournament.slug);
   const savedDraft = useMemo(() => readRegistrationDraft(tournament.slug), [tournament.slug]);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
@@ -743,6 +781,19 @@ export function RegistrationPage() {
 
   const minAge = Number((tournament as any).minAge ?? (tournament as any).min_age ?? 0);
   const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
+
+  useEffect(() => {
+    if (!slug) return;
+    let active = true;
+    apiRequest<Record<string, any>>(`/public/tournaments/${slug}`)
+      .then((item) => {
+        if (active) setRemoteTournament(item);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [slug]);
 
   useEffect(() => {
     const draft: RegistrationDraft = {

@@ -191,15 +191,15 @@ export function HomePage() {
   const featuredGroups = [
     {
       key: "featured",
-      title: "Featured tournaments",
-      text: "Manager-selected tournaments shown with title and place only.",
+      title: "Upcoming Tournament",
+      text: "Manager-selected upcoming tournaments shown with title and place only.",
       ref: upcomingTournamentsRef,
       compact: true,
       items: runtimeTournaments.filter((item: any) => item.featureOnly || item.show_on_home === true).slice(0, 8),
     },
     {
       key: "upcoming",
-      title: "Upcoming tournaments",
+      title: "Registration Open",
       text: "Registration-open tournaments where teams can enter now.",
       ref: registrationOpenRef,
       items: runtimeTournaments.filter((item) => item.status === "Registration Open"),
@@ -430,7 +430,7 @@ export function HomePage() {
           <div>
             <p className="eyebrow">Tournament Discovery</p>
             <h2>Tournament highlights</h2>
-            <p>Manager-selected features, open registration, live tournaments, and old records are separated clearly.</p>
+            <p>Upcoming tournaments, open registrations, live tournaments, and old records are separated clearly.</p>
           </div>
         </div>
         <div className="featured-status-stack">

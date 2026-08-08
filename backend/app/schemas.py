@@ -182,6 +182,8 @@ class TournamentUpsertPayload(BaseModel):
     address: str = Field(default="", max_length=500)
     sport_description: str = Field(default="", max_length=1000)
     tournament_description: str = Field(default="", max_length=1400)
+    rules_pdf: str = Field(default="", max_length=1200)
+    rules_text: str = Field(default="", max_length=4000)
     fee_breakdown: list[TournamentFeeLinePayload] = Field(default_factory=list, max_length=20)
     prizes: list[TournamentPrizePayload] = Field(default_factory=list, max_length=20)
     cities: list[str] = Field(default_factory=list, max_length=12)

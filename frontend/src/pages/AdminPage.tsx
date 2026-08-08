@@ -199,6 +199,8 @@ type AdminTournamentForm = {
   address: string;
   sportDescription: string;
   tournamentDescription: string;
+  rulesPdf: string;
+  rulesText: string;
   showOnHome: boolean;
   blockRepeatRegistration: boolean;
   feeBreakdown: Array<{ label: string; value: number }>;
@@ -228,6 +230,8 @@ const emptyAdminTournamentForm: AdminTournamentForm = {
   address: "",
   sportDescription: "",
   tournamentDescription: "",
+  rulesPdf: "",
+  rulesText: "",
   showOnHome: false,
   blockRepeatRegistration: false,
   feeBreakdown: [{ label: "Entry Fee", value: 5000 }],
@@ -280,6 +284,8 @@ function adminFormFromTournament(item?: Record<string, any>): AdminTournamentFor
     address: item.address ?? "",
     sportDescription: item.sport_description ?? "",
     tournamentDescription: item.tournament_description ?? "",
+    rulesPdf: item.rules_pdf ?? "",
+    rulesText: item.rules_text ?? "",
     showOnHome: Boolean(item.show_on_home),
     blockRepeatRegistration: Boolean(item.block_repeat_registration),
     feeBreakdown,
@@ -466,6 +472,8 @@ function AdminTournamentsDbPanel() {
       address: form.address,
       sport_description: form.sportDescription,
       tournament_description: form.tournamentDescription,
+      rules_pdf: form.rulesPdf,
+      rules_text: form.rulesText,
       fee_breakdown: form.feeBreakdown.filter((line) => line.label.trim()),
       prizes: form.prizes,
       cities,
@@ -610,7 +618,7 @@ function AdminTournamentsDbPanel() {
   }
 
   const groups = {
-    Featured: records.filter((item) => item.status === "Featured" || item.show_on_home === true),
+    "Upcoming Tournament": records.filter((item) => item.status === "Featured" || item.show_on_home === true),
     Upcoming: records.filter((item) => item.status === "Upcoming"),
     "Registration Open": records.filter((item) => item.status === "Registration Open"),
     Live: records.filter((item) => item.status === "Live"),
@@ -630,7 +638,7 @@ function AdminTournamentsDbPanel() {
           <div />
           <div className="hero-actions">
             <Link className="btn btn-secondary" to="/admin/tournaments/new">Add New Tournament</Link>
-            <Link className="btn btn-primary" to="/admin/tournaments/new?featured=1">Add Featured Tournament</Link>
+            <Link className="btn btn-primary" to="/admin/tournaments/new?featured=1">Add New Upcoming Tournament</Link>
           </div>
         </div>
         {Object.entries(groups).map(([group, items]) => (
@@ -732,7 +740,15 @@ function AdminTournamentsDbPanel() {
               <label>Sport description<textarea value={form.sportDescription} onChange={(event) => patchForm({ sportDescription: event.target.value })} /></label>
               <label>Tournament description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} /></label>
             </div>
-            <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
+            <div className="form-grid">
+              <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) patchForm({ rulesPdf: `/rules/${file.name}` });
+              }} /></label>
+              <label>Rules PDF path<input value={form.rulesPdf} onChange={(event) => patchForm({ rulesPdf: event.target.value })} placeholder="/rules/tournament-rules.pdf" /></label>
+              <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} placeholder="Rules shown in the registration acceptance step." /></label>
+            </div>
+            <label className="visibility-row"><span><b>Add new upcoming tournament</b><small>Show this tournament in the Upcoming Tournament row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
             <div className="registration-actions compact-actions">
               <button className="btn btn-primary" type="button" onClick={saveTournament}>Save</button>
               <button className="btn btn-secondary" type="button" onClick={() => setShowForm(false)}>Close</button>
@@ -1684,6 +1700,8 @@ export function AdminTournamentEditorPage() {
       address: form.address,
       sport_description: form.sportDescription,
       tournament_description: form.tournamentDescription,
+      rules_pdf: form.rulesPdf,
+      rules_text: form.rulesText,
       fee_breakdown: form.feeBreakdown.filter((line) => line.label.trim()),
       prizes: form.prizes,
       cities,
@@ -1722,15 +1740,15 @@ export function AdminTournamentEditorPage() {
             {featuredQuickStart ? (
               <>
                 <div className="form-grid">
-                  <label>Title<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Featured tournament title" /></label>
-                  <label>Image<input type="file" accept="image/*" onChange={(event) => {
+                  <label>Title<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Upcoming tournament title" /></label>
+                <label>Image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (file) patchForm({ image: `/assets/${file.name}` });
                   }} /></label>
-                  <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short featured tournament description" /></label>
+                  <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short upcoming tournament description" /></label>
                 </div>
                 <div className="registration-actions compact-actions">
-                  <button className="btn btn-primary" type="button" onClick={saveTournament}>Save featured tournament</button>
+                  <button className="btn btn-primary" type="button" onClick={saveTournament}>Save upcoming tournament</button>
                   <Link className="btn btn-secondary" to="/admin/tournaments">Cancel</Link>
                 </div>
               </>
@@ -1740,7 +1758,7 @@ export function AdminTournamentEditorPage() {
                   <label>Tournament name<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} /></label>
                   <label>Sport<select value={form.sport} onChange={(event) => patchForm({ sport: event.target.value })}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}<option value="__new__">Add new sport</option></select></label>
                   {form.sport === "__new__" && <label>New sport name<input value={form.newSportName} onChange={(event) => patchForm({ newSportName: event.target.value })} /></label>}
-                  <label>Status<select value={form.status} onChange={(event) => patchForm({ status: event.target.value })}><option>Featured</option><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
+                  <label>Status<select value={form.status} onChange={(event) => patchForm({ status: event.target.value })}><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
                   <label>Primary place<select value={form.location} onChange={(event) => patchForm({ location: event.target.value, cities: Array.from(new Set([...form.cities, event.target.value])) })}>{cityOptions.map((city) => <option key={city}>{city}</option>)}</select></label>
                   <label>Tournament date<input type="date" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
                   <label>Registration opens<input type="date" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
@@ -1776,9 +1794,12 @@ export function AdminTournamentEditorPage() {
                 <div className="form-grid">
                   <label>Sport description<textarea value={form.sportDescription} onChange={(event) => patchForm({ sportDescription: event.target.value })} /></label>
                   <label>Tournament description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} /></label>
+                  <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ rulesPdf: `/rules/${file.name}` }); }} /></label>
+                  <label>Rules PDF path<input value={form.rulesPdf} onChange={(event) => patchForm({ rulesPdf: event.target.value })} placeholder="/rules/tournament-rules.pdf" /></label>
+                  <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} /></label>
                 </div>
                 <div className="admin-flow-checks">
-                  <label className="visibility-row"><span><b>Add featured tournament</b><small>Show in featured row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
+                  <label className="visibility-row"><span><b>Add new upcoming tournament</b><small>Show in upcoming tournament row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
                   <label className="visibility-row"><span><b>Block repeat registration</b><small>On means same user cannot register this tournament again.</small></span><input type="checkbox" checked={form.blockRepeatRegistration} onChange={(event) => patchForm({ blockRepeatRegistration: event.target.checked })} /></label>
                 </div>
                 <div className="registration-actions compact-actions">

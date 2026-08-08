@@ -1,9 +1,9 @@
 import { ArrowRight, Bell, Hand, Minus, Plus, RefreshCw, ZoomIn } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Page, PortalShell } from "../components/UI";
-import { acceptedTeams as fallbackAcceptedTeams, bracketConnections, bracketNodes, managementSidebar, tournaments } from "../data/platform";
+import { acceptedTeams as fallbackAcceptedTeams, bracketConnections, bracketNodes, managementSidebar, sidebar, tournaments } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { InfoPanel } from "./shared";
 
@@ -272,8 +272,10 @@ export function TournamentRoundsPage() {
 
 export function BracketWorkspacePage() {
   const { slug = "bangalore-corporate-t20" } = useParams();
+  const location = useLocation();
   const { token } = useAuth();
   const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[1];
+  const portalSidebar = location.pathname.startsWith("/admin") ? sidebar : managementSidebar;
   const [acceptedTeams, setAcceptedTeams] = useState<TeamSeed[]>([]);
   const [bucketMode, setBucketMode] = useState<BucketMode>("single");
   const [roundCount, setRoundCount] = useState(5);
@@ -405,7 +407,7 @@ export function BracketWorkspacePage() {
       <PortalShell
         title="Bracket Allocation Workspace"
         subtitle={`${tournament.name} manager workspace. Auto bracket first, then manual edits before save and publish.`}
-        sidebar={managementSidebar}
+        sidebar={portalSidebar}
         action={<Link className="btn btn-secondary" to={`/tournaments/${tournament.slug}/rounds`}>Public rounds</Link>}
       >
         <div className="workspace-status">

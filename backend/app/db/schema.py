@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS tournaments (
   address TEXT NOT NULL DEFAULT '',
   sport_description TEXT NOT NULL DEFAULT '',
   tournament_description TEXT NOT NULL DEFAULT '',
+  rules_pdf TEXT NOT NULL DEFAULT '',
+  rules_text TEXT NOT NULL DEFAULT '',
   fee_breakdown_json TEXT NOT NULL DEFAULT '[]',
   show_on_home INTEGER NOT NULL DEFAULT 1,
   block_repeat_registration INTEGER NOT NULL DEFAULT 0
@@ -405,6 +407,21 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   message TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  image TEXT,
+  date_from TEXT,
+  date_to TEXT,
+  published INTEGER DEFAULT 1,
+  created_by TEXT,
+  city TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
 """
 
 MIRROR_METADATA_SCHEMA = """
@@ -580,6 +597,8 @@ def _apply_operational_schema(path=None) -> None:
             "address": "TEXT NOT NULL DEFAULT ''",
             "sport_description": "TEXT NOT NULL DEFAULT ''",
             "tournament_description": "TEXT NOT NULL DEFAULT ''",
+            "rules_pdf": "TEXT NOT NULL DEFAULT ''",
+            "rules_text": "TEXT NOT NULL DEFAULT ''",
             "fee_breakdown_json": "TEXT NOT NULL DEFAULT '[]'",
             "show_on_home": "INTEGER NOT NULL DEFAULT 1",
             "block_repeat_registration": "INTEGER NOT NULL DEFAULT 0",
@@ -658,6 +677,23 @@ CREATE TABLE IF NOT EXISTS news_social (
   comments_json TEXT NOT NULL DEFAULT '[]',
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  image TEXT,
+  date_from TEXT,
+  date_to TEXT,
+  published INTEGER DEFAULT 1,
+  created_by TEXT,
+  city TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(published);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_by ON announcements(created_by);
+CREATE INDEX IF NOT EXISTS idx_announcements_city ON announcements(city);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
 
 """)
         live_match_columns = {

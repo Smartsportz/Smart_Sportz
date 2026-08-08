@@ -534,6 +534,7 @@ export const dashboardStats = [
 export const sidebar = [
   { label: "Dashboard", path: "/admin/dashboard", icon: BarChart3 },
   { label: "Tournaments", path: "/admin/tournaments", icon: Trophy },
+  { label: "Bracket Workspace", path: "/admin/bracket-workspace", icon: Zap },
   { label: "Users", path: "/admin/users", icon: Users },
   { label: "Managers", path: "/admin/managers", icon: ShieldCheck },
   { label: "Roles", path: "/admin/roles", icon: ShieldCheck, hidden: true },

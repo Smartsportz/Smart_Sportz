@@ -216,9 +216,9 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     computed_accent = accent_for_status(computed_status, payload.accent)
     execute(
         """INSERT INTO tournaments(slug, name, sport, status, location, date, registration_start, registration_end, teams, capacity, team_size,
-          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home,
+          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, rules_pdf, rules_text, fee_breakdown_json, show_on_home,
           block_repeat_registration)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             tournament_slug,
             payload.name,
@@ -242,6 +242,8 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
             payload.address,
             payload.sport_description,
             payload.tournament_description,
+            payload.rules_pdf,
+            payload.rules_text,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
             int(payload.show_on_home),
             int(payload.block_repeat_registration),
@@ -269,7 +271,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     execute(
         """UPDATE tournaments SET name = ?, sport = ?, status = ?, location = ?, date = ?, registration_start = ?, registration_end = ?,
           teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, min_age = ?, max_age = ?, prize = ?, image = ?, poster = ?, accent = ?, address = ?,
-          sport_description = ?, tournament_description = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
+          sport_description = ?, tournament_description = ?, rules_pdf = ?, rules_text = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
         (
             payload.name,
             sport_name,
@@ -292,6 +294,8 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
             payload.address,
             payload.sport_description,
             payload.tournament_description,
+            payload.rules_pdf,
+            payload.rules_text,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
             int(payload.show_on_home),
             int(payload.block_repeat_registration),
@@ -309,11 +313,16 @@ def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("
     if not item:
         raise HTTPException(status_code=404, detail="Tournament not found")
     ensure_tournament_access(user, item)
-    blockers = row("SELECT COUNT(*) AS count FROM registrations WHERE tournament_slug = ?", (tournament_slug,))
-    if blockers and blockers["count"]:
-        raise HTTPException(status_code=409, detail="Tournament has registrations. Archive or complete it instead of deleting.")
     ensure_tournament_access(user, item)
-    for table in ["tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_connections", "bracket_nodes", "notification_events"]:
+    registration_ids = [item["id"] for item in rows("SELECT id FROM registrations WHERE tournament_slug = ?", (tournament_slug,))]
+    for registration_id in registration_ids:
+        execute("DELETE FROM registration_documents WHERE registration_id = ?", (registration_id,))
+        execute("DELETE FROM registration_members WHERE registration_id = ?", (registration_id,))
+        execute("DELETE FROM payments WHERE registration_id = ?", (registration_id,))
+    for post in rows("SELECT slug FROM news_posts WHERE tournament_slug = ?", (tournament_slug,)):
+        execute("DELETE FROM news_blocks WHERE post_slug = ?", (post["slug"],))
+        execute("DELETE FROM news_social WHERE news_slug = ?", (post["slug"],))
+    for table in ["registrations", "payment_intents", "news_posts", "tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_round_schedules", "bracket_connections", "bracket_nodes", "notification_events"]:
         execute(f"DELETE FROM {table} WHERE tournament_slug = ?", (tournament_slug,))
     execute("DELETE FROM tournaments WHERE slug = ?", (tournament_slug,))
     log(user["email"], "tournament_deleted", "tournament", tournament_slug, f"Deleted {item['name']}")
