@@ -1050,6 +1050,25 @@ export function RegistrationPage() {
     scrollRegistrationTop();
   }
 
+  if (tournament.status !== "Registration Open") {
+    return (
+      <RegistrationShell>
+        <Page className="registration-reference-page">
+          <section className="registration-hero-copy compact">
+            <p className="eyebrow">SmartSportz</p>
+            <h1>Registration is closed</h1>
+            <p>{tournament.name} is currently marked as {tournament.status}. Admin or manager must open registration before teams can register.</p>
+          </section>
+          <section className="panel user-empty-state">
+            <h2>Registration closed</h2>
+            <p>Team registration is not available for this tournament right now.</p>
+            <Link className="btn btn-primary" to={`/tournaments/${routeSlug}`}>Back to tournament</Link>
+          </section>
+        </Page>
+      </RegistrationShell>
+    );
+  }
+
   return (
     <RegistrationShell>
       <Page className="registration-reference-page">

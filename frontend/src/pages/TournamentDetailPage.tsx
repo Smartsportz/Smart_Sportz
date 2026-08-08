@@ -1,9 +1,43 @@
+import { Download } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
 import { useEffect, useState } from "react";
 import { archiveForTournament, individualScores, liveMatches, withRuntimeTournamentStatus } from "../data/platform";
 import { InfoPanel, Metric } from "./shared";
 import { apiRequest } from "../lib/api";
+
+async function downloadRulesPdf(tournament: Record<string, any>) {
+  const rulesPdf = String(tournament.rulesPdf ?? tournament.rules_pdf ?? "").trim();
+  const isPdfSource = /^data:application\/pdf/i.test(rulesPdf) || /^https?:\/\/.+\.pdf(\?|#|$)/i.test(rulesPdf) || /^\/media\/.+\.pdf(\?|#|$)/i.test(rulesPdf);
+  if (!rulesPdf || !isPdfSource) {
+    window.alert("Rules PDF is not uploaded for this tournament.");
+    return;
+  }
+  const filename = rulesPdf.split("/").pop()?.split("?")[0] || `${tournament.slug}-rules.pdf`;
+  if (/^https?:\/\//i.test(rulesPdf)) {
+    const response = await fetch(rulesPdf);
+    if (!response.ok) {
+      window.alert("Rules PDF could not be downloaded.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 300);
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = rulesPdf;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 export function TournamentDetailPage() {
   const params = useParams();
@@ -233,7 +267,15 @@ export function TournamentDetailPage() {
         )
       ) : (
         <div className="detail-grid tournament-info-grid">
-          <InfoPanel title="Tournament Rules" items={["Roster min/max validation", "Team member details required", "Document verification required", "Payment required before approval"]} to="/faq" />
+          <article className="panel tournament-rules-panel">
+            <h3>Tournament Rules</h3>
+            {["Roster min/max validation", "Team member details required", "Document verification required", "Payment required before approval"].map((rule) => (
+              <p key={rule}><span className="rule-check">✓</span>{rule}</p>
+            ))}
+            <button className="btn btn-secondary wide" type="button" onClick={() => void downloadRulesPdf(item)}>
+              <Download size={16} /> Download rules
+            </button>
+          </article>
           <InfoPanel title="Prize Pool" items={[item.prize, "Winner trophy", "MVP award", "Digital certificates"]} to="/leaderboards" highlight />
           <InfoPanel title="Schedule" items={[`Registration opens: ${item.registrationStart}`, `Registration ends: ${item.registrationEnd}`, "Qualifiers", "Final"]} to="/live" />
           <InfoPanel title="Venue And Capacity" items={[item.location, `${item.teams}/${item.capacity} teams`, "Smart venue map", "Officials and support desk"]} to="/contact" />
