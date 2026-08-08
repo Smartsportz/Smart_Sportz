@@ -197,9 +197,9 @@ export function HomePage() {
     {
       key: "old",
       title: "Old tournaments",
-      text: "Completed tournament records and previous season archives.",
+      text: "Registration-closed and completed tournament records with rounds available.",
       ref: oldTournamentsRef,
-      items: runtimeTournaments.filter((item) => item.status === "Completed"),
+      items: runtimeTournaments.filter((item) => item.status === "Completed" || item.status === "Registration Closed"),
     },
   ].filter((group) => group.items.length > 0);
 

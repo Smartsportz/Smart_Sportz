@@ -37,7 +37,7 @@ export function TournamentsPage() {
     () => Array.from(new Set(runtimeTournaments.flatMap((item) => [item.location, ...(item.cities ?? [])]))).sort(),
     [runtimeTournaments],
   );
-  const statusOptions = ["Featured", "Open Registration", "Live", "Completed"]; //removed 
+  const statusOptions = ["Featured", "Open Registration", "Registration Closed", "Live", "Completed"];
 
   function toggleValue(list: string[], value: string) {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -54,7 +54,7 @@ export function TournamentsPage() {
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.some((status) => {
       if (status === "Featured") return isFeatured;
       if (status === "Open Registration") return item.status === "Registration Open";
-      if (status === "Completed") return item.status === "Completed";
+      if (status === "Completed") return item.status === "Completed" || item.status === "Registration Closed";
       return item.status === status;
     });
     return matchesSearch && matchesSport && matchesPlace && matchesFeatured && matchesStatus;
@@ -90,8 +90,8 @@ export function TournamentsPage() {
     {
       key: "old",
       title: "Old tournaments",
-      text: "Completed tournament records and archived competitions.",
-      items: filteredTournaments.filter((item) => item.status === "Completed"),
+      text: "Registration-closed and completed tournament records with rounds available.",
+      items: filteredTournaments.filter((item) => item.status === "Completed" || item.status === "Registration Closed"),
     },
   ].filter((section) => section.items.length > 0);
 
