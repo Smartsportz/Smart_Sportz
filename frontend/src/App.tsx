@@ -159,7 +159,7 @@ export default function App() {
           <Route path="/management/players" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="players" /></ProtectedRoute>} />
           <Route path="/management/announcements" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="announcements" /></ProtectedRoute>} />
           <Route path="/management/news" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="news" /></ProtectedRoute>} />
-          <Route path="/management/gallery" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="cms" /></ProtectedRoute>} />
+          <Route path="/management/gallery" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="gallery" /></ProtectedRoute>} />
           <Route path="/management/reports" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="reports" /></ProtectedRoute>} />
           <Route path="/management/matches/:id/control" element={<ProtectedRoute roles={["management"]}><LiveMatchPage /></ProtectedRoute>} />
           <Route path="/management/group-bracket" element={<ProtectedRoute roles={["management"]}><BracketWorkspacePage /></ProtectedRoute>} />
@@ -191,7 +191,7 @@ export default function App() {
           <Route path="/admin/payments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="payments" /></ProtectedRoute>} />
           <Route path="/admin/payments/operations" element={<ProtectedRoute roles={["super_admin"]}><UtilityDetailPage type="admin-payments" /></ProtectedRoute>} />
           <Route path="/admin/news" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="news" /></ProtectedRoute>} />
-          <Route path="/admin/gallery" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="cms" /></ProtectedRoute>} />
+          <Route path="/admin/gallery" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="gallery" /></ProtectedRoute>} />
           <Route path="/admin/cms" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="cms" /></ProtectedRoute>} />
           <Route path="/admin/cms/:section" element={<ProtectedRoute roles={["super_admin"]}><CmsSectionPage /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="reports" /></ProtectedRoute>} />

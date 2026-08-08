@@ -217,14 +217,26 @@ class NewsBlockPayload(BaseModel):
 class NewsPostPayload(BaseModel):
     title: str = Field(min_length=3, max_length=160)
     short_description: str = Field(min_length=10, max_length=320)
-    image: str = Field(min_length=3, max_length=500)
+    image: str = Field(min_length=3, max_length=2000000)
     category: str = Field(pattern="^(Winner Teams|Match Updates|Tournament Updates|Announcements)$")
     sport: str = Field(min_length=2, max_length=80)
     tournament_slug: str | None = Field(default=None, max_length=120)
-    city: str = Field(min_length=2, max_length=80)
+    city: str = Field(default="", max_length=80)
     status: str = Field(default="draft", pattern="^(draft|published)$")
     is_highlight: bool = False
     blocks: list[NewsBlockPayload] = Field(default_factory=list)
+
+
+class GalleryAlbumPayload(BaseModel):
+    title: str = Field(min_length=2, max_length=160)
+    description: str = Field(default="", max_length=1000)
+    image: str = Field(min_length=3, max_length=2000000)
+    sport: str = Field(default="Gallery", max_length=80)
+    city: str = Field(default="", max_length=80)
+    from_date: str = Field(default="", max_length=40)
+    to_date: str = Field(default="", max_length=40)
+    published: bool = True
+    sort_order: int = Field(default=0, ge=0, le=10000)
 
 
 class SportHomeVisibilityPayload(BaseModel):

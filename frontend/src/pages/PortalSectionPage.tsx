@@ -5,7 +5,7 @@ import { DataTable, Page, PortalShell } from "../components/UI";
 import { managementSidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
-import { AnnouncementManagerPanel } from "./AdminPage";
+import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
@@ -28,7 +28,7 @@ const managementContent = {
   players: ["Roster management", "Eligibility status", "Player documents", "Captain updates"],
   announcements: ["Tournament notices", "Team broadcast", "Schedule change alert", "Delivery status"],
   news: ["Create winner-team news", "Upload match update image", "Format article sections", "Publish city-scoped updates"],
-  cms: ["Gallery albums", "Homepage cards", "Live highlights", "Sponsor logos"],
+  gallery: ["Gallery albums", "Single image uploads", "Publish controls", "Delete confirmation"],
   reports: ["Revenue reports", "Registration funnel", "Live score audit", "Export center"],
 };
 
@@ -585,6 +585,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       </div>
     )
   ) : section === "news" ? (
+    <AdminNewsPage mode="news" />
+  ) : false ? (
     <div className="manager-news-layout">
       <section className="panel news-editor-panel">
         <span className="status emerald">Manager News Editor</span>
@@ -645,11 +647,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     )
   ) : section === "announcements" ? (
     <AnnouncementManagerPanel role="manager" />
-  ) : section === "cms" ? (
-    <section className="panel user-empty-state">
-      <h2>Gallery CMS</h2>
-      <p>Published gallery and homepage CMS records are loaded from the database only. Use the admin CMS table for full create, edit, and delete controls.</p>
-    </section>
+  ) : section === "gallery" ? (
+    <GalleryManagerPanel />
   ) : section === "reports" ? (
     sectionRecords.length === 0 ? (
       <section className="panel user-empty-state"><h2>No reports available</h2><p>Reports will appear after registrations, payments, and live scoring generate records.</p></section>

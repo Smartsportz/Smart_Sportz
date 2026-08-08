@@ -1653,7 +1653,7 @@ def admin_payments(_: dict = Depends(require_roles("super_admin", "management"))
 
 @router.get("/cms")
 def cms_sections(_: dict = Depends(require_roles("super_admin"))):
-    return ok(rows("SELECT * FROM cms_content ORDER BY title"))
+    return ok(rows("SELECT * FROM cms_content WHERE slug <> 'regional-masters-highlights' ORDER BY title"))
 
 
 @router.patch("/cms/{slug}")
@@ -1680,6 +1680,24 @@ def admin_home_content(_: dict = Depends(require_roles("super_admin"))):
         "liveHighlights": rows("SELECT * FROM live_highlights ORDER BY sort_order, title"),
         "sponsorLogos": rows("SELECT * FROM sponsor_logos ORDER BY sort_order, name"),
     })
+
+
+@router.post("/home-content/discovery")
+def create_home_discovery(payload: HomeDiscoveryCardUpdate, user: dict = Depends(require_roles("super_admin"))):
+    slug = slugify(payload.title)
+    counter = 2
+    while row("SELECT slug FROM home_discovery_cards WHERE slug = ?", (slug,)):
+        slug = f"{slugify(payload.title)}-{counter}"
+        counter += 1
+    execute(
+        """INSERT INTO home_discovery_cards(
+            slug, label, title, sport, tournament_slug, sponsor_name, sponsor_image,
+            image, event_date, description, sponsor_details, register_path, sort_order, published
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, payload.label, payload.title, payload.sport, payload.tournament_slug, payload.sponsor_name, payload.sponsor_image, payload.image, payload.event_date, payload.description, payload.sponsor_details, payload.register_path, payload.sort_order, int(payload.published)),
+    )
+    log(user["email"], "home_discovery_created", "home_discovery", slug, "Home discovery card created")
+    return ok(row("SELECT * FROM home_discovery_cards WHERE slug = ?", (slug,)), "Discovery card created")
 
 
 @router.patch("/home-content/discovery/{slug}")
@@ -1729,6 +1747,29 @@ def update_home_discovery(
     )
 
 
+@router.delete("/home-content/discovery/{slug}")
+def delete_home_discovery(slug: str, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT slug FROM home_discovery_cards WHERE slug = ?", (slug,)):
+        raise HTTPException(status_code=404, detail="Discovery card not found")
+    execute("DELETE FROM home_discovery_cards WHERE slug = ?", (slug,))
+    log(user["email"], "home_discovery_deleted", "home_discovery", slug, "Home discovery card deleted")
+    return ok({"deleted": True, "slug": slug}, "Discovery card deleted")
+
+
+@router.post("/home-content/live-highlight")
+def create_live_highlight(payload: LiveHighlightUpdate, user: dict = Depends(require_roles("super_admin"))):
+    item_id = f"live_{uuid4().hex[:10]}"
+    execute(
+        """INSERT INTO live_highlights(
+            id, match_id, title, stage_label, home_team, away_team, home_score,
+            away_score, image, description, impact_notes, link_path, sort_order, published
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (item_id, payload.match_id, payload.title, payload.stage_label, payload.home_team, payload.away_team, payload.home_score, payload.away_score, payload.image, payload.description, payload.impact_notes, payload.link_path, payload.sort_order, int(payload.published)),
+    )
+    log(user["email"], "live_highlight_created", "live_highlight", item_id, "Homepage live highlight created")
+    return ok(row("SELECT * FROM live_highlights WHERE id = ?", (item_id,)), "Live highlight created")
+
+
 @router.patch("/home-content/live-highlight/{item_id}")
 def update_live_highlight(
     item_id: str,
@@ -1775,6 +1816,30 @@ def update_live_highlight(
     )
 
 
+@router.delete("/home-content/live-highlight/{item_id}")
+def delete_live_highlight(item_id: str, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT id FROM live_highlights WHERE id = ?", (item_id,)):
+        raise HTTPException(status_code=404, detail="Live highlight not found")
+    execute("DELETE FROM live_highlights WHERE id = ?", (item_id,))
+    log(user["email"], "live_highlight_deleted", "live_highlight", item_id, "Homepage live highlight deleted")
+    return ok({"deleted": True, "id": item_id}, "Live highlight deleted")
+
+
+@router.post("/home-content/sponsor")
+def create_sponsor_logo(payload: SponsorLogoUpdate, user: dict = Depends(require_roles("super_admin"))):
+    slug = slugify(payload.name)
+    counter = 2
+    while row("SELECT slug FROM sponsor_logos WHERE slug = ?", (slug,)):
+        slug = f"{slugify(payload.name)}-{counter}"
+        counter += 1
+    execute(
+        "INSERT INTO sponsor_logos(slug, name, image, link_url, sort_order, published) VALUES (?, ?, ?, ?, ?, ?)",
+        (slug, payload.name, payload.image, payload.link_url, payload.sort_order, int(payload.published)),
+    )
+    log(user["email"], "sponsor_logo_created", "sponsor", slug, "Sponsor logo created")
+    return ok(row("SELECT * FROM sponsor_logos WHERE slug = ?", (slug,)), "Sponsor logo created")
+
+
 @router.patch("/home-content/sponsor/{slug}")
 def update_sponsor_logo(
     slug: str,
@@ -1802,6 +1867,15 @@ def update_sponsor_logo(
         row("SELECT * FROM sponsor_logos WHERE slug = ?", (slug,)),
         "Sponsor logo updated"
     )
+
+
+@router.delete("/home-content/sponsor/{slug}")
+def delete_sponsor_logo(slug: str, user: dict = Depends(require_roles("super_admin"))):
+    if not row("SELECT slug FROM sponsor_logos WHERE slug = ?", (slug,)):
+        raise HTTPException(status_code=404, detail="Sponsor logo not found")
+    execute("DELETE FROM sponsor_logos WHERE slug = ?", (slug,))
+    log(user["email"], "sponsor_logo_deleted", "sponsor", slug, "Sponsor logo deleted")
+    return ok({"deleted": True, "slug": slug}, "Sponsor logo deleted")
 
 
 @router.get("/logs")

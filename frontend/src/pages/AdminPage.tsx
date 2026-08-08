@@ -16,6 +16,15 @@ type IconProps = {
   className?: string;
 };
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 function EditIcon({ size = 14, className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
@@ -325,6 +334,7 @@ function AdminDashboardDbPanel() {
   }, [token]);
 
   if (error) return <div className="form-alert">{error}</div>;
+
   if (!data) return <section className="panel user-empty-state"><h2>Loading admin dashboard</h2><p>Fetching live database records.</p></section>;
 
   return (
@@ -1106,6 +1116,31 @@ function AdminCmsDbPanel() {
 
   if (error) return <div className="form-alert">{error}</div>;
 
+  async function reloadHomeContent() {
+    const payload = await apiRequest<{ discoveryCards: Array<Record<string, any>>; liveHighlights: Array<Record<string, any>>; sponsorLogos: Array<Record<string, any>> }>("/admin/home-content", {}, token);
+    setHomeContent(payload);
+  }
+
+  async function createHomeItem(type: "discovery" | "live-highlight" | "sponsor") {
+    setMessage("");
+    if (type === "discovery") {
+      await apiRequest("/admin/home-content/discovery", { method: "POST", body: JSON.stringify({ label: "New Card", title: "New Discovery Card", sport: "Gallery", tournament_slug: "", sponsor_name: "Smart Sportz", sponsor_image: "", image: "/assets/logo.png", event_date: "Upcoming", description: "Edit this discovery card description.", sponsor_details: "Edit sponsor details.", register_path: "/tournaments", sort_order: homeContent.discoveryCards.length + 1, published: false }) }, token);
+    } else if (type === "live-highlight") {
+      await apiRequest("/admin/home-content/live-highlight", { method: "POST", body: JSON.stringify({ match_id: "", title: "New Live Highlight", stage_label: "Live", home_team: "Team A", away_team: "Team B", home_score: "0", away_score: "0", image: "/assets/logo.png", description: "Edit this live highlight description.", impact_notes: "Edit impact notes.", link_path: "/live", sort_order: homeContent.liveHighlights.length + 1, published: false }) }, token);
+    } else {
+      await apiRequest("/admin/home-content/sponsor", { method: "POST", body: JSON.stringify({ name: "New Sponsor", image: "/assets/logo.png", link_url: "https://smart-sportz-dun.vercel.app/", sort_order: homeContent.sponsorLogos.length + 1, published: false }) }, token);
+    }
+    await reloadHomeContent();
+    setMessage("CMS record created. Use Edit to update the details.");
+  }
+
+  async function deleteHomeItem(type: "discovery" | "live-highlight" | "sponsor", id: string, title: string) {
+    if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    await apiRequest(`/admin/home-content/${type}/${id}`, { method: "DELETE" }, token);
+    await reloadHomeContent();
+    setMessage("CMS record deleted.");
+  }
+
   // Table rows for Discovery Cards
   const discoveryRows = homeContent.discoveryCards.map((item) => [
     item.title || item.label || "Untitled",
@@ -1115,6 +1150,7 @@ function AdminCmsDbPanel() {
     <span className="table-actions">
       <Link to={`/admin/cms/edit/discovery/${item.slug}`}><EditIcon size={14} /> Edit</Link>
       <Link to={item.register_path || "/"}><ViewIcon size={14} /> View</Link>
+      <button className="danger-link" type="button" onClick={() => void deleteHomeItem("discovery", item.slug, item.title || item.label)}>Delete</button>
     </span>,
   ]);
 
@@ -1127,6 +1163,7 @@ function AdminCmsDbPanel() {
     <span className="table-actions">
       <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><EditIcon size={14} /> Edit</Link>
       <Link to={item.link_path || "/"}><ViewIcon size={14} /> View</Link>
+      <button className="danger-link" type="button" onClick={() => void deleteHomeItem("live-highlight", item.id, item.title)}>Delete</button>
     </span>,
   ]);
 
@@ -1139,6 +1176,7 @@ function AdminCmsDbPanel() {
     <span className="table-actions">
       <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><EditIcon size={14} /> Edit</Link>
       {item.link_url && <Link to={item.link_url}><ViewIcon size={14} /> View</Link>}
+      <button className="danger-link" type="button" onClick={() => void deleteHomeItem("sponsor", item.slug, item.name)}>Delete</button>
     </span>,
   ]);
 
@@ -1195,7 +1233,7 @@ function AdminCmsDbPanel() {
         <section className="panel">
           <div className="section-head-inline">
             <h2>Homepage discovery cards</h2>
-            <span>{homeContent.discoveryCards.length} cards</span>
+            <button className="btn btn-secondary" type="button" onClick={() => void createHomeItem("discovery")}><Plus size={16} /> Create</button>
           </div>
           <p>Edit sponsor/game/tournament cards displayed in Discover tournaments across categories.</p>
           {homeContent.discoveryCards.length === 0 ? (
@@ -1217,7 +1255,7 @@ function AdminCmsDbPanel() {
         <section className="panel">
           <div className="section-head-inline">
             <h2>Homepage live highlights</h2>
-            <span>{homeContent.liveHighlights.length} highlights</span>
+            <button className="btn btn-secondary" type="button" onClick={() => void createHomeItem("live-highlight")}><Plus size={16} /> Create</button>
           </div>
           <p>Live match highlights displayed on the homepage.</p>
           {homeContent.liveHighlights.length === 0 ? (
@@ -1239,7 +1277,7 @@ function AdminCmsDbPanel() {
         <section className="panel">
           <div className="section-head-inline">
             <h2>Sponsor company logos</h2>
-            <span>{homeContent.sponsorLogos.length} sponsors</span>
+            <button className="btn btn-secondary" type="button" onClick={() => void createHomeItem("sponsor")}><Plus size={16} /> Create</button>
           </div>
           <p>Sponsor logos displayed on the homepage.</p>
           {homeContent.sponsorLogos.length === 0 ? (
@@ -1892,14 +1930,16 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
   const [newsList, setNewsList] = useState<any[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [editingNews, setEditingNews] = useState<any | null>(null);
+  const defaultCity = assignedCities[0] ?? "";
+  const defaultSport = sports[0]?.name ?? "Cricket";
   const [formData, setFormData] = useState({
     title: "",
     short_description: "",
     image: "",
     category: "Tournament Updates",
-    sport: "",
+    sport: defaultSport,
     tournament_slug: "",
-    city: "",
+    city: defaultCity,
     status: "published",
     is_highlight: false,
     blocks: [{ block_type: "paragraph", content: "", sort_order: 0 }]
@@ -1932,9 +1972,9 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
       short_description: "",
       image: "",
       category: "Tournament Updates",
-      sport: "",
+      sport: defaultSport,
       tournament_slug: "",
-      city: "",
+      city: defaultCity,
       status: "published",
       is_highlight: false,
       blocks: [{ block_type: "paragraph", content: "", sort_order: 0 }]
@@ -1991,7 +2031,7 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
       if (editingNews) {
         // UPDATE
         result = await apiRequest(`/admin/news/${editingNews.id}`, {
-          method: "PUT",
+          method: "PATCH",
           body: JSON.stringify(formData)
         }, token);
         setNewsList(newsList.map(item => item.id === result.id ? result : item));
@@ -2160,11 +2200,21 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
                     >
                       <option value="draft">Draft</option>
                       <option value="published">Published</option>
-                      <option value="archived">Archived</option>
                     </select>
                   </label>
                   <label>
-                    Image URL
+                    Image upload
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void fileToDataUrl(file).then((image) => setFormData({ ...formData, image }));
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Image URL / uploaded data
                     <input
                       value={formData.image}
                       onChange={(e) => setFormData({ ...formData, image: e.target.value })}
@@ -2269,6 +2319,161 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
         </section>
       </div>
     </>
+  );
+}
+
+export function GalleryManagerPanel() {
+  const { token } = useAuth();
+  const [records, setRecords] = useState<any[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    image: "",
+    sport: "Gallery",
+    city: "",
+    from_date: "",
+    to_date: "",
+    published: true,
+    sort_order: 0,
+  });
+
+  function resetForm() {
+    setEditing(null);
+    setForm({ title: "", description: "", image: "", sport: "Gallery", city: "", from_date: "", to_date: "", published: true, sort_order: 0 });
+  }
+
+  async function fetchGallery() {
+    setError("");
+    try {
+      const payload = await apiRequest<any[]>("/management/gallery", {}, token);
+      setRecords(payload);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not load gallery records.");
+    }
+  }
+
+  useEffect(() => {
+    void fetchGallery();
+  }, [token]);
+
+  function openEdit(item: any) {
+    setEditing(item);
+    const [fromDate = "", toDate = ""] = String(item.date_label || "").split(" - ");
+    setForm({
+      title: item.title || "",
+      description: item.summary || "",
+      image: item.cover || "",
+      sport: item.sport || "Gallery",
+      city: item.city || "",
+      from_date: fromDate,
+      to_date: toDate,
+      published: Boolean(item.published),
+      sort_order: Number(item.sort_order || 0),
+    });
+    setShowEditor(true);
+  }
+
+  async function saveGallery(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      const saved = await apiRequest<any>(editing ? `/management/gallery/${editing.slug}` : "/management/gallery", {
+        method: editing ? "PATCH" : "POST",
+        body: JSON.stringify(form),
+      }, token);
+      setRecords((current) => editing ? current.map((item) => item.slug === saved.slug ? saved : item) : [saved, ...current]);
+      setMessage(editing ? "Gallery updated successfully." : "Gallery created successfully.");
+      setShowEditor(false);
+      resetForm();
+      void fetchGallery();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save gallery.");
+    }
+  }
+
+  async function deleteGallery(item: any) {
+    if (!window.confirm(`Delete gallery "${item.title}"? This cannot be undone.`)) return;
+    setError("");
+    setMessage("");
+    try {
+      await apiRequest(`/management/gallery/${item.slug}`, { method: "DELETE" }, token);
+      setRecords((current) => current.filter((record) => record.slug !== item.slug));
+      setMessage("Gallery deleted successfully.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not delete gallery.");
+    }
+  }
+
+  return (
+    <div className="manager-news-layout">
+      {message && <div className="form-alert success-alert">{message}</div>}
+      {error && <div className="form-alert">{error}</div>}
+      <section className="panel admin-list-head">
+        <div>
+          <span className="status emerald">Gallery Management</span>
+          <h2>Gallery containers</h2>
+          <p>Create single-image gallery cards for the public Gallery page from database records only.</p>
+        </div>
+        <button className="btn btn-primary" type="button" onClick={() => { resetForm(); setShowEditor(true); }}><Plus size={16} /> Add Gallery</button>
+      </section>
+      {records.length ? (
+        <DataTable
+          columns={["Title", "Description", "Date", "Status", "Action"]}
+          rows={records.map((item) => [
+            <span><b>{item.title}</b><small style={{ display: "block", opacity: 0.7 }}>{item.city || "No city"}</small></span>,
+            item.summary || "-",
+            item.date_label || "-",
+            <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
+            <span className="table-actions">
+              <Link to={`/gallery/${item.slug}`}>Preview</Link>
+              <button type="button" onClick={() => openEdit(item)}>Edit</button>
+              <button className="danger-link" type="button" onClick={() => void deleteGallery(item)}>Delete</button>
+            </span>,
+          ])}
+        />
+      ) : (
+        <section className="panel user-empty-state"><h2>No gallery containers</h2><p>Click Add Gallery to create the first public gallery card.</p></section>
+      )}
+      {showEditor && (
+        <div className="modal-backdrop">
+          <section className="manager-tournament-modal news-editor-modal">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">{editing ? "Edit Gallery" : "Add Gallery"}</p>
+                <h2>{editing ? editing.title : "New gallery image"}</h2>
+              </div>
+              <button className="icon-btn" type="button" onClick={() => { setShowEditor(false); resetForm(); }}>x</button>
+            </div>
+            <form onSubmit={saveGallery}>
+              <div className="form-grid">
+                <label>Title<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required /></label>
+                <label>Sport / type<input value={form.sport} onChange={(event) => setForm({ ...form, sport: event.target.value })} /></label>
+                <label>City<input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} placeholder="Optional city" /></label>
+                <label>From date<input type="date" value={form.from_date} onChange={(event) => setForm({ ...form, from_date: event.target.value })} /></label>
+                <label>To date<input type="date" value={form.to_date} onChange={(event) => setForm({ ...form, to_date: event.target.value })} /></label>
+                <label>Image upload<input type="file" accept="image/*" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void fileToDataUrl(file).then((image) => setForm((current) => ({ ...current, image })));
+                }} /></label>
+                <label>Image URL / uploaded data<input value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} required /></label>
+                <label>Sort order<input type="number" value={form.sort_order} onChange={(event) => setForm({ ...form, sort_order: Number(event.target.value) })} /></label>
+              </div>
+              <label>Description<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={4} /></label>
+              <label className="visibility-row"><span><b>Published</b><small>Show on public Gallery page.</small></span><input type="checkbox" checked={form.published} onChange={(event) => setForm({ ...form, published: event.target.checked })} /></label>
+              <div className="registration-actions compact-actions">
+                <button className="btn btn-primary" type="submit">{editing ? "Update Gallery" : "Create Gallery"}</button>
+                <button className="btn btn-secondary" type="button" onClick={() => { setShowEditor(false); resetForm(); }}>Cancel</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -3175,6 +3380,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
         {section === "players" && <AthleteProfile />}
         {section === "payments" && <AdminTournamentPickerPanel mode="payments" />}
         {section === "news" && <AdminNewsPage mode="news" />}
+        {section === "gallery" && <GalleryManagerPanel />}
         {section === "cms" && <AdminCmsDbPanel />}
         {section === "announcements" && <AnnouncementManagerPanel role="admin" />}
         {section === "reports" && <ListPanel title="Reports Center" items={reports} to="/admin/reports/detail" />}

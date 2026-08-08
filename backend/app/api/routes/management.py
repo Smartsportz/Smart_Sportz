@@ -11,7 +11,7 @@ from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, GalleryAlbumPayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
 from app.services.notifications import send_whatsapp_message
@@ -406,6 +406,72 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
         execute_many(statements)
     log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
     return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post updated")
+
+
+@router.get("/gallery")
+def gallery_albums(user: dict = Depends(require_roles("super_admin", "management"))):
+    cities = manager_cities(user)
+    if user["role"] != "super_admin" and not cities:
+        return ok([])
+    if user["role"] == "super_admin":
+        return ok(rows("SELECT * FROM gallery_albums ORDER BY sort_order, title"))
+    placeholders = ",".join(["?"] * len(cities))
+    return ok(rows(f"SELECT * FROM gallery_albums WHERE city IN ({placeholders}) ORDER BY sort_order, title", cities))
+
+
+@router.post("/gallery")
+def create_gallery_album(payload: GalleryAlbumPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    if payload.city:
+        ensure_city_access(user, payload.city)
+    base_slug = slugify(payload.title)
+    slug = base_slug
+    counter = 2
+    while row("SELECT slug FROM gallery_albums WHERE slug = ?", (slug,)):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    date_label = " - ".join([value for value in [payload.from_date, payload.to_date] if value]) or payload.from_date or payload.to_date or "Published gallery"
+    month_label = payload.from_date[:7] if payload.from_date else ""
+    execute(
+        """INSERT INTO gallery_albums(slug, title, sport, city, date_label, month_label, day_count, cover, summary, sort_order, published)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, 1, payload.image, payload.description, payload.sort_order, int(payload.published)),
+    )
+    log(user["email"], "gallery_created", "gallery", slug, f"Gallery album created: {payload.title}")
+    return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery created")
+
+
+@router.patch("/gallery/{slug}")
+def update_gallery_album(slug: str, payload: GalleryAlbumPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+    if item["city"]:
+        ensure_city_access(user, item["city"])
+    if payload.city:
+        ensure_city_access(user, payload.city)
+    date_label = " - ".join([value for value in [payload.from_date, payload.to_date] if value]) or payload.from_date or payload.to_date or item["date_label"]
+    month_label = payload.from_date[:7] if payload.from_date else item["month_label"]
+    execute(
+        """UPDATE gallery_albums
+           SET title = ?, sport = ?, city = ?, date_label = ?, month_label = ?, cover = ?, summary = ?, sort_order = ?, published = ?
+           WHERE slug = ?""",
+        (payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, payload.image, payload.description, payload.sort_order, int(payload.published), slug),
+    )
+    log(user["email"], "gallery_updated", "gallery", slug, f"Gallery album updated: {payload.title}")
+    return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery updated")
+
+
+@router.delete("/gallery/{slug}")
+def delete_gallery_album(slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+    if item["city"]:
+        ensure_city_access(user, item["city"])
+    execute("DELETE FROM gallery_social WHERE image_key = ?", (f"album:{slug}",))
+    execute("DELETE FROM gallery_albums WHERE slug = ?", (slug,))
+    log(user["email"], "gallery_deleted", "gallery", slug, f"Gallery album deleted: {item['title']}")
+    return ok({"deleted": True, "slug": slug}, "Gallery deleted")
 
 @router.patch("/sports/{sport_slug}/home-visibility")
 def update_sport_home_visibility(sport_slug: str, payload: SportHomeVisibilityPayload, user: dict = Depends(require_roles("super_admin", "management"))):
