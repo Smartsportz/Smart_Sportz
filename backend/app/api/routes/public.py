@@ -75,6 +75,12 @@ def attach_cities(item: dict) -> dict:
         for city in rows("SELECT city FROM tournament_cities WHERE tournament_slug = ? ORDER BY sort_order, city", (item["slug"],))
     ]
     item["prizes"] = rows("SELECT position, label, amount, sort_order FROM tournament_prizes WHERE tournament_slug = ? ORDER BY sort_order, position", (item["slug"],))
+    published_matches = rows(
+        "SELECT round FROM group_bracket_matches WHERE tournament_slug = ? AND published = 1",
+        (item["slug"],),
+    )
+    item["published_match_count"] = len(published_matches)
+    item["published_round_count"] = len({match["round"] for match in published_matches if match.get("round")})
     try:
         item["fee_breakdown"] = json.loads(item.get("fee_breakdown_json") or "[]")
     except json.JSONDecodeError:

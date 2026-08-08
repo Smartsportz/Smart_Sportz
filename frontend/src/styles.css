@@ -647,6 +647,9 @@ input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px 
 .registration-form-section { display: grid; gap: 18px; padding: 30px; }
 .registration-form-section h2, .registration-summary-card h2, .registration-timeline h3, .verification-pass h2 { margin: 0; color: var(--primary-dark); font-family: Poppins, sans-serif; letter-spacing: -0.035em; }
 .registration-form-section p { margin: 4px 0 0; color: var(--muted); }
+.player-row-input { display: grid; grid-template-columns: 40px minmax(180px, 1fr) minmax(88px, 110px) minmax(112px, 140px); gap: 10px; align-items: center; }
+.player-row-number { font-weight: 900; color: #666; }
+.jersey-size-select { width: 100%; min-height: 42px; padding: 8px 34px 8px 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: var(--ink); appearance: auto; }
 .registration-choice-card { display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: stretch; padding: 16px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 18px; background: linear-gradient(135deg, rgba(11, 136, 82, .08), rgba(255, 255, 255, .92)); }
 .registration-choice-card.compact-card { grid-template-columns: 58px 1fr; align-items: center; }
 .registration-choice-card > img { width: 100%; height: 170px; border-radius: 14px; object-fit: cover; }
@@ -1610,6 +1613,9 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .registration-step { min-width: 124px; min-height: 36px; font-size: 11px; }
   .registration-step span { width: 21px; height: 21px; }
   .registration-form-section { padding: 18px; border-radius: 15px; }
+  .player-row-input { grid-template-columns: 32px 1fr; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.78); }
+  .player-row-input input, .player-row-input select { grid-column: 2; width: 100%; }
+  .player-row-number { grid-row: 1 / span 3; align-self: start; padding-top: 10px; }
   .section-head-inline { align-items: stretch; flex-direction: column; }
   .section-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .news-section-actions { display: flex; flex-wrap: wrap; gap: 10px; }

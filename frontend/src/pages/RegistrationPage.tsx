@@ -793,6 +793,12 @@ export function RegistrationPage() {
   }, [routeSlug]);
 
   useEffect(() => {
+    setMembers((current) => memberSlots.map((_, index) => current[index] ?? ""));
+    setMemberAges((current) => memberSlots.map((_, index) => current[index] ?? ""));
+    setMemberJerseySizes((current) => memberSlots.map((_, index) => current[index] ?? ""));
+  }, [memberSlots.length]);
+
+  useEffect(() => {
     const draft: RegistrationDraft = {
       activeStep,
       teamDetails,
@@ -845,6 +851,11 @@ export function RegistrationPage() {
         status: "uploaded",
       } : item));
     });
+  }
+
+  function updateMemberJerseySize(index: number, value: string) {
+    const normalized = value.trim().toUpperCase();
+    setMemberJerseySizes((current) => memberSlots.map((_, itemIndex) => itemIndex === index ? normalized : current[itemIndex] ?? ""));
   }
 
   function openRulesModal() {
@@ -1145,8 +1156,8 @@ export function RegistrationPage() {
                       const ageNum = parseInt(ageStr);
                       const isInvalid = ageStr && (!isNaN(ageNum) && ageNum > 0) ? !isAgeInRange(ageNum, tournament) : false;
                       return (
-                        <div key={role} className="player-row-input" style={{ display: "grid", gridTemplateColumns: "40px 1fr 80px 120px", gap: "10px", alignItems: "center" }}>
-                          <span style={{ fontWeight: "bold", color: "#666" }}>{index + 1}</span>
+                        <div key={role} className="player-row-input">
+                          <span className="player-row-number">{index + 1}</span>
                           <input 
                             value={members[index]} 
                             onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} 
@@ -1161,8 +1172,8 @@ export function RegistrationPage() {
                           />
                           <select
                             value={memberJerseySizes[index] || ""}
-                            onChange={(event) => setMemberJerseySizes((current) => current.map((v, i) => i === index ? event.target.value : v))}
-                            style={{ padding: "8px", borderRadius: "8px", border: "1px solid #ddd" }}
+                            onChange={(event) => updateMemberJerseySize(index, event.target.value)}
+                            className="jersey-size-select"
                           >
                             <option value="">Size</option>
                             {jerseySizeOptions.map((size) => (
