@@ -733,7 +733,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                         <option value="__custom__">Custom text path</option>
                       </select>
                     </label>
-                    <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchTournamentForm({ image: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
+                    <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ image: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
                   </div>
                   <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
                   <div className="manager-form-split">
@@ -762,7 +762,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                   <div className="form-grid">
                     <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
                     <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
-                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
+                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
                     <label>Rules acceptance text<textarea value={tournamentForm.rulesText} onChange={(event) => patchTournamentForm({ rulesText: event.target.value })} /></label>
                   </div>
                   <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>

@@ -392,7 +392,7 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
   return pdf;
 }
 
-function downloadRulesFile(tournament: (typeof tournaments)[number]) {
+async function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
   const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
   const isPdfSource = /^data:application\/pdf/i.test(uploadedRulesPdf) || /^https?:\/\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf) || /^\/media\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf);
@@ -400,9 +400,27 @@ function downloadRulesFile(tournament: (typeof tournaments)[number]) {
     window.alert("Rules PDF is not uploaded for this tournament.");
     return;
   }
+  const filename = uploadedRulesPdf.split("/").pop()?.split("?")[0] || `${tournament.slug}-rules-and-conditions.pdf`;
+  if (/^https?:\/\//i.test(uploadedRulesPdf)) {
+    const response = await fetch(uploadedRulesPdf);
+    if (!response.ok) {
+      window.alert("Rules PDF could not be downloaded.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 300);
+    return;
+  }
   const link = document.createElement("a");
   link.href = uploadedRulesPdf;
-  link.download = uploadedRulesPdf.split("/").pop() || `${tournament.slug}-rules-and-conditions.pdf`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();

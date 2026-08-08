@@ -134,8 +134,8 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   }
 }
 
-export async function uploadFile(file: File, token?: string | null): Promise<{ filename: string; originalName?: string; size: number; url: string }> {
-  beginGlobalLoading();
+export async function uploadFile(file: File, token?: string | null, options: { silent?: boolean } = {}): Promise<{ filename: string; originalName?: string; size: number; url: string }> {
+  if (!options.silent) beginGlobalLoading();
   try {
     const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
     const requestToken = token ?? storedToken;
@@ -153,6 +153,6 @@ export async function uploadFile(file: File, token?: string | null): Promise<{ f
     const url = /^https?:\/\//i.test(payload.data.url) ? payload.data.url : `${API_BASE_URL}${payload.data.url.replace(/^\/api\/v1/, "")}`;
     return { ...payload.data, url };
   } finally {
-    endGlobalLoading();
+    if (!options.silent) endGlobalLoading();
   }
 }

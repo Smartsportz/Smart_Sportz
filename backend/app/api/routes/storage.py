@@ -34,4 +34,6 @@ def get_file(filename: str):
         raise HTTPException(status_code=400, detail="Invalid file path")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
+    if target.suffix.lower() == ".pdf":
+        return FileResponse(target, media_type="application/pdf", filename=filename, content_disposition_type="attachment")
     return FileResponse(target)
