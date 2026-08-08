@@ -6,18 +6,9 @@ import { managementSidebar, sidebar, sportHomeVisibility, sports, tournaments, u
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
-import { apiRequest } from "../lib/api";
+import { apiRequest, uploadFile } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 const userContent = {
   profile: ["Identity verification", "Captain and player details", "Emergency contact", "Document upload"],
@@ -463,8 +454,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
         { method: editingTournament ? "PATCH" : "POST", body: JSON.stringify(payload) },
         token,
       );
-      const refreshed = await apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token);
-      setSectionRecords(refreshed);
+      setSectionRecords((current) => [saved, ...current.filter((item) => item.slug !== (editingTournament?.slug ?? saved.slug))]);
+      void apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token).then(setSectionRecords).catch(() => undefined);
       setEditingTournament(saved);
       setTournamentForm(formFromTournament(saved));
       setManagerMessage(`${saved.name} saved. You can continue editing or confirm the next publishing step.`);
@@ -742,7 +733,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                         <option value="__custom__">Custom text path</option>
                       </select>
                     </label>
-                    <label>Image text path<input type="text" value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/cricket-stadium.png" /></label>
+                    <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchTournamentForm({ image: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
                   </div>
                   <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
                   <div className="manager-form-split">
@@ -771,7 +762,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                   <div className="form-grid">
                     <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
                     <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
-                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((rulesPdf) => patchTournamentForm({ rulesPdf })); }} /></label>
+                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
                     <label>Rules acceptance text<textarea value={tournamentForm.rulesText} onChange={(event) => patchTournamentForm({ rulesText: event.target.value })} /></label>
                   </div>
                   <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>

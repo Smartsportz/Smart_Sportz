@@ -7,7 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { logRows, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
-import { apiRequest } from "../lib/api";
+import { apiRequest, uploadFile } from "../lib/api";
 import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 
@@ -497,7 +497,8 @@ function AdminTournamentsDbPanel() {
         { method: editing ? "PATCH" : "POST", body: JSON.stringify(payload) }, 
         token,
       );
-      await loadTournaments();
+      setRecords((current) => [saved, ...current.filter((item) => item.slug !== (editing?.slug ?? saved.slug))]);
+      void loadTournaments();
       setEditing(saved);
       setSavedTournament(saved);
       setForm(adminFormFromTournament(saved));
@@ -708,11 +709,11 @@ function AdminTournamentsDbPanel() {
               <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
               <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) void fileToDataUrl(file).then((image) => patchForm({ image }));
+                if (file) void uploadFile(file, token).then((upload) => patchForm({ image: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload tournament image."));
               }} /></label>
               <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) void fileToDataUrl(file).then((poster) => patchForm({ poster }));
+                if (file) void uploadFile(file, token).then((upload) => patchForm({ poster: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload tournament poster."));
               }} /></label>
             </div>
             <section className="mini-table-card manager-allocation-card">
@@ -731,8 +732,6 @@ function AdminTournamentsDbPanel() {
                 </div>
               ) : <p className="empty-line">No manager accounts found. Create managers from Admin &gt; Managers first.</p>}
             </section>
-            <label>Selected image path<input value={form.image} readOnly /></label>
-            <label>Selected poster path<input value={form.poster} readOnly /></label>
             <label>Full address<textarea value={form.address} onChange={(event) => patchForm({ address: event.target.value })} /></label>
             <div className="manager-form-split">
               <section className="mini-table-card">
@@ -753,7 +752,7 @@ function AdminTournamentsDbPanel() {
             <div className="form-grid">
               <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) void fileToDataUrl(file).then((rulesPdf) => patchForm({ rulesPdf }));
+                if (file) void uploadFile(file, token).then((upload) => patchForm({ rulesPdf: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload rules PDF."));
               }} /></label>
               <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} placeholder="Rules shown in the registration acceptance step." /></label>
             </div>
@@ -1778,7 +1777,7 @@ export function AdminTournamentEditorPage() {
                   <label>Title<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Upcoming tournament title" /></label>
                 <label>Image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) void fileToDataUrl(file).then((image) => patchForm({ image }));
+                    if (file) void uploadFile(file, token).then((upload) => patchForm({ image: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload tournament image."));
                   }} /></label>
                   <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short upcoming tournament description" /></label>
                 </div>
@@ -1803,16 +1802,14 @@ export function AdminTournamentEditorPage() {
                   <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
                   <label>Min age<input type="number" value={form.minAge} onChange={(event) => patchForm({ minAge: Number(event.target.value) })} /></label>
                   <label>Max age<input type="number" value={form.maxAge} onChange={(event) => patchForm({ maxAge: Number(event.target.value) })} /></label>
-                  <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((image) => patchForm({ image })); }} /></label>
-                  <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((poster) => patchForm({ poster })); }} /></label>
+                  <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchForm({ image: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
+                  <label>Tournament poster<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchForm({ poster: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload tournament poster.")); }} /></label>
                   <label>Manager allocation
                     <select multiple value={form.assignedManagerIds} onChange={(event) => patchForm({ assignedManagerIds: Array.from(event.target.selectedOptions).map((option) => option.value) })}>
                       {managers.map((manager) => <option value={manager.id} key={manager.id}>{manager.name} - {manager.email}</option>)}
                     </select>
                   </label>
                 </div>
-                <label>Selected image path<input value={form.image} readOnly /></label>
-                <label>Selected poster path<input value={form.poster} readOnly /></label>
                 <label>Full address<textarea value={form.address} onChange={(event) => patchForm({ address: event.target.value })} /></label>
                 <div className="manager-form-split">
                   <section className="mini-table-card">
@@ -1829,7 +1826,7 @@ export function AdminTournamentEditorPage() {
                 <div className="form-grid">
                   <label>Sport description<textarea value={form.sportDescription} onChange={(event) => patchForm({ sportDescription: event.target.value })} /></label>
                   <label>Tournament description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} /></label>
-                  <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((rulesPdf) => patchForm({ rulesPdf })); }} /></label>
+                  <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token).then((upload) => patchForm({ rulesPdf: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
                   <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} /></label>
                 </div>
                 <div className="admin-flow-checks">
