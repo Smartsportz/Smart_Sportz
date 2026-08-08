@@ -112,6 +112,23 @@ class BracketSavePayload(BaseModel):
     audit_reason: str = Field(default="Manager saved bracket workspace", max_length=300)
 
 
+class GroupBracketMatchPayload(BaseModel):
+    id: str | None = Field(default=None, max_length=120)
+    round: str = Field(min_length=1, max_length=80)
+    team_1: str = Field(default="", max_length=160)
+    team_2: str = Field(default="", max_length=160)
+    starts_at: str = Field(default="", max_length=80)
+    ends_at: str = Field(default="", max_length=80)
+    status: str = Field(default="upcoming", pattern="^(upcoming|live|completed)$")
+    sort_order: int = Field(default=1, ge=1, le=500)
+
+
+class GroupBracketSavePayload(BaseModel):
+    matches: list[GroupBracketMatchPayload] = Field(default_factory=list, max_length=500)
+    publish: bool = True
+    audit_reason: str = Field(default="Saved group bracket table", max_length=300)
+
+
 class WinnerAdvancePayload(BaseModel):
     winner_team: str = Field(min_length=2, max_length=120)
     target_node_id: str

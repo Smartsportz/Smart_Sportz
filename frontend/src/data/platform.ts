@@ -534,7 +534,7 @@ export const dashboardStats = [
 export const sidebar = [
   { label: "Dashboard", path: "/admin/dashboard", icon: BarChart3 },
   { label: "Tournaments", path: "/admin/tournaments", icon: Trophy },
-  { label: "Bracket Workspace", path: "/admin/bracket-workspace", icon: Zap },
+  { label: "Group Bracket", path: "/admin/group-bracket", icon: Zap },
   { label: "Users", path: "/admin/users", icon: Users },
   { label: "Managers", path: "/admin/managers", icon: ShieldCheck },
   { label: "Roles", path: "/admin/roles", icon: ShieldCheck, hidden: true },
@@ -561,7 +561,7 @@ export const managementSidebar = [
   { label: "Tournaments", path: "/management/tournaments", icon: Trophy },
   { label: "Registrations", path: "/management/registrations", icon: FileText },
   { label: "Matches", path: "/management/matches", icon: Activity },
-  { label: "Bracket Workspace", path: "/management/tournaments/bangalore-corporate-t20/bracket", icon: Zap },
+  { label: "Group Bracket", path: "/management/group-bracket", icon: Zap },
   { label: "Players", path: "/management/players", icon: Users },
   { label: "Announcements", path: "/management/announcements", icon: FileText },
   { label: "News", path: "/management/news", icon: GalleryHorizontal },

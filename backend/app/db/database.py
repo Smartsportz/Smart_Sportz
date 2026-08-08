@@ -34,6 +34,7 @@ OPERATIONAL_TABLE_ORDER = [
     "payment_intents",
     "bracket_nodes",
     "bracket_connections",
+    "group_bracket_matches",
     "notification_events",
     "cms_content",
     "news_posts",

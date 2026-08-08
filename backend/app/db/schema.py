@@ -260,6 +260,22 @@ CREATE TABLE IF NOT EXISTS bracket_round_schedules (
   FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
 );
 
+CREATE TABLE IF NOT EXISTS group_bracket_matches (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  round TEXT NOT NULL,
+  team_1 TEXT NOT NULL DEFAULT '',
+  team_2 TEXT NOT NULL DEFAULT '',
+  starts_at TEXT NOT NULL DEFAULT '',
+  ends_at TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
 CREATE TABLE IF NOT EXISTS home_discovery_cards (
   slug TEXT PRIMARY KEY,
   label TEXT NOT NULL,
@@ -533,6 +549,7 @@ CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, id);
 CREATE INDEX IF NOT EXISTS idx_bracket_nodes_tournament ON bracket_nodes(tournament_slug, x, y);
 CREATE INDEX IF NOT EXISTS idx_bracket_connections_tournament ON bracket_connections(tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_bracket_round_schedules_tournament ON bracket_round_schedules(tournament_slug, round);
+CREATE INDEX IF NOT EXISTS idx_group_bracket_matches_tournament ON group_bracket_matches(tournament_slug, sort_order);
 """
 
 
@@ -694,6 +711,21 @@ CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(publishe
 CREATE INDEX IF NOT EXISTS idx_announcements_created_by ON announcements(created_by);
 CREATE INDEX IF NOT EXISTS idx_announcements_city ON announcements(city);
 CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
+CREATE TABLE IF NOT EXISTS group_bracket_matches (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  round TEXT NOT NULL,
+  team_1 TEXT NOT NULL DEFAULT '',
+  team_2 TEXT NOT NULL DEFAULT '',
+  starts_at TEXT NOT NULL DEFAULT '',
+  ends_at TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_group_bracket_matches_tournament ON group_bracket_matches(tournament_slug, sort_order);
 
 """)
         live_match_columns = {

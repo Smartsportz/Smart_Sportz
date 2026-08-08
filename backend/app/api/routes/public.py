@@ -219,6 +219,13 @@ def tournament_bracket(slug: str):
             "nodes": rows("SELECT id, label, team, round, x, y, status, bucket, scheduled_at FROM bracket_nodes WHERE tournament_slug = ? ORDER BY bucket, x, y", (slug,)),
             "connections": rows("SELECT id, source_id, target_id FROM bracket_connections WHERE tournament_slug = ?", (slug,)),
             "roundSchedules": rows("SELECT round, bucket, scheduled_at FROM bracket_round_schedules WHERE tournament_slug = ? ORDER BY round, bucket", (slug,)),
+            "matches": rows(
+                """SELECT id, round, team_1, team_2, starts_at, ends_at, status, sort_order
+                   FROM group_bracket_matches
+                   WHERE tournament_slug = ? AND published = 1
+                   ORDER BY sort_order, round""",
+                (slug,),
+            ),
         }
 
     return ok(get_or_set_json(cache_key("public:bracket", slug), build))

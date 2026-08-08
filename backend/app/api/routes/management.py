@@ -11,7 +11,7 @@ from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
 from app.services.notifications import send_sms_message, send_whatsapp_message
@@ -322,7 +322,7 @@ def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("
     for post in rows("SELECT slug FROM news_posts WHERE tournament_slug = ?", (tournament_slug,)):
         execute("DELETE FROM news_blocks WHERE post_slug = ?", (post["slug"],))
         execute("DELETE FROM news_social WHERE news_slug = ?", (post["slug"],))
-    for table in ["registrations", "payment_intents", "news_posts", "tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_round_schedules", "bracket_connections", "bracket_nodes", "notification_events"]:
+    for table in ["registrations", "payment_intents", "news_posts", "tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_round_schedules", "group_bracket_matches", "bracket_connections", "bracket_nodes", "notification_events"]:
         execute(f"DELETE FROM {table} WHERE tournament_slug = ?", (tournament_slug,))
     execute("DELETE FROM tournaments WHERE slug = ?", (tournament_slug,))
     log(user["email"], "tournament_deleted", "tournament", tournament_slug, f"Deleted {item['name']}")
@@ -543,6 +543,69 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
         "roundSchedules": rows("SELECT round, bucket, scheduled_at FROM bracket_round_schedules WHERE tournament_slug = ? ORDER BY round, bucket", (tournament_slug,)),
         "notifications": rows("SELECT * FROM notification_events WHERE tournament_slug = ? ORDER BY created_at DESC LIMIT 10", (tournament_slug,)),
     })
+
+
+@router.get("/group-brackets/{tournament_slug}")
+def group_bracket_workspace(tournament_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    accepted = rows(
+        """SELECT id, team_name AS name, captain_name, status
+           FROM registrations
+           WHERE tournament_slug = ? AND status = 'accepted'
+           ORDER BY created_at""",
+        (tournament_slug,),
+    )
+    return ok({
+        "tournament": item,
+        "acceptedTeams": accepted,
+        "matches": rows(
+            """SELECT id, round, team_1, team_2, starts_at, ends_at, status, sort_order, published
+               FROM group_bracket_matches
+               WHERE tournament_slug = ?
+               ORDER BY sort_order, round""",
+            (tournament_slug,),
+        ),
+        "notifications": rows("SELECT * FROM notification_events WHERE tournament_slug = ? ORDER BY created_at DESC LIMIT 10", (tournament_slug,)),
+    })
+
+
+@router.post("/group-brackets/{tournament_slug}/save")
+def save_group_bracket(tournament_slug: str, payload: GroupBracketSavePayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    execute("DELETE FROM group_bracket_matches WHERE tournament_slug = ?", (tournament_slug,))
+    timestamp = datetime.now(timezone.utc).isoformat()
+    statements: list[tuple[str, tuple]] = []
+    for index, match in enumerate(payload.matches, start=1):
+        statements.append((
+            """INSERT INTO group_bracket_matches(
+              id, tournament_slug, round, team_1, team_2, starts_at, ends_at,
+              status, sort_order, published, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                match.id or f"gbm_{uuid4().hex[:12]}",
+                tournament_slug,
+                match.round,
+                match.team_1,
+                match.team_2,
+                match.starts_at,
+                match.ends_at,
+                match.status,
+                match.sort_order or index,
+                int(payload.publish),
+                timestamp,
+                timestamp,
+            ),
+        ))
+    if statements:
+        execute_many(statements)
+    log(user["email"], "group_bracket_saved", "tournament", tournament_slug, payload.audit_reason)
+    return group_bracket_workspace(tournament_slug, user)
 
 
 @router.post("/brackets/{tournament_slug}/save")

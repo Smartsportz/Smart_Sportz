@@ -811,6 +811,12 @@ textarea { width: 100%; min-height: 112px; padding: 12px 14px; border: 1px solid
 .detail-score span { font-size: clamp(30px, 5vw, 54px); }
 .table-actions { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .table-actions a, .table-actions button { border: 0; padding: 0; background: transparent; color: var(--primary-dark); font-weight: 800; cursor: pointer; }
+.group-bracket-table { display: grid; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.group-bracket-head,
+.group-bracket-row { display: grid; grid-template-columns: 150px 180px 180px 190px 190px 150px 70px; gap: 8px; align-items: center; min-width: 1130px; }
+.group-bracket-head { color: var(--muted); font-size: .78rem; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.group-bracket-row input,
+.group-bracket-row select { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; background: #fff; color: var(--ink); }
 .sport-tournament-sections { display: grid; gap: 34px; margin: 34px 0; }
 .status-section { display: grid; gap: 16px; }
 .section-title.compact { margin-bottom: 0; }

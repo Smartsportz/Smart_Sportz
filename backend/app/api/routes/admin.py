@@ -498,6 +498,7 @@ def delete_tournament(
         "tournament_cities",
         "tournament_manager_assignments",
         "bracket_round_schedules",
+        "group_bracket_matches",
         "bracket_connections",
         "bracket_nodes",
         "notification_events"

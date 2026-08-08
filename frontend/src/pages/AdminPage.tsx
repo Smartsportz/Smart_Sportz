@@ -1108,8 +1108,9 @@ function AdminCmsDbPanel() {
 
   // Table rows for Discovery Cards
   const discoveryRows = homeContent.discoveryCards.map((item) => [
-    <span><b>{item.title || item.label || "Untitled"}</b><small style={{display: 'block', opacity: 0.7}}>{item.sport || "No sport"}</small></span>,
-    item.tournament_slug || "-",
+    item.title || item.label || "Untitled",
+    "Homepage discovery card",
+    item.register_path || `/discover/${item.slug}`,
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
       <Link to={`/admin/cms/edit/discovery/${item.slug}`}><EditIcon size={14} /> Edit</Link>
@@ -1119,8 +1120,9 @@ function AdminCmsDbPanel() {
 
   // Table rows for Live Highlights
   const liveHighlightRows = homeContent.liveHighlights.map((item) => [
-    <span><b>{item.title || "Untitled"}</b><small style={{display: 'block', opacity: 0.7}}>{item.home_team} vs {item.away_team}</small></span>,
-    item.stage_label || "-",
+    item.title || "Untitled",
+    "Homepage live highlight",
+    item.link_path || "/live",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
       <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><EditIcon size={14} /> Edit</Link>
@@ -1130,7 +1132,8 @@ function AdminCmsDbPanel() {
 
   // Table rows for Sponsor Logos
   const sponsorRows = homeContent.sponsorLogos.map((item) => [
-    <span><b>{item.name || "Untitled"}</b></span>,
+    item.name || "Untitled",
+    "Sponsor company logo",
     item.link_url || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
@@ -1202,7 +1205,7 @@ function AdminCmsDbPanel() {
             </div>
           ) : (
             <DataTable
-              columns={["Card", "Tournament", "Status", "Action"]}
+              columns={["Section", "Type", "Path", "Status", "Action"]}
               rows={discoveryRows}
             />
           )}
@@ -1224,7 +1227,7 @@ function AdminCmsDbPanel() {
             </div>
           ) : (
             <DataTable
-              columns={["Match", "Stage", "Status", "Action"]}
+              columns={["Section", "Type", "Path", "Status", "Action"]}
               rows={liveHighlightRows}
             />
           )}
@@ -1246,7 +1249,7 @@ function AdminCmsDbPanel() {
             </div>
           ) : (
             <DataTable
-              columns={["Sponsor", "Link", "Status", "Action"]}
+              columns={["Section", "Type", "Path", "Status", "Action"]}
               rows={sponsorRows}
             />
           )}
