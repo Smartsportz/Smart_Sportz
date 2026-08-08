@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronRight, Search, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, ChevronRight, Download, Search, Settings } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -250,10 +250,12 @@ export function TournamentCard({ item }: { item: any }) {
         ? "Live tournament in progress"
         : `Registration closed ${tournament.registrationEnd}`;
   const destination = `/tournaments/${item.slug}`;
-  const actionLabel = "View details";
+  const actionLabel = canRegister || isUpcoming ? "View details" : "Rounds";
   const minAge = Number((item as any).minAge ?? (item as any).min_age ?? 0);
   const maxAge = Number((item as any).maxAge ?? (item as any).max_age ?? 0);
   const ageLabel = minAge && maxAge ? `${minAge}-${maxAge} yrs` : minAge ? `${minAge}+ yrs` : maxAge ? `Up to ${maxAge} yrs` : "Open age";
+  const publishedMatchCount = Number(item.published_match_count ?? item.publishedMatchCount ?? 0);
+  const publishedRoundCount = Number(item.published_round_count ?? item.publishedRoundCount ?? 0);
 
   return (
     <Link to={destination} className="click-card">
@@ -267,7 +269,7 @@ export function TournamentCard({ item }: { item: any }) {
         <div className="card-meta">
           <span>{tournament.teams}/{tournament.capacity} teams</span>
           <span>{tournament.prize}</span>
-          <span>{ageLabel}</span>
+          <span>{publishedMatchCount > 0 ? `${publishedMatchCount} match${publishedMatchCount === 1 ? "" : "es"} / ${publishedRoundCount || 1} round${(publishedRoundCount || 1) === 1 ? "" : "s"}` : ageLabel}</span>
         </div>
         <span className="inline-link">{actionLabel} <ChevronRight size={16} /></span>
       </div>
@@ -291,13 +293,64 @@ export function LiveMatchCard({ match }: { match: any }) {
   );
 }
 
+function cellText(value: React.ReactNode): string {
+  if (value === null || value === undefined || typeof value === "boolean") return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(cellText).join(" ").trim();
+  if (typeof value === "object" && "props" in value) return cellText((value as React.ReactElement<any>).props.children);
+  return "";
+}
+
+function downloadTableCsv(columns: string[], rows: Array<Array<React.ReactNode>>) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const csv = [
+    columns.map(escape).join(","),
+    ...rows.map((row) => columns.map((_, index) => escape(cellText(row[index]))).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `smart-sportz-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<React.ReactNode>> }) {
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+
+  useEffect(() => {
+    const update = () => setScrollWidth(tableRef.current?.scrollWidth ?? 0);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [rows, columns]);
+
+  function syncScroll(source: "top" | "body") {
+    const top = topScrollRef.current;
+    const body = bodyScrollRef.current;
+    if (!top || !body) return;
+    if (source === "top") body.scrollLeft = top.scrollLeft;
+    else top.scrollLeft = body.scrollLeft;
+  }
+
   return (
     <div className="table-wrap">
-      <table>
-        <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
-      </table>
+      {rows.length > 0 && (
+        <div className="table-export-actions">
+          <button type="button" onClick={() => downloadTableCsv(columns, rows)}><Download size={16} /> Download</button>
+        </div>
+      )}
+      <div className="table-scroll-top" ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
+      <div className="table-scroll-body" ref={bodyScrollRef} onScroll={() => syncScroll("body")}>
+        <table ref={tableRef}>
+          <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
+          <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </div>
   );
 }

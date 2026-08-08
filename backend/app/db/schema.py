@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS tournaments (
   address TEXT NOT NULL DEFAULT '',
   sport_description TEXT NOT NULL DEFAULT '',
   tournament_description TEXT NOT NULL DEFAULT '',
+  rules_pdf TEXT NOT NULL DEFAULT '',
+  rules_text TEXT NOT NULL DEFAULT '',
   fee_breakdown_json TEXT NOT NULL DEFAULT '[]',
   show_on_home INTEGER NOT NULL DEFAULT 1,
   block_repeat_registration INTEGER NOT NULL DEFAULT 0
@@ -258,6 +260,22 @@ CREATE TABLE IF NOT EXISTS bracket_round_schedules (
   FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
 );
 
+CREATE TABLE IF NOT EXISTS group_bracket_matches (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  round TEXT NOT NULL,
+  team_1 TEXT NOT NULL DEFAULT '',
+  team_2 TEXT NOT NULL DEFAULT '',
+  starts_at TEXT NOT NULL DEFAULT '',
+  ends_at TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
+);
+
 CREATE TABLE IF NOT EXISTS home_discovery_cards (
   slug TEXT PRIMARY KEY,
   label TEXT NOT NULL,
@@ -297,6 +315,14 @@ CREATE TABLE IF NOT EXISTS sponsor_logos (
   name TEXT NOT NULL,
   image TEXT NOT NULL,
   link_url TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS home_organizer_cards (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 1,
   published INTEGER NOT NULL DEFAULT 1
 );
@@ -405,6 +431,21 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   message TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  image TEXT,
+  date_from TEXT,
+  date_to TEXT,
+  published INTEGER DEFAULT 1,
+  created_by TEXT,
+  city TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
 """
 
 MIRROR_METADATA_SCHEMA = """
@@ -464,6 +505,29 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
   message TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+-- Create announcements table
+CREATE TABLE IF NOT EXISTS announcements (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    image TEXT,
+    date_from TEXT,
+    date_to TEXT,
+    published INTEGER DEFAULT 1,
+    created_by TEXT,
+    city TEXT,
+    created_at TEXT,
+    updated_at TEXT,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(published);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_by ON announcements(created_by);
+CREATE INDEX IF NOT EXISTS idx_announcements_city ON announcements(city);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
+
 """
 
 INDEX_SCHEMA = """
@@ -493,6 +557,7 @@ CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, id);
 CREATE INDEX IF NOT EXISTS idx_bracket_nodes_tournament ON bracket_nodes(tournament_slug, x, y);
 CREATE INDEX IF NOT EXISTS idx_bracket_connections_tournament ON bracket_connections(tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_bracket_round_schedules_tournament ON bracket_round_schedules(tournament_slug, round);
+CREATE INDEX IF NOT EXISTS idx_group_bracket_matches_tournament ON group_bracket_matches(tournament_slug, sort_order);
 """
 
 
@@ -557,6 +622,8 @@ def _apply_operational_schema(path=None) -> None:
             "address": "TEXT NOT NULL DEFAULT ''",
             "sport_description": "TEXT NOT NULL DEFAULT ''",
             "tournament_description": "TEXT NOT NULL DEFAULT ''",
+            "rules_pdf": "TEXT NOT NULL DEFAULT ''",
+            "rules_text": "TEXT NOT NULL DEFAULT ''",
             "fee_breakdown_json": "TEXT NOT NULL DEFAULT '[]'",
             "show_on_home": "INTEGER NOT NULL DEFAULT 1",
             "block_repeat_registration": "INTEGER NOT NULL DEFAULT 0",
@@ -629,12 +696,52 @@ CREATE TABLE IF NOT EXISTS sponsor_logos (
   sort_order INTEGER NOT NULL DEFAULT 1,
   published INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS home_organizer_cards (
+  slug TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS news_social (
   news_slug TEXT PRIMARY KEY,
   likes INTEGER NOT NULL DEFAULT 0,
   comments_json TEXT NOT NULL DEFAULT '[]',
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  image TEXT,
+  date_from TEXT,
+  date_to TEXT,
+  published INTEGER DEFAULT 1,
+  created_by TEXT,
+  city TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_announcements_published ON announcements(published);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_by ON announcements(created_by);
+CREATE INDEX IF NOT EXISTS idx_announcements_city ON announcements(city);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_at ON announcements(created_at);
+CREATE TABLE IF NOT EXISTS group_bracket_matches (
+  id TEXT PRIMARY KEY,
+  tournament_slug TEXT NOT NULL,
+  round TEXT NOT NULL,
+  team_1 TEXT NOT NULL DEFAULT '',
+  team_2 TEXT NOT NULL DEFAULT '',
+  starts_at TEXT NOT NULL DEFAULT '',
+  ends_at TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'upcoming',
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  published INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_group_bracket_matches_tournament ON group_bracket_matches(tournament_slug, sort_order);
+
 """)
         live_match_columns = {
             "youtube_url": "TEXT NOT NULL DEFAULT ''",

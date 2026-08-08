@@ -1,5 +1,5 @@
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, ExternalLink, FileText, ImagePlus, Printer, ShieldCheck, Smartphone, Trophy, Upload, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, ExternalLink, FileText, Printer, ShieldCheck, Smartphone, Trophy, Upload, UserPlus, Users } from "lucide-react";
 import { Page } from "../components/UI";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -8,6 +8,7 @@ import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
 import { useAuth } from "../auth/AuthContext";
+import * as XLSX from "xlsx";
 
 type SavedDocument = {
   documentType: string;
@@ -173,28 +174,16 @@ function teamGroupImageDocument(restored: SavedDocument[] | undefined): SavedDoc
   return [match ?? { documentType: "Team Group Image", fileName: "", filePath: "", status: "required" }];
 }
 
-function jerseySvg(label: string, color: string) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
-      <rect width="320" height="220" rx="26" fill="#f5fbf6"/>
-      <path d="M111 31h98l22 18 34 12-17 35-25-8v96H77V88l-25 8-17-35 34-12 22-18z" fill="${color}" stroke="#0b1b33" stroke-width="6" />
-      <path d="M121 31c10 18 24 26 39 26s29-8 39-26" fill="none" stroke="#0b1b33" stroke-width="6" stroke-linecap="round"/>
-      <text x="160" y="188" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="700" fill="#0b1b33">${label}</text>
-    </svg>
-  `;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
-const jerseyOptions = [
-  { label: "Home", image: jerseySvg("Home", "#0b8852") },
-  { label: "Away", image: jerseySvg("Away", "#1d4ed8") },
-  { label: "Third", image: jerseySvg("Third", "#ea580c") },
-  { label: "Classic", image: jerseySvg("Classic", "#7c3aed") },
-];
-
-function jerseyDisplayName(value: string) {
-  return jerseyOptions.find((jersey) => jersey.image === value)?.label ?? "Selected team kit";
-}
+const jerseySizeOptions = ["XS", "S", "M", "L", "XL"];
 
 function completedRecordFromBackend(registration: BackendRegistration, tournament: any) {
   const payment = registration.payments?.[0];
@@ -247,14 +236,19 @@ function completedRecordFromBackend(registration: BackendRegistration, tournamen
   };
 }
 
-function amountForTournament(slug: string) {
-  if (slug.includes("corporate")) return 129900;
-  if (slug.includes("football")) return 349900;
-  return 517900;
+function amountForTournament(_slug: string, tournament?: Record<string, any>) {
+  const feeLines = Array.isArray(tournament?.feeBreakdown)
+    ? tournament?.feeBreakdown
+    : Array.isArray(tournament?.fee_breakdown)
+      ? tournament?.fee_breakdown
+      : [];
+  const feeTotal = feeLines.reduce((total: number, line: any) => total + Number(line?.value || 0), 0);
+  if (feeTotal > 0) return feeTotal * 100;
+  return 0;
 }
 
 function totalPayableForAmount(amount: number) {
-  return amount + Math.round(amount * 0.18);
+  return amount;
 }
 
 function formatInr(cents: number) {
@@ -288,20 +282,12 @@ function buildAppUpiLinks(upiIntent: string) {
   ];
 }
 
-function prizePoolAmount(prize: string) {
-  const number = Number(prize.replace(/[^\d]/g, ""));
-  return Number.isFinite(number) ? number * 100 : 0;
-}
-
-function prizeBreakdown(prize: string) {
-  const total = prizePoolAmount(prize);
-  const first = Math.round(total * 0.6);
-  const second = Math.round(total * 0.3);
-  return [
-    { label: "1st Prize", amount: first },
-    { label: "2nd Prize", amount: second },
-    { label: "3rd Prize", amount: total - first - second },
-  ];
+function tournamentPrizeLines(tournament: Record<string, any>) {
+  return Array.isArray(tournament.prizes)
+    ? tournament.prizes
+        .map((line: any) => ({ label: String(line?.label ?? `${line?.position ?? ""} Prize`).trim(), amount: Number(line?.amount || 0) }))
+        .filter((line) => line.label && line.amount > 0)
+    : [];
 }
 
 function formatFileSize(size?: number) {
@@ -320,7 +306,24 @@ function tournamentAgeRange(tournament: (typeof tournaments)[number]) {
   return "Open age category";
 }
 
+function isAgeInRange(age: number, tournament: (typeof tournaments)[number]): boolean {
+  const minAge = Number((tournament as any).minAge ?? (tournament as any).min_age ?? 0);
+  const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
+  if (minAge && maxAge) return age >= minAge && age <= maxAge;
+  if (minAge) return age >= minAge;
+  if (maxAge) return age <= maxAge;
+  return true;
+}
+
 function tournamentRulesText(tournament: (typeof tournaments)[number]) {
+  const customRules = String((tournament as any).rulesText ?? (tournament as any).rules_text ?? "").trim();
+  if (customRules) {
+    return [
+      `${tournament.name} - Rules And Conditions`,
+      "",
+      customRules,
+    ].join("\n");
+  }
   const description = (tournament as any).tournamentDescription || `${tournament.name} follows SmartSportz registration, roster verification, payment, fair-play, and event operations rules.`;
   return [
     `${tournament.name} - Rules And Conditions`,
@@ -389,26 +392,79 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
   return pdf;
 }
 
-function downloadRulesFile(tournament: (typeof tournaments)[number]) {
+async function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
-  const blob = new Blob([buildRulesPdf(tournament)], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
+  const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
+  const isPdfSource = /^data:application\/pdf/i.test(uploadedRulesPdf) || /^https?:\/\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf) || /^\/media\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf);
+  if (!uploadedRulesPdf || !isPdfSource) {
+    window.alert("Rules PDF is not uploaded for this tournament.");
+    return;
+  }
+  const filename = uploadedRulesPdf.split("/").pop()?.split("?")[0] || `${tournament.slug}-rules-and-conditions.pdf`;
+  if (/^https?:\/\//i.test(uploadedRulesPdf)) {
+    const response = await fetch(uploadedRulesPdf);
+    if (!response.ok) {
+      window.alert("Rules PDF could not be downloaded.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 300);
+    return;
+  }
   const link = document.createElement("a");
-  link.href = url;
-  link.download = `${tournament.slug}-rules-and-conditions.pdf`;
+  link.href = uploadedRulesPdf;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 300);
+}
+
+function downloadSampleExcel() {
+  const sampleData = [
+    { sno: 1, name: "John Doe", age: 25, size: "L" },
+    { sno: 2, name: "Jane Smith", age: 24, size: "M" },
+    { sno: 3, name: "Mike Johnson", age: 26, size: "XL" },
+    { sno: 4, name: "Sarah Williams", age: 23, size: "S" },
+    { sno: 5, name: "David Brown", age: 27, size: "M" },
+  ];
+  
+  const ws = XLSX.utils.json_to_sheet(sampleData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Players");
+  
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 8 },  // sno
+    { wch: 20 }, // name
+    { wch: 10 }, // age
+    { wch: 10 }  // size
+  ];
+  
+  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'import_player_sample.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
   const wizard = ["Tournament", "Team Details", "Payment", "Confirmation"];
-  // Map index for custom 4-step wizard
   let displayIndex = activeIndex;
-  if (activeIndex >= 1) displayIndex = 1; // Team & Players
-  if (activeIndex === 4) displayIndex = 2; // Payment
-  if (activeIndex === 5) displayIndex = 3; // Confirmation
+  if (activeIndex >= 1) displayIndex = 1;
+  if (activeIndex === 4) displayIndex = 2;
+  if (activeIndex === 5) displayIndex = 3;
 
   return (
     <div className="registration-stepper" aria-label="Registration progress">
@@ -423,14 +479,12 @@ function RegistrationStepper({ activeIndex }: { activeIndex: number }) {
 }
 
 function RegistrationShell({ children }: { children: React.ReactNode }) {
-  return (
-    <>{children}</>
-  );
+  return <>{children}</>;
 }
 
-function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: (typeof tournaments)[number]; amount: number; showTimeline?: boolean }) {
-  const fees = Math.round(amount * 0.18);
+function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: Record<string, any>; amount: number; showTimeline?: boolean }) {
   const total = totalPayableForAmount(amount);
+  const prizes = tournamentPrizeLines(tournament);
   return (
     <aside className="registration-side">
       <section className="registration-summary-card">
@@ -447,18 +501,17 @@ function RegistrationSummary({ tournament, amount, showTimeline = false }: { tou
         </div>
         <div className="summary-lines">
           <p><span>Venue</span><b>{tournament.location}</b></p>
-          <p><span>Prize Pool</span><b>{tournament.prize}</b></p>
           <p><span>Slots</span><b>{String(tournament.teams).padStart(2, "0")}/{tournament.capacity} Filled</b></p>
         </div>
-        <div className="prize-split">
-          {prizeBreakdown(tournament.prize).map((item) => <p key={item.label}><span>{item.label}</span><b>{formatInr(item.amount)}</b></p>)}
-        </div>
+        {prizes.length > 0 && (
+          <div className="prize-split">
+            {prizes.map((item) => <p key={item.label}><span>{item.label}</span><b>{formatInr(item.amount * 100)}</b></p>)}
+          </div>
+        )}
         <div className="summary-lines total-lines">
-          <p><span>Registration Fee</span><b>{formatInr(amount)}</b></p>
-          <p><span>Platform & GST (18%)</span><b>{formatInr(fees)}</b></p>
-          <p className="payable"><span>Total Payable</span><b>{formatInr(total)}</b></p>
+          <p className="payable"><span>Registration Fee</span><b>{amount > 0 ? formatInr(total) : "Not configured"}</b></p>
         </div>
-        <button className="btn btn-secondary wide" type="button"><Download size={16} />Download Rulebook</button>
+        <button className="btn btn-secondary wide" type="button" onClick={() => downloadRulesFile(tournament as any)}><Download size={16} />Download Rulebook</button>
       </section>
       {showTimeline && (
         <section className="registration-timeline">
@@ -612,13 +665,73 @@ function parseRosterImportContent(rawText: string): ImportedRosterEntry[] {
   return imported;
 }
 
+function parseExcelFile(file: File): Promise<ImportedRosterEntry[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+        
+        const entries: ImportedRosterEntry[] = [];
+        jsonData.forEach((row: any) => {
+          const name = row.name || row.Name || row.NAME || row.player_name || "";
+          const age = String(row.age || row.Age || row.AGE || row.player_age || "");
+          const jerseySize = String(row.size || row.Size || row.SIZE || row.jersey_size || "");
+          
+          if (name && name.trim()) {
+            entries.push({
+              name: name.trim(),
+              age: age.trim(),
+              jerseySize: jerseySize.trim()
+            });
+          }
+        });
+        
+        resolve(entries);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function normalizeTournamentRecord(record: Record<string, any>, fallback: (typeof tournaments)[number]) {
+  const feeBreakdown = Array.isArray(record.fee_breakdown) ? record.fee_breakdown : Array.isArray(record.feeBreakdown) ? record.feeBreakdown : (fallback as any).feeBreakdown ?? [];
+  const prizes = Array.isArray(record.prizes) ? record.prizes : [];
+  return {
+    ...fallback,
+    ...record,
+    registrationStart: record.registration_start ?? fallback.registrationStart,
+    registrationEnd: record.registration_end ?? fallback.registrationEnd,
+    teamSize: Number(record.team_size ?? record.max_team_size ?? fallback.teamSize),
+    minAge: Number(record.min_age ?? fallback.minAge ?? 0),
+    maxAge: Number(record.max_age ?? fallback.maxAge ?? 0),
+    tournamentDescription: record.tournament_description ?? fallback.tournamentDescription,
+    sportDescription: record.sport_description ?? (fallback as any).sportDescription,
+    rulesPdf: record.rules_pdf ?? (fallback as any).rulesPdf ?? "",
+    rulesText: record.rules_text ?? (fallback as any).rulesText ?? "",
+    feeBreakdown,
+    prizes,
+    show_on_home: Boolean(record.show_on_home ?? (fallback as any).show_on_home),
+    cities: Array.isArray(record.cities) && record.cities.length ? record.cities : fallback.cities,
+  };
+}
+
 export function RegistrationPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const amount = amountForTournament(tournament.slug);
-  const savedDraft = useMemo(() => readRegistrationDraft(tournament.slug), [tournament.slug]);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const fallbackTournament = tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug };
+  const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
+  const tournament = withRuntimeTournamentStatus(remoteTournament ? normalizeTournamentRecord(remoteTournament, fallbackTournament) : fallbackTournament) as (typeof tournaments)[number];
+  const amount = amountForTournament(routeSlug, tournament);
+  const savedDraft = useMemo(() => readRegistrationDraft(routeSlug), [routeSlug]);
   const memberSlots = Array.from({ length: tournament.teamSize }, (_, index) => {
     if (index === 0) return "Captain";
     if (index === 1) return "Sub-captain";
@@ -636,7 +749,7 @@ export function RegistrationPage() {
     districtState: tournament.cities[0] ?? tournament.location,
     teamLogo: "",
     teamMotto: "",
-    selectedJersey: savedDraft?.teamDetails?.selectedJersey ?? tournament.poster ?? tournament.image,
+    selectedJersey: "",
     category: `${tournament.sport} League`,
   });
   const [members, setMembers] = useState(() => {
@@ -654,15 +767,36 @@ export function RegistrationPage() {
   const [documents, setDocuments] = useState<SavedDocument[]>(() => teamGroupImageDocument(savedDraft?.documents));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  // steps 2 and 3 are now hidden/merged into step 1
   const [activeStep, setActiveStep] = useState(() => Math.min(Math.max(savedDraft?.activeStep ?? 0, 0), 1));
   const [tournamentAccepted, setTournamentAccepted] = useState(() => savedDraft?.tournamentAccepted ?? false);
   const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [rulesScrolled, setRulesScrolled] = useState(false);
-  const [jerseyPickerOpen, setJerseyPickerOpen] = useState(false);
   const [rosterImportOpen, setRosterImportOpen] = useState(false);
   const [rosterImportText, setRosterImportText] = useState("");
   const rosterFileInputRef = useRef<HTMLInputElement | null>(null);
+  const excelFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const minAge = Number((tournament as any).minAge ?? (tournament as any).min_age ?? 0);
+  const maxAge = Number((tournament as any).maxAge ?? (tournament as any).max_age ?? 0);
+
+  useEffect(() => {
+    if (!routeSlug) return;
+    let active = true;
+    apiRequest<Record<string, any>>(`/public/tournaments/${routeSlug}`)
+      .then((item) => {
+        if (active) setRemoteTournament(item);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [routeSlug]);
+
+  useEffect(() => {
+    setMembers((current) => memberSlots.map((_, index) => current[index] ?? ""));
+    setMemberAges((current) => memberSlots.map((_, index) => current[index] ?? ""));
+    setMemberJerseySizes((current) => memberSlots.map((_, index) => current[index] ?? ""));
+  }, [memberSlots.length]);
 
   useEffect(() => {
     const draft: RegistrationDraft = {
@@ -674,8 +808,8 @@ export function RegistrationPage() {
       documents,
       tournamentAccepted,
     };
-    localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify(draft));
-  }, [activeStep, teamDetails, members, memberAges, memberJerseySizes, documents, tournamentAccepted, tournament.slug]);
+    localStorage.setItem(registrationDraftKey(routeSlug), JSON.stringify(draft));
+  }, [activeStep, teamDetails, members, memberAges, memberJerseySizes, documents, tournamentAccepted, routeSlug]);
 
   function showMissing(message: string) {
     setError(message);
@@ -696,20 +830,32 @@ export function RegistrationPage() {
     });
   }
 
-  function chooseJersey(value: string) {
-    updateTeamDetails("selectedJersey", value);
-    setJerseyPickerOpen(false);
-  }
-
   function updateDocument(index: number, file?: File) {
     const fileName = file?.name ?? "";
-    setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
-      ...item,
-      fileName,
-      fileSize: file?.size,
-      filePath: fileName ? `/local-team-images/${encodeURIComponent(fileName)}` : "",
-      status: fileName ? "uploaded" : "required",
-    } : item));
+    if (!file) {
+      setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
+        ...item,
+        fileName: "",
+        fileSize: undefined,
+        filePath: "",
+        status: "required",
+      } : item));
+      return;
+    }
+    void fileToDataUrl(file).then((filePath) => {
+      setDocuments((current) => current.map((item, itemIndex) => itemIndex === index ? {
+        ...item,
+        fileName,
+        fileSize: file.size,
+        filePath,
+        status: "uploaded",
+      } : item));
+    });
+  }
+
+  function updateMemberJerseySize(index: number, value: string) {
+    const normalized = value.trim().toUpperCase();
+    setMemberJerseySizes((current) => memberSlots.map((_, itemIndex) => itemIndex === index ? normalized : current[itemIndex] ?? ""));
   }
 
   function openRulesModal() {
@@ -718,10 +864,9 @@ export function RegistrationPage() {
     downloadRulesFile(tournament);
   }
 
-  function applyRosterImport(rawText: string) {
-    const importedRows = parseRosterImportContent(rawText);
-    if (!importedRows.length) {
-      showMissing("No roster rows were found. Paste names, ages, and jersey sizes or upload a CSV/text file.");
+  function applyRosterImport(entries: ImportedRosterEntry[]) {
+    if (!entries.length) {
+      showMissing("No roster entries were found.");
       return;
     }
 
@@ -729,7 +874,7 @@ export function RegistrationPage() {
     const nextMemberAges = [...memberAges];
     const nextMemberJerseySizes = [...memberJerseySizes];
 
-    importedRows.forEach((entry, index) => {
+    entries.forEach((entry, index) => {
       if (index >= memberSlots.length) return;
       nextMembers[index] = entry.name;
       nextMemberAges[index] = entry.age;
@@ -741,17 +886,26 @@ export function RegistrationPage() {
     setMemberJerseySizes(nextMemberJerseySizes);
     setRosterImportText("");
     setRosterImportOpen(false);
-    window.alert("Roster imported into the first available player slots.");
+    window.alert(`${entries.length} players imported into the available roster slots.`);
   }
 
-  async function handleRosterFileImport(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleRosterTextImport() {
+    if (!rosterImportText.trim()) {
+      showMissing("Please paste player data first.");
+      return;
+    }
+    const entries = parseRosterImportContent(rosterImportText);
+    applyRosterImport(entries);
+  }
+
+  async function handleExcelImport(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      applyRosterImport(text);
+      const entries = await parseExcelFile(file);
+      applyRosterImport(entries);
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "The selected file could not be read.";
+      const message = caught instanceof Error ? caught.message : "The Excel file could not be read.";
       showMissing(message);
     } finally {
       event.target.value = "";
@@ -766,7 +920,6 @@ export function RegistrationPage() {
   }
 
   async function continueToRoster() {
-    // Validate everything combined
     const requiredFields = ["teamName", "captainName", "subCaptainName", "email", "phone", "city"] as const;
     const missingTeamFields = requiredFields.filter((key) => !teamDetails[key].trim());
     
@@ -775,15 +928,30 @@ export function RegistrationPage() {
       .filter((item) => item.name.length < 2)
       .map((item) => item.label);
 
-    const missingAges = memberAges.filter(a => !a.trim()).length;
+    const invalidAges = memberAges
+      .map((age, index) => ({ age: age.trim(), index, label: memberSlots[index] }))
+      .filter((item) => {
+        if (!item.age) return false;
+        const ageNum = parseInt(item.age);
+        return isNaN(ageNum) || ageNum <= 0 || !isAgeInRange(ageNum, tournament);
+      });
+
     const missingSizes = memberJerseySizes.filter(s => !s.trim()).length;
 
     if (missingTeamFields.length) {
       showMissing(`Please complete these fields: ${missingTeamFields.join(", ")}.`);
       return;
     }
-    if (missingMemberLabels.length || missingAges || missingSizes) {
-      showMissing(`Please complete all player names, ages, and jersey sizes.`);
+    if (missingMemberLabels.length) {
+      showMissing(`Please complete all player names.`);
+      return;
+    }
+    if (invalidAges.length) {
+      showMissing(`Invalid ages for: ${invalidAges.map(a => a.label).join(", ")}. Age must be between ${minAge || 0} and ${maxAge || 100}.`);
+      return;
+    }
+    if (missingSizes) {
+      showMissing(`Please select jersey sizes for all players.`);
       return;
     }
 
@@ -794,7 +962,7 @@ export function RegistrationPage() {
       const created = await apiRequest<BackendRegistration>("/registrations", {
         method: "POST",
         body: JSON.stringify({
-          tournament_slug: tournament.slug,
+          tournament_slug: routeSlug,
           team_name: teamDetails.teamName,
           team_code: "",
           captain_name: teamDetails.captainName,
@@ -807,11 +975,11 @@ export function RegistrationPage() {
           team_logo: teamDetails.teamLogo,
           team_motto: teamDetails.teamMotto,
           category: `${tournament.sport} League`,
-          selected_jersey_image: teamDetails.selectedJersey,
+          selected_jersey_image: "",
           members: members.map((name, index) => ({
             name: name.trim(),
             role: index === 0 ? "Captain" : index === 1 ? "Sub-captain" : "Player",
-            jersey: teamDetails.selectedJersey,
+            jersey: "",
             contact: index === 0 ? teamDetails.phone : "",
             age: memberAges[index] ? Number(memberAges[index]) : null,
             jersey_size: memberJerseySizes[index] ?? "",
@@ -827,7 +995,7 @@ export function RegistrationPage() {
       const payload: SavedRegistration = {
         registrationId: created.id,
         tournament: tournament.name,
-        tournamentSlug: tournament.slug,
+        tournamentSlug: routeSlug,
         ...teamDetails,
         teamCode: "",
         members,
@@ -835,8 +1003,8 @@ export function RegistrationPage() {
         memberJerseySizes,
         documents,
       };
-      writeSavedRegistration(tournament.slug, payload);
-      localStorage.setItem(registrationDraftKey(tournament.slug), JSON.stringify({
+      writeSavedRegistration(routeSlug, payload);
+      localStorage.setItem(registrationDraftKey(routeSlug), JSON.stringify({
         activeStep: 1,
         teamDetails: { ...teamDetails, teamCode: "" },
         members,
@@ -845,7 +1013,7 @@ export function RegistrationPage() {
         documents,
         tournamentAccepted,
       } satisfies RegistrationDraft));
-      navigate(`/tournaments/${tournament.slug}/register/roster`);
+      navigate(`/tournaments/${routeSlug}/register/roster`);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Registration could not be saved.";
       setError(message);
@@ -875,11 +1043,30 @@ export function RegistrationPage() {
   function goBack() {
     setError("");
     if (activeStep === 0) {
-      navigate(`/tournaments/${tournament.slug}`);
+      navigate(`/tournaments/${routeSlug}`);
       return;
     }
     setActiveStep(0);
     scrollRegistrationTop();
+  }
+
+  if (tournament.status !== "Registration Open") {
+    return (
+      <RegistrationShell>
+        <Page className="registration-reference-page">
+          <section className="registration-hero-copy compact">
+            <p className="eyebrow">SmartSportz</p>
+            <h1>Registration is closed</h1>
+            <p>{tournament.name} is currently marked as {tournament.status}. Admin or manager must open registration before teams can register.</p>
+          </section>
+          <section className="panel user-empty-state">
+            <h2>Registration closed</h2>
+            <p>Team registration is not available for this tournament right now.</p>
+            <Link className="btn btn-primary" to={`/tournaments/${routeSlug}`}>Back to tournament</Link>
+          </section>
+        </Page>
+      </RegistrationShell>
+    );
   }
 
   return (
@@ -963,53 +1150,63 @@ export function RegistrationPage() {
                     <label>Sub-captain name<input value={teamDetails.subCaptainName} onChange={(event) => updateTeamDetails("subCaptainName", event.target.value)} placeholder="Full Name" /></label>
                     <label>Coach name<input value={teamDetails.coachName} onChange={(event) => updateTeamDetails("coachName", event.target.value)} placeholder="Optional" /></label>
                     <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="contact@team.com" /></label>
-                    <label>Phone<input value={teamDetails.phone} onChange={(event) => updateTeamDetails("phone", event.target.value)} placeholder="+91" /></label>
+                    <label>Phone
+                      <input 
+                        type="number" 
+                        value={teamDetails.phone} 
+                        onChange={(event) => updateTeamDetails("phone", event.target.value)} 
+                        placeholder="+91" 
+                      />
+                    </label>
                   </div>
                 </div>
 
                 <div className="form-group-box" style={{ marginTop: "2rem" }}>
                   <div className="section-head-inline">
                     <h3>Player Roster</h3>
-                    <div className="section-actions">
+                    <div className="section-actions" style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRosterImportOpen(true)}><Upload size={14} /> Import</button>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={downloadSampleExcel}><Download size={14} /> Sample</button>
                     </div>
                   </div>
                   <div className="player-roster-rows" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {memberSlots.map((role, index) => (
-                      <div key={role} className="player-row-input" style={{ display: "grid", gridTemplateColumns: "40px 1fr 80px 120px", gap: "10px", alignItems: "center" }}>
-                        <span style={{ fontWeight: "bold", color: "#666" }}>{index + 1}</span>
-                        <input 
-                          value={members[index]} 
-                          onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} 
-                          placeholder={`${role} Name`} 
-                        />
-                        <input 
-                          value={memberAges[index]} 
-                          onChange={(event) => setMemberAges((current) => current.map((v, i) => i === index ? event.target.value : v))} 
-                          placeholder="Age" 
-                          inputMode="numeric" 
-                        />
-                        <input 
-                          value={memberJerseySizes[index]} 
-                          onChange={(event) => setMemberJerseySizes((current) => current.map((v, i) => i === index ? event.target.value : v))} 
-                          placeholder="Size (S/M/L)" 
-                        />
-                      </div>
-                    ))}
+                    {memberSlots.map((role, index) => {
+                      const ageStr = memberAges[index] || "";
+                      const ageNum = parseInt(ageStr);
+                      const isInvalid = ageStr && (!isNaN(ageNum) && ageNum > 0) ? !isAgeInRange(ageNum, tournament) : false;
+                      return (
+                        <div key={role} className="player-row-input">
+                          <span className="player-row-number">{index + 1}</span>
+                          <input 
+                            value={members[index]} 
+                            onChange={(event) => setMembers((current) => current.map((name, i) => i === index ? event.target.value : name))} 
+                            placeholder={`${role} Name`} 
+                          />
+                          <input 
+                            type="number"
+                            value={memberAges[index]} 
+                            onChange={(event) => setMemberAges((current) => current.map((v, i) => i === index ? event.target.value : v))} 
+                            placeholder="Age"
+                            style={isInvalid ? { borderColor: "red", backgroundColor: "#fff0f0" } : {}}
+                          />
+                          <select
+                            value={memberJerseySizes[index] || ""}
+                            onChange={(event) => updateMemberJerseySize(index, event.target.value)}
+                            className="jersey-size-select"
+                          >
+                            <option value="">Size</option>
+                            {jerseySizeOptions.map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-
-                <div className="jersey-row" style={{ marginTop: "2rem" }}>
-                  <div>
-                    <h3>Team Jersey</h3>
-                    <p>Select the kit style for your team.</p>
-                  </div>
-                  <div className="registration-choice-card compact-card jersey-preview-card" style={{ margin: "10px 0" }}>
-                    <img src={teamDetails.selectedJersey} alt="Selected jersey" style={{ width: "80px", height: "auto" }} />
-                    <div className="jersey-preview-copy">
-                      <p><strong>{jerseyDisplayName(teamDetails.selectedJersey)}</strong></p>
-                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => setJerseyPickerOpen(true)}>Change Kit</button>
-                    </div>
+                  <div style={{ marginTop: "8px", fontSize: "14px", color: "#666" }}>
+                    <span>Age restriction: {tournamentAgeRange(tournament)}</span>
+                    {minAge > 0 && <span style={{ marginLeft: "16px" }}>Min: {minAge} years</span>}
+                    {maxAge > 0 && <span style={{ marginLeft: "16px" }}>Max: {maxAge} years</span>}
                   </div>
                 </div>
 
@@ -1033,37 +1230,32 @@ export function RegistrationPage() {
             <article className="rules-modal">
               <button className="rules-modal-close" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>x</button>
               <h2>Import roster</h2>
-              <p>Paste player rows or upload a CSV/text file. We will fill the first available roster slots.</p>
-              <input ref={rosterFileInputRef} type="file" accept=".csv,.txt,.json" onChange={handleRosterFileImport} style={{ display: "none" }} />
-              <div className="rules-modal-actions" style={{ justifyContent: "flex-start", marginBottom: "12px" }}>
-                <button className="btn btn-secondary btn-sm" type="button" onClick={() => rosterFileInputRef.current?.click()}>Upload file</button>
+              <p>Paste player rows or upload a CSV/Excel file. We will fill the first available roster slots.</p>
+              <div className="rules-modal-actions" style={{ justifyContent: "flex-start", marginBottom: "12px", gap: "8px" }}>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={() => document.getElementById('excel-upload')?.click()}>
+                  <FileText size={14} /> Upload Excel
+                </button>
+                <input 
+                  id="excel-upload"
+                  ref={excelFileInputRef}
+                  type="file" 
+                  accept=".xlsx,.xls,.csv" 
+                  onChange={handleExcelImport}
+                  style={{ display: "none" }}
+                />
+                <button className="btn btn-secondary btn-sm" type="button" onClick={downloadSampleExcel}>
+                  <Download size={14} /> Sample
+                </button>
               </div>
               <textarea
                 value={rosterImportText}
                 onChange={(event) => setRosterImportText(event.target.value)}
-                placeholder="Example:&#10;John Doe, 20, M&#10;Ravi Kumar, 19, L"
+                placeholder="Example:&#10;John Doe, 25, L&#10;Ravi Kumar, 24, M"
                 style={{ minHeight: "140px", width: "100%", border: "1px solid #d4d8e0", borderRadius: "10px", padding: "10px", resize: "vertical" }}
               />
               <div className="rules-modal-actions">
                 <button className="btn btn-secondary" type="button" onClick={() => { setRosterImportOpen(false); setRosterImportText(""); }}>Cancel</button>
-                <button className="btn btn-primary" type="button" onClick={() => applyRosterImport(rosterImportText)}>Import rows</button>
-              </div>
-            </article>
-          </div>
-        )}
-
-        {jerseyPickerOpen && (
-          <div className="rules-modal-backdrop" role="dialog" aria-modal="true">
-            <article className="rules-modal jersey-picker-modal">
-              <button className="rules-modal-close" type="button" onClick={() => setJerseyPickerOpen(false)}>x</button>
-              <h2>Choose your jersey</h2>
-              <div className="jersey-picker-grid">
-                {jerseyOptions.map((jersey) => (
-                  <button key={jersey.label} type="button" className={`jersey-option ${teamDetails.selectedJersey === jersey.image ? "selected" : ""}`} onClick={() => chooseJersey(jersey.image)}>
-                    <img src={jersey.image} alt={jersey.label} />
-                    <strong>{jersey.label}</strong>
-                  </button>
-                ))}
+                <button className="btn btn-primary" type="button" onClick={handleRosterTextImport}>Import rows</button>
               </div>
             </article>
           </div>
@@ -1092,8 +1284,9 @@ export function RegistrationPage() {
 
 export function RegistrationRosterPage() {
   const { slug } = useParams();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
 
   return (
     <RegistrationShell>
@@ -1105,7 +1298,7 @@ export function RegistrationRosterPage() {
       <RegistrationStepper activeIndex={1} />
       {!saved ? (
         <section className="panel">
-          <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back to registration</Link>
+          <Link className="btn btn-primary" to={`/tournaments/${routeSlug}/register`}>Back to registration</Link>
         </section>
       ) : (
         <div className="detail-grid">
@@ -1117,7 +1310,7 @@ export function RegistrationRosterPage() {
               <p><b>Email</b><span>{saved.email}</span></p>
               <p><b>City</b><span>{saved.city}</span></p>
             </div>
-            <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register/payment`}>Continue to payment</Link>
+            <Link className="btn btn-primary" to={`/tournaments/${routeSlug}/register/payment`}>Continue to payment</Link>
           </section>
           <section className="panel">
             <h2>Roster</h2>
@@ -1137,9 +1330,12 @@ export function RegistrationRosterPage() {
 export function RegistrationPaymentPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
-  const amount = amountForTournament(tournament.slug);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const fallbackTournament = tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug };
+  const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
+  const tournament = withRuntimeTournamentStatus(remoteTournament ? normalizeTournamentRecord(remoteTournament, fallbackTournament) : fallbackTournament);
+  const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
+  const amount = amountForTournament(routeSlug, tournament);
   const totalPayable = totalPayableForAmount(amount);
   const [method, setMethod] = useState<"upi" | "card">("upi");
   const [contact, setContact] = useState(saved?.phone ?? "");
@@ -1153,6 +1349,18 @@ export function RegistrationPaymentPage() {
     : "";
   const upiAppLinks = useMemo(() => buildAppUpiLinks(upiIntent), [upiIntent]);
 
+  useEffect(() => {
+    let active = true;
+    apiRequest<Record<string, any>>(`/public/tournaments/${routeSlug}`)
+      .then((item) => {
+        if (active) setRemoteTournament(item);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [routeSlug]);
+
   async function completePayment(selectedMethod: "upi" | "card") {
     if (!saved) return;
     setStatus("checking");
@@ -1160,7 +1368,7 @@ export function RegistrationPaymentPage() {
     try {
       const intent = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi"; status: string }>("/payments/local-intent", {
         method: "POST",
-        body: JSON.stringify({ tournament_slug: tournament.slug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
+        body: JSON.stringify({ tournament_slug: routeSlug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
       });
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await apiRequest(`/payments/local-intent/${intent.id}/confirm`, { method: "POST", body: JSON.stringify({ status: "paid", method: selectedMethod }) });
@@ -1168,10 +1376,10 @@ export function RegistrationPaymentPage() {
         method: "POST", body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable }),
       });
       const updatedRegistration = await apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`);
-      writeSavedRegistration(tournament.slug, { ...saved, teamCode: updatedRegistration.team_code || "" });
+      writeSavedRegistration(routeSlug, { ...saved, teamCode: updatedRegistration.team_code || "" });
       const payment: SavedPayment = { id: registrationPayment.id, receiptNumber: registrationPayment.receipt_number, amount: registrationPayment.amount, method: registrationPayment.method, status: "paid", paidAt: new Date().toISOString() };
-      writeSavedPayment(tournament.slug, payment);
-      navigate(`/tournaments/${tournament.slug}/register/review`);
+      writeSavedPayment(routeSlug, payment);
+      navigate(`/tournaments/${routeSlug}/register/review`);
     } catch (caught) {
       setStatus("idle");
       setError("Payment failed. Please try again.");
@@ -1190,7 +1398,7 @@ export function RegistrationPaymentPage() {
       </section>
       <RegistrationStepper activeIndex={4} />
       {!saved ? (
-        <section className="panel"><Link className="btn btn-primary" to={`/tournaments/${tournament.slug}/register`}>Back</Link></section>
+        <section className="panel"><Link className="btn btn-primary" to={`/tournaments/${routeSlug}/register`}>Back</Link></section>
       ) : (
         <div className="payment-layout">
           <section className="panel payment-panel">
@@ -1242,9 +1450,10 @@ export function RegistrationPaymentPage() {
 
 export function RegistrationReviewPage() {
   const { slug } = useParams();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const saved = useMemo(() => readSavedRegistration(tournament.slug), [tournament.slug]);
-  const payment = useMemo(() => readSavedPayment(tournament.slug), [tournament.slug]);
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
+  const payment = useMemo(() => readSavedPayment(routeSlug), [routeSlug]);
   const [backendRegistration, setBackendRegistration] = useState<BackendRegistration | null>(null);
 
   useEffect(() => {
@@ -1262,7 +1471,7 @@ export function RegistrationReviewPage() {
   useEffect(() => {
     if (saved && payment) {
       saveCompletedRegistration({
-        tournamentSlug: tournament.slug,
+        tournamentSlug: routeSlug,
         tournamentName: tournament.name,
         registrationId: saved.registrationId,
         confirmationCode,
@@ -1317,21 +1526,22 @@ export function RegistrationReviewPage() {
 export function RegistrationPassPage() {
   const { slug } = useParams();
   const { token } = useAuth();
-  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === slug) ?? tournaments[0]);
-  const [completed, setCompleted] = useState(() => getCompletedRegistration(tournament.slug));
+  const routeSlug = slug ?? tournaments[0].slug;
+  const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
+  const [completed, setCompleted] = useState(() => getCompletedRegistration(routeSlug));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!completed && token) {
       setLoading(true);
-      apiRequest<BackendRegistration>(`/registrations/by-tournament/${tournament.slug}/mine`)
+      apiRequest<BackendRegistration>(`/registrations/by-tournament/${routeSlug}/mine`)
         .then((reg) => {
           const rec = completedRecordFromBackend(reg, tournament);
           if (rec) { saveCompletedRegistration(rec); setCompleted(rec); }
         })
         .finally(() => setLoading(false));
     }
-  }, [token, tournament.slug]);
+  }, [token, routeSlug]);
 
   return (
     <RegistrationShell>

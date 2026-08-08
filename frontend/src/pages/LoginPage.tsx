@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -6,6 +6,31 @@ import { useAuth, type OtpChallenge } from "../auth/AuthContext";
 import { Page } from "../components/UI";
 import { assets } from "../data/platform";
 import { apiRequest } from "../lib/api";
+
+type IconProps = {
+  size?: number;
+  className?: string;
+};
+
+function Eye({ size = 20, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M2.1 12a10 10 0 0 1 19.8 0 10 10 0 0 1-19.8 0" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOff({ size = 20, className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 10.6A2 2 0 0 0 12 16a2 2 0 0 0 1.4-.6" />
+      <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c5.5 0 9.5 4.8 10.7 8-0.4 1.1-1.2 2.6-2.5 4.1" />
+      <path d="M6.1 6.1C3.8 7.7 2.6 10 1.3 12c1.4 2.1 5.4 7 10.7 7 .9 0 1.8-.1 2.6-.3" />
+    </svg>
+  );
+}
 
 const GOOGLE_CLIENT_ID = "1052442707513-ht85fnn4ag34pvna47vv6cnorv4bto7c.apps.googleusercontent.com";
 
@@ -36,7 +61,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [loginPreset, setLoginPreset] = useState<"super_admin" | "management" | "participant" | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+916374409006");
-  const [channel, setChannel] = useState<"email" | "sms">("email");
+  const [channel] = useState<"email" | "sms">("sms");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const [otp, setOtp] = useState("");
@@ -45,7 +70,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
-  const emailPlaceholder = loginPreset === "management"
+  /* const emailPlaceholder = loginPreset === "management"
     ? "manager@smartsportz.in"
     : loginPreset === "participant"
       ? "user@smartsportz.in"
@@ -55,7 +80,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
     : loginPreset === "participant"
       ? "user123"
       : "admin123";
-
+  */
   function applyLoginPreset(preset: "super_admin" | "management" | "participant") {
     setLoginPreset(preset);
     setEmail("");
@@ -198,18 +223,18 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
               : recovery
                 ? "Enter your email and we will send an OTP for password recovery."
                 : mode === "signup"
-                  ? "Create a participant account and verify it by email or SMS before opening your dashboard."
+                  ? "Create a participant account and verify it by WhatsApp before opening your dashboard."
                   : "Please enter your credentials to access your dashboard."}
           </p>
           {!challenge && mode === "signup" && <label>Full name<input placeholder="Team captain name" value={name} onChange={(event) => setName(event.target.value)} /></label>}
-          {!challenge && <label>Email address<input placeholder={emailPlaceholder} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
+          {!challenge && <label>Email address<input placeholder='example@gmail.com' value={email} onChange={(event) => setEmail(event.target.value)} /></label>}   {/* removed the placeholder of emailPlaceholder */}
           {!challenge && mode === "signup" && <label>Phone number<input placeholder="+916374409006" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>}
           {!challenge && !recovery && (
             <label className="password-field">
               Password
               <div className="password-input-wrap">
                 <input
-                  placeholder={passwordPlaceholder}
+                  placeholder="*****"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -220,7 +245,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword((current) => !current)}
                 >
-                  {showPassword ? <Eye /> : <EyeOff />}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </label>
@@ -237,12 +262,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
               )}
             </div>
           )}
-          {!challenge && mode === "signup" && (
-            <div className="otp-channel-group" role="radiogroup" aria-label="Verification method">
-              <button type="button" className={channel === "email" ? "active" : ""} onClick={() => setChannel("email")}>Verify by Email</button>
-              <button type="button" className={channel === "sms" ? "active" : ""} onClick={() => setChannel("sms")}>Verify by SMS</button>
-            </div>
-          )}
+          {!challenge && mode === "signup" && <div className="otp-channel-group"><button type="button" className="active">Verify by WhatsApp</button></div>}
           {challenge && <label>OTP code<input placeholder="4 digit code" value={otp} onChange={(event) => setOtp(event.target.value)} maxLength={8} /></label>}
           {challenge && recovery && <label>New password<input placeholder="New secure password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>}
           {challenge?.deliveryMessage?.startsWith("Local OTP:") && !recovery && <div className="otp-local-box">{challenge.deliveryMessage}</div>}
@@ -250,13 +270,15 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
           <button type="submit" className="btn btn-primary wide" disabled={loading}>
             {loading ? "Please wait..." : challenge ? "Verify OTP" : recovery ? "Send OTP" : mode === "signup" ? "Create and verify account" : "Sign in"}
           </button>
+          {/*
           {!recovery && !challenge && mode === "login" && (
             <div className="login-help">
               <button type="button" onClick={() => applyLoginPreset("super_admin")}>Super Admin</button>
               <button type="button" onClick={() => applyLoginPreset("management")}>Management</button>
               <button type="button" onClick={() => applyLoginPreset("participant")}>Participant</button>
             </div>
-          )}
+          )} 
+            */}
           {!recovery && !challenge && (
             <button className="auth-switch" type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
               {mode === "login" ? "I do not have an account already" : "I already have an account"}

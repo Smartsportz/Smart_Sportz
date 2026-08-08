@@ -1,8 +1,7 @@
 import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
-import { newsPosts, tournaments } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
@@ -43,10 +42,6 @@ function normalizePost(item: any): NewsPost {
   };
 }
 
-function fallbackPosts() {
-  return newsPosts.map(normalizePost);
-}
-
 function renderBlock(block: { type: string; content: string }, index: number) {
   if (block.type === "heading") return <h2 key={index}>{block.content}</h2>;
   if (block.type === "quote") return <blockquote key={index}>{block.content}</blockquote>;
@@ -63,7 +58,8 @@ export function NewsPage() {
   useWheelHorizontal();
   const [remotePosts, setRemotePosts] = useState<NewsPost[]>([]);
   const [social, setSocial] = useState<NewsSocial>({});
-  const posts = remotePosts.length ? remotePosts : fallbackPosts();
+  const categoryScrollers = useRef<Record<string, HTMLDivElement | null>>({});
+  const posts = remotePosts;
   const categories = ["Match Updates", "Tournament Updates", "Announcements"];
   const visibleCategories = categories.filter((category) => posts.some((post) => post.category === category));
   const highlightedPosts = posts.filter((post) => post.highlight);
@@ -122,9 +118,13 @@ export function NewsPage() {
     await navigator.clipboard.writeText(`${payload.text}\n${url}`);
   }
 
+  function moveCategory(category: string, direction: -1 | 1) {
+    categoryScrollers.current[category]?.scrollBy({ left: direction * 380, behavior: "smooth" });
+  }
+
   return (
     <Page className="news-page">
-      <section className="news-highlight-section">
+      {activeHighlight ? <section className="news-highlight-section">
         <Link className="news-highlight-card click-card" to={`/news/${activeHighlight.slug}`} key={activeHighlight.slug}>
           <img src={activeHighlight.image} alt="" />
           <div className="news-highlight-overlay">
@@ -136,7 +136,7 @@ export function NewsPage() {
             </div>
           </div>
         </Link>
-      </section>
+      </section> : <section className="panel user-empty-state"><h2>No news published</h2><p>Admin or manager news articles will appear here after publishing.</p></section>}
       <section className="section news-category-sections">
         {visibleCategories.map((category) => {
           const categoryPosts = posts.filter((post) => post.category === category);
@@ -146,9 +146,11 @@ export function NewsPage() {
                 <h2>{category}</h2>
                 <div className="news-category-actions">
                   <span>{categoryPosts.length} updates</span>
+                  <button type="button" onClick={() => moveCategory(category, -1)} aria-label={`Previous ${category}`}>&lt;</button>
+                  <button type="button" onClick={() => moveCategory(category, 1)} aria-label={`Next ${category}`}>&gt;</button>
                 </div>
               </div>
-              <div className="news-list-grid wheel-horizontal news-category-carousel">
+              <div className="news-list-grid wheel-horizontal news-category-carousel content-scroll-row" ref={(node) => { categoryScrollers.current[category] = node; }}>
                 {categoryPosts.map((post) => (
                   <article className="news-card panel" key={post.slug}>
                     <Link className="click-card news-card-link" to={`/news/${post.slug}`}>
@@ -181,11 +183,11 @@ export function NewsPage() {
 export function NewsDetailPage() {
   const { slug } = useParams();
   const [remotePost, setRemotePost] = useState<NewsPost | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [social, setSocial] = useState<NewsSocial>({});
   const [comment, setComment] = useState("");
-  const post = remotePost ?? fallbackPosts().find((item) => item.slug === slug) ?? fallbackPosts()[0];
-  const tournament = tournaments.find((item) => item.slug === post.tournamentSlug);
-  const related = fallbackPosts().filter((item) => item.slug !== post.slug && (item.sport === post.sport || item.city === post.city)).slice(0, 3);
+  const post = remotePost;
+  const [related, setRelated] = useState<NewsPost[]>([]);
 
   useEffect(() => {
     if (!slug) return;
@@ -193,6 +195,13 @@ export function NewsDetailPage() {
     apiRequest<any>(`/news/${slug}`)
       .then((item) => {
         if (alive) setRemotePost(normalizePost(item));
+      })
+      .catch(() => {
+        if (alive) setNotFound(true);
+      });
+    apiRequest<any[]>("/news")
+      .then((items) => {
+        if (alive) setRelated(items.map(normalizePost).filter((item) => item.slug !== slug).slice(0, 3));
       })
       .catch(() => undefined);
     apiRequest<NewsSocial>("/news/social")
@@ -206,6 +215,7 @@ export function NewsDetailPage() {
   }, [slug]);
 
   async function shareNews() {
+    if (!post) return;
     const url = window.location.href;
     const imageUrl = new URL(post.image, window.location.origin).toString();
     const sharePayload = {
@@ -222,6 +232,7 @@ export function NewsDetailPage() {
   }
 
   async function submitComment() {
+    if (!post) return;
     if (!comment.trim()) return;
     const updated = await apiRequest<{ slug: string; comments: Array<{ text: string; createdAt?: string }> }>("/news/social/comment", {
       method: "POST",
@@ -233,6 +244,13 @@ export function NewsDetailPage() {
 
   return (
     <Page>
+      {(!post || notFound) ? (
+        <section className="panel user-empty-state">
+          <h2>News not found</h2>
+          <p>This article is not published in the database.</p>
+          <Link className="btn btn-primary" to="/news">Back to news</Link>
+        </section>
+      ) : <>
       <article className="news-detail">
         <img className="news-detail-image" src={post.image} alt="" />
         <div className="news-detail-copy">
@@ -243,7 +261,7 @@ export function NewsDetailPage() {
             <span>{post.date}</span>
             <span>{post.sport}</span>
             <span>{post.city}</span>
-            {tournament && <Link to={`/tournaments/${tournament.slug}`}>{tournament.name}</Link>}
+            {post.tournamentSlug && <Link to={`/tournaments/${post.tournamentSlug}`}>Tournament</Link>}
           </div>
           <button className="btn btn-secondary news-share-button" type="button" onClick={() => void shareNews()}><Share2 size={16} />Share image and link</button>
         </div>
@@ -277,6 +295,7 @@ export function NewsDetailPage() {
           ))}
         </div>
       </section>
+      </>}
     </Page>
   );
 }

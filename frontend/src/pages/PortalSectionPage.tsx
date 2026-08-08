@@ -1,12 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { managementSidebar, newsPosts, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
+import { managementSidebar, sidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
-import { AnnouncementManagerPanel } from "./AdminPage";
-import { apiRequest } from "../lib/api";
+import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
+import { apiRequest, uploadFile } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
 
@@ -28,6 +28,7 @@ const managementContent = {
   players: ["Roster management", "Eligibility status", "Player documents", "Captain updates"],
   announcements: ["Tournament notices", "Team broadcast", "Schedule change alert", "Delivery status"],
   news: ["Create winner-team news", "Upload match update image", "Format article sections", "Publish city-scoped updates"],
+  gallery: ["Gallery albums", "Single image uploads", "Publish controls", "Delete confirmation"],
   reports: ["Revenue reports", "Registration funnel", "Live score audit", "Export center"],
 };
 
@@ -66,6 +67,8 @@ type TournamentFormState = {
   address: string;
   sportDescription: string;
   tournamentDescription: string;
+  rulesPdf: string;
+  rulesText: string;
   showOnHome: boolean;
   feeBreakdown: MoneyLine[];
   prizes: PrizeLine[];
@@ -91,6 +94,8 @@ const emptyTournamentForm: TournamentFormState = {
   address: "",
   sportDescription: "",
   tournamentDescription: "",
+  rulesPdf: "",
+  rulesText: "",
   showOnHome: true,
   feeBreakdown: [{ label: "Entry Fee", value: 5000 }],
   prizes: [
@@ -130,6 +135,8 @@ function formFromTournament(item?: Record<string, any>): TournamentFormState {
     address: item.address ?? "",
     sportDescription: item.sport_description ?? item.sportDescription ?? "",
     tournamentDescription: item.tournament_description ?? item.tournamentDescription ?? "",
+    rulesPdf: item.rules_pdf ?? item.rulesPdf ?? "",
+    rulesText: item.rules_text ?? item.rulesText ?? "",
     showOnHome: Boolean(item.show_on_home ?? item.showOnHome ?? true),
     feeBreakdown,
     prizes,
@@ -271,8 +278,12 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
 }
 
 export function ManagementSectionPage({ section }: { section: keyof typeof managementContent }) {
+  const location = useLocation();
   const title = section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const { token } = useAuth();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const portalSidebar = isAdminRoute ? sidebar : managementSidebar;
+  const dashboardPath = isAdminRoute ? "/admin/dashboard" : "/management/dashboard";
   const [managerDashboard, setManagerDashboard] = useState<ManagerDashboardData | null>(null);
   const [managerNews, setManagerNews] = useState<ManagerNewsData | null>(null);
   const [sectionRecords, setSectionRecords] = useState<Array<Record<string, any>>>([]);
@@ -414,11 +425,11 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       name: tournamentForm.name,
       sport: tournamentForm.sport === "__new__" ? tournamentForm.newSportName : tournamentForm.sport,
       new_sport_name: tournamentForm.sport === "__new__" ? tournamentForm.newSportName : undefined,
-      status: tournamentForm.status,
-      location: tournamentForm.location,
-      date: tournamentForm.date,
-      registration_start: tournamentForm.registrationStart,
-      registration_end: tournamentForm.registrationEnd,
+      status: tournamentForm.status === "Featured" ? "Upcoming" : tournamentForm.status,
+      location: tournamentForm.location || "Mumbai",
+      date: tournamentForm.date || "TBA",
+      registration_start: tournamentForm.registrationStart || "TBA",
+      registration_end: tournamentForm.registrationEnd || "TBA",
       teams: tournamentForm.teams,
       capacity: tournamentForm.capacity,
       team_size: tournamentForm.maxTeamSize,
@@ -430,6 +441,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       address: tournamentForm.address,
       sport_description: tournamentForm.sportDescription,
       tournament_description: tournamentForm.tournamentDescription,
+      rules_pdf: tournamentForm.rulesPdf,
+      rules_text: tournamentForm.rulesText,
       fee_breakdown: tournamentForm.feeBreakdown.filter((line) => line.label.trim()),
       prizes: tournamentForm.prizes,
       cities: selectedCities,
@@ -441,8 +454,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
         { method: editingTournament ? "PATCH" : "POST", body: JSON.stringify(payload) },
         token,
       );
-      const refreshed = await apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token);
-      setSectionRecords(refreshed);
+      setSectionRecords((current) => [saved, ...current.filter((item) => item.slug !== (editingTournament?.slug ?? saved.slug))]);
+      void apiRequest<Array<Record<string, any>>>("/management/tournaments", {}, token).then(setSectionRecords).catch(() => undefined);
       setEditingTournament(saved);
       setTournamentForm(formFromTournament(saved));
       setManagerMessage(`${saved.name} saved. You can continue editing or confirm the next publishing step.`);
@@ -584,6 +597,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       </div>
     )
   ) : section === "news" ? (
+    <AdminNewsPage mode="news" />
+  ) : false ? (
     <div className="manager-news-layout">
       <section className="panel news-editor-panel">
         <span className="status emerald">Manager News Editor</span>
@@ -591,7 +606,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
         <p>Managers publish only for assigned cities. Rich sections are stored as structured blocks.</p>
         <RichTextToolbarPreview />
         <div className="form-grid">
-          <label>Image<select>{(newsRows.length ? newsRows : newsPosts).map((post) => <option key={post.slug}>{post.image}</option>)}</select></label>
+          <label>Image<select>{newsRows.map((post) => <option key={post.slug}>{post.image}</option>)}</select></label>
           <label>Category<select><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
           <label>Title<input placeholder="Winner team headline" /></label>
           <label>City<select>{(assignedCities.length ? assignedCities : ["Bengaluru", "Mysuru", "Mumbai"]).map((city) => <option key={city}>{city}</option>)}</select></label>
@@ -627,12 +642,12 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       </section>
       <DataTable
         columns={["News", "Category", "City", "Status", "Action"]}
-        rows={(newsRows.length ? newsRows : newsPosts).map((post) => [
+        rows={newsRows.map((post) => [
           post.title,
           post.category,
           post.city,
           <span className="status emerald">{post.status}</span>,
-          <span className="table-actions"><Link to={`/news/${post.slug}`}>Open</Link><button>Edit</button></span>,
+          <span className="table-actions"><Link to={`/news/${post.slug}`}>Open</Link><button>Edit</button><button>Delete</button></span>,
         ])}
       />
     </div>
@@ -644,6 +659,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     )
   ) : section === "announcements" ? (
     <AnnouncementManagerPanel role="manager" />
+  ) : section === "gallery" ? (
+    <GalleryManagerPanel />
   ) : section === "reports" ? (
     sectionRecords.length === 0 ? (
       <section className="panel user-empty-state"><h2>No reports available</h2><p>Reports will appear after registrations, payments, and live scoring generate records.</p></section>
@@ -654,7 +671,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
 
   return (
     <Page>
-      <PortalShell title={title} subtitle="Management portal section for tournament-specific operations." sidebar={managementSidebar} action={<Link className="btn btn-primary" to="/management/dashboard">Dashboard</Link>}>
+      <PortalShell title={title} subtitle="Management portal section for tournament-specific operations." sidebar={portalSidebar} action={<Link className="btn btn-primary" to={dashboardPath}>Dashboard</Link>}>
         {managerError && <div className="form-alert">{managerError}</div>}
         {managerMessage && <p className="form-note">{managerMessage}</p>}
         {primaryContent}
@@ -700,7 +717,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                     <label>Primary place
                       <select value={tournamentForm.location} onChange={(event) => patchTournamentForm({ location: event.target.value, cities: Array.from(new Set([...tournamentForm.cities, event.target.value])) })}>
                         {cityOptions.map((city) => <option key={city}>{city}</option>)}
-                        <option value="__new_city__">Add new place</option>
+                        {!assignedCities.length && <option value="__new_city__">Add new place</option>}
                       </select>
                     </label>
                     {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={() => tournamentForm.newCity && patchTournamentForm({ location: tournamentForm.newCity, cities: Array.from(new Set([...tournamentForm.cities, tournamentForm.newCity])) })} /></label>}
@@ -716,7 +733,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                         <option value="__custom__">Custom text path</option>
                       </select>
                     </label>
-                    <label>Image text path<input type="text" value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/cricket-stadium.png" /></label>
+                    <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ image: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
                   </div>
                   <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
                   <div className="manager-form-split">
@@ -745,6 +762,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                   <div className="form-grid">
                     <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
                     <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
+                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
+                    <label>Rules acceptance text<textarea value={tournamentForm.rulesText} onChange={(event) => patchTournamentForm({ rulesText: event.target.value })} /></label>
                   </div>
                   <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
                   <div className="registration-actions compact-actions">

@@ -1,12 +1,84 @@
+import { Download } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
-import { useMemo, useState } from "react";
-import { archiveForTournament, individualScores, liveMatches, tournaments, withRuntimeTournamentStatus } from "../data/platform";
+import { useEffect, useState } from "react";
+import { archiveForTournament, individualScores, liveMatches, withRuntimeTournamentStatus } from "../data/platform";
 import { InfoPanel, Metric } from "./shared";
+import { apiRequest } from "../lib/api";
+
+async function downloadRulesPdf(tournament: Record<string, any>) {
+  const rulesPdf = String(tournament.rulesPdf ?? tournament.rules_pdf ?? "").trim();
+  const isPdfSource = /^data:application\/pdf/i.test(rulesPdf) || /^https?:\/\/.+\.pdf(\?|#|$)/i.test(rulesPdf) || /^\/media\/.+\.pdf(\?|#|$)/i.test(rulesPdf);
+  if (!rulesPdf || !isPdfSource) {
+    window.alert("Rules PDF is not uploaded for this tournament.");
+    return;
+  }
+  const filename = rulesPdf.split("/").pop()?.split("?")[0] || `${tournament.slug}-rules.pdf`;
+  if (/^https?:\/\//i.test(rulesPdf)) {
+    const response = await fetch(rulesPdf);
+    if (!response.ok) {
+      window.alert("Rules PDF could not be downloaded.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 300);
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = rulesPdf;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 export function TournamentDetailPage() {
   const params = useParams();
-  const item = withRuntimeTournamentStatus(tournaments.find((t) => t.slug === params.slug) ?? tournaments[0]);
+  const [remoteItem, setRemoteItem] = useState<any | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [selectedArchiveMatchId, setSelectedArchiveMatchId] = useState("");
+
+  useEffect(() => {
+    if (!params.slug) return;
+    setNotFound(false);
+    apiRequest<any>(`/public/tournaments/${params.slug}`)
+      .then((item) => setRemoteItem(item))
+      .catch(() => {
+        setRemoteItem(null);
+        setNotFound(true);
+      });
+  }, [params.slug]);
+
+  if (notFound) {
+    return (
+      <Page>
+        <section className="panel user-empty-state">
+          <h2>Tournament not found</h2>
+          <p>This tournament is not available in the database.</p>
+          <Link className="btn btn-primary" to="/tournaments">Back to tournaments</Link>
+        </section>
+      </Page>
+    );
+  }
+
+  if (!remoteItem) {
+    return <Page><section className="panel user-empty-state"><h2>Loading tournament</h2><p>Fetching tournament details from the database.</p></section></Page>;
+  }
+
+  const item = withRuntimeTournamentStatus({
+    ...remoteItem,
+    registrationStart: remoteItem.registrationStart ?? remoteItem.registration_start,
+    registrationEnd: remoteItem.registrationEnd ?? remoteItem.registration_end,
+    tournamentDescription: remoteItem.tournamentDescription ?? remoteItem.tournament_description,
+    feeBreakdown: remoteItem.feeBreakdown ?? remoteItem.fee_breakdown ?? [],
+  });
   const isLive = item.phase === "live";
   const isExisting = item.phase === "existing";
   const isFeatureOnly = Boolean((item as any).featureOnly);
@@ -15,8 +87,7 @@ export function TournamentDetailPage() {
   const isRegistrationClosed = item.status === "Registration Closed";
   const liveMatch = liveMatches.find((match) => match.tournament === item.name) ?? liveMatches[0];
   const archive = archiveForTournament(item.slug);
-  const archivedMatches = useMemo(() => archive?.rounds.flatMap((round) => round.matches) ?? [], [archive]);
-  const [selectedArchiveMatchId, setSelectedArchiveMatchId] = useState(archivedMatches[0]?.id ?? "");
+  const archivedMatches = archive?.rounds.flatMap((round) => round.matches) ?? [];
   const selectedArchiveMatch = archivedMatches.find((match) => match.id === selectedArchiveMatchId) ?? archivedMatches[0];
 
   const action = isFeatureOnly ? null : isLive ? (
@@ -196,7 +267,15 @@ export function TournamentDetailPage() {
         )
       ) : (
         <div className="detail-grid tournament-info-grid">
-          <InfoPanel title="Tournament Rules" items={["Roster min/max validation", "Team member details required", "Document verification required", "Payment required before approval"]} to="/faq" />
+          <article className="panel tournament-rules-panel">
+            <h3>Tournament Rules</h3>
+            {["Roster min/max validation", "Team member details required", "Document verification required", "Payment required before approval"].map((rule) => (
+              <p key={rule}><span className="rule-check">✓</span>{rule}</p>
+            ))}
+            <button className="btn btn-secondary wide" type="button" onClick={() => void downloadRulesPdf(item)}>
+              <Download size={16} /> Download rules
+            </button>
+          </article>
           <InfoPanel title="Prize Pool" items={[item.prize, "Winner trophy", "MVP award", "Digital certificates"]} to="/leaderboards" highlight />
           <InfoPanel title="Schedule" items={[`Registration opens: ${item.registrationStart}`, `Registration ends: ${item.registrationEnd}`, "Qualifiers", "Final"]} to="/live" />
           <InfoPanel title="Venue And Capacity" items={[item.location, `${item.teams}/${item.capacity} teams`, "Smart venue map", "Officials and support desk"]} to="/contact" />

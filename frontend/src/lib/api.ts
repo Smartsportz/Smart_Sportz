@@ -15,7 +15,7 @@ function resolveApiBaseUrl() {
   return PRODUCTION_API_BASE_URL;
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 const USER_KEY = "smart-sportz-user";
 const TOKEN_KEY = "smart-sportz-token";
 const REFRESH_KEY = "smart-sportz-refresh-token";
@@ -131,5 +131,28 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     return payload.data;
   } finally {
     endGlobalLoading();
+  }
+}
+
+export async function uploadFile(file: File, token?: string | null, options: { silent?: boolean } = {}): Promise<{ filename: string; originalName?: string; size: number; url: string }> {
+  if (!options.silent) beginGlobalLoading();
+  try {
+    const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+    const requestToken = token ?? storedToken;
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API_BASE_URL}/storage/upload`, {
+      method: "POST",
+      headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : undefined,
+      body: formData,
+    });
+    const payload = await parseEnvelope<{ filename: string; originalName?: string; size: number; url: string }>(response);
+    if (!response.ok || !payload.success) {
+      throw new Error(errorMessageFromPayload(payload as ApiEnvelope<unknown>));
+    }
+    const url = /^https?:\/\//i.test(payload.data.url) ? payload.data.url : `${API_BASE_URL}${payload.data.url.replace(/^\/api\/v1/, "")}`;
+    return { ...payload.data, url };
+  } finally {
+    if (!options.silent) endGlobalLoading();
   }
 }

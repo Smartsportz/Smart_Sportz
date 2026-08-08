@@ -1,26 +1,15 @@
-import { Filter, MapPin, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Filter, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Page, TournamentCard } from "../components/UI";
-import { sports, tournaments, withRuntimeTournamentStatus } from "../data/platform";
+import { withRuntimeTournamentStatus } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
 
-function FeaturedTournamentMiniCard({ item }: { item: any }) {
-  return (
-    <Link className="featured-mini-card click-card" to={`/tournaments/${item.slug}`}>
-      <img src={item.image} alt="" />
-      <div>
-        <h3>{item.name}</h3>
-        <p><MapPin size={15} />{item.location}</p>
-        {item.tournamentDescription && <small>{item.tournamentDescription}</small>}
-      </div>
-    </Link>
-  );
-}
-
 export function TournamentsPage() {
   useWheelHorizontal();
+  const [tournamentRows, setTournamentRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
@@ -28,12 +17,27 @@ export function TournamentsPage() {
   const [selectedPlaces, setSelectedPlaces] = useState<string[]>([]);
   const [featuredOnly, setFeaturedOnly] = useState(false);
 
-  const runtimeTournaments = useMemo(() => tournaments.map((item) => withRuntimeTournamentStatus(item)), []);
+  useEffect(() => {
+    apiRequest<any[]>("/public/tournaments")
+      .then(setTournamentRows)
+      .catch(() => setTournamentRows([]));
+  }, []);
+
+  const runtimeTournaments = useMemo(() => tournamentRows.map((item) => withRuntimeTournamentStatus({
+    ...item,
+    registrationStart: item.registrationStart ?? item.registration_start,
+    registrationEnd: item.registrationEnd ?? item.registration_end,
+    tournamentDescription: item.tournamentDescription ?? item.tournament_description,
+  })), [tournamentRows]);
+  const sportOptions = useMemo(
+    () => Array.from(new Set(runtimeTournaments.map((item) => item.sport).filter(Boolean))).sort(),
+    [runtimeTournaments],
+  );
   const placeOptions = useMemo(
     () => Array.from(new Set(runtimeTournaments.flatMap((item) => [item.location, ...(item.cities ?? [])]))).sort(),
     [runtimeTournaments],
   );
-  const statusOptions = ["Featured", "Open Registration", "Upcoming", "Live", "Completed"];
+  const statusOptions = ["Featured", "Open Registration", "Registration Closed", "Live", "Completed"];
 
   function toggleValue(list: string[], value: string) {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -50,7 +54,7 @@ export function TournamentsPage() {
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.some((status) => {
       if (status === "Featured") return isFeatured;
       if (status === "Open Registration") return item.status === "Registration Open";
-      if (status === "Completed") return item.status === "Completed";
+      if (status === "Completed") return item.status === "Completed" || item.status === "Registration Closed";
       return item.status === status;
     });
     return matchesSearch && matchesSport && matchesPlace && matchesFeatured && matchesStatus;
@@ -67,14 +71,13 @@ export function TournamentsPage() {
   const sections = [
     {
       key: "featured",
-      title: "Featured tournaments",
-      text: "Manager-selected tournament cards with only the event title and place.",
-      compact: true,
-      items: filteredTournaments.filter((item: any) => item.featureOnly || item.show_on_home === true).slice(0, 8),
+      title: "Upcoming tournaments",
+      text: "Upcoming tournaments created by admin or manager.",
+      items: filteredTournaments.filter((item) => item.status === "Upcoming").slice(0, 8),
     },
     {
       key: "upcoming",
-      title: "Upcoming tournaments",
+      title: "Registration Open",
       text: "Open registration tournaments available for team entry now.",
       items: filteredTournaments.filter((item) => item.status === "Registration Open"),
     },
@@ -87,8 +90,8 @@ export function TournamentsPage() {
     {
       key: "old",
       title: "Old tournaments",
-      text: "Completed tournament records and archived competitions.",
-      items: filteredTournaments.filter((item) => item.status === "Completed"),
+      text: "Registration-closed and completed tournament records with rounds available.",
+      items: filteredTournaments.filter((item) => item.status === "Completed" || item.status === "Registration Closed"),
     },
   ].filter((section) => section.items.length > 0);
 
@@ -120,9 +123,9 @@ export function TournamentsPage() {
           <div className="filter-group">
             <h3>Sports</h3>
             <div className="filter-chip-grid">
-              {sports.map((sport) => (
-                <button type="button" className={selectedSports.includes(sport.name) ? "active" : ""} onClick={() => setSelectedSports((current) => toggleValue(current, sport.name))} key={sport.slug}>
-                  {sport.name}
+              {sportOptions.map((sport) => (
+                <button type="button" className={selectedSports.includes(sport) ? "active" : ""} onClick={() => setSelectedSports((current) => toggleValue(current, sport))} key={sport}>
+                  {sport}
                 </button>
               ))}
             </div>
@@ -154,10 +157,7 @@ export function TournamentsPage() {
             </div>
             <div className="carousel-shell">
               <div className="card-grid carousel-row wheel-horizontal featured-carousel featured-status-carousel">
-                {section.items.map((item) => section.compact
-                  ? <FeaturedTournamentMiniCard key={item.slug} item={item} />
-                  : <TournamentCard key={item.slug} item={item} />,
-                )}
+                {section.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
               </div>
             </div>
           </section>

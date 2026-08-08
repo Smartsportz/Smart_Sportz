@@ -74,6 +74,17 @@ def attach_cities(item: dict) -> dict:
         city["city"]
         for city in rows("SELECT city FROM tournament_cities WHERE tournament_slug = ? ORDER BY sort_order, city", (item["slug"],))
     ]
+    item["prizes"] = rows("SELECT position, label, amount, sort_order FROM tournament_prizes WHERE tournament_slug = ? ORDER BY sort_order, position", (item["slug"],))
+    published_matches = rows(
+        "SELECT round FROM group_bracket_matches WHERE tournament_slug = ? AND published = 1",
+        (item["slug"],),
+    )
+    item["published_match_count"] = len(published_matches)
+    item["published_round_count"] = len({match["round"] for match in published_matches if match.get("round")})
+    try:
+        item["fee_breakdown"] = json.loads(item.get("fee_breakdown_json") or "[]")
+    except json.JSONDecodeError:
+        item["fee_breakdown"] = []
     return item
 
 
@@ -105,21 +116,7 @@ def tournament_jersey_options(tournament_slug: str) -> list[dict]:
             (tournament_slug,),
         )
     }
-    if uploaded:
-        options = uploaded
-    else:
-        colors = ["#0b8852", "#1d4ed8", "#ea580c", "#7c3aed", "#dc2626", "#0891b2", "#4d7c0f", "#9333ea"]
-        count = max(1, int(tournament.get("capacity") or 4))
-        options = [
-            {
-                "id": f"default-{index + 1}",
-                "label": f"Jersey {index + 1}",
-                "image": default_jersey_svg(str(index + 1), colors[index % len(colors)]),
-                "sort_order": index + 1,
-            }
-            for index in range(count)
-        ]
-    return [{**item, "reserved": item["image"] in reserved} for item in options]
+    return [{**item, "reserved": item["image"] in reserved} for item in uploaded]
 
 
 @router.get("/home")
@@ -138,9 +135,17 @@ def home():
             "discoveryCards": rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"),
             "liveHighlight": row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1"),
             "sponsorLogos": rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"),
+            "organizerCards": rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title"),
+            "announcements": rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"),
+            "newsPosts": rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"),
         }
 
     return ok(get_or_set_json(cache_key("public:home"), build))
+
+
+@router.get("/announcements")
+def published_announcements():
+    return ok(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC"))
 
 
 @router.get("/gallery/social")
@@ -219,6 +224,13 @@ def tournament_bracket(slug: str):
             "nodes": rows("SELECT id, label, team, round, x, y, status, bucket, scheduled_at FROM bracket_nodes WHERE tournament_slug = ? ORDER BY bucket, x, y", (slug,)),
             "connections": rows("SELECT id, source_id, target_id FROM bracket_connections WHERE tournament_slug = ?", (slug,)),
             "roundSchedules": rows("SELECT round, bucket, scheduled_at FROM bracket_round_schedules WHERE tournament_slug = ? ORDER BY round, bucket", (slug,)),
+            "matches": rows(
+                """SELECT id, round, team_1, team_2, starts_at, ends_at, status, sort_order
+                   FROM group_bracket_matches
+                   WHERE tournament_slug = ? AND published = 1
+                   ORDER BY sort_order, round""",
+                (slug,),
+            ),
         }
 
     return ok(get_or_set_json(cache_key("public:bracket", slug), build))

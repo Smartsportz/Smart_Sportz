@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,10 +11,11 @@ from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, GalleryAlbumPayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
-from app.services.notifications import send_sms_message, send_whatsapp_message
+from app.services.notifications import send_whatsapp_message
+from app.services.runtime_state import runtime_state
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -39,6 +40,8 @@ def manager_tournament_slugs(user: dict) -> list[str]:
 
 
 def ensure_city_access(user: dict, city: str) -> None:
+    if not city:
+        return
     if user["role"] == "super_admin":
         return
     if city.lower() not in [item.lower() for item in manager_cities(user)]:
@@ -59,6 +62,24 @@ def ensure_tournament_access(user: dict, item: dict) -> None:
 def slugify(title: str) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return value or f"news-{uuid4().hex[:8]}"
+
+
+def clear_public_cache(*slugs: str) -> None:
+    keys = [
+        cache_key("public:home"),
+        cache_key("public:tournaments"),
+        cache_key("content:news"),
+    ]
+    keys.extend(cache_key("public:tournament", slug) for slug in slugs if slug)
+    keys.extend(cache_key("public:bracket", slug) for slug in slugs if slug)
+    keys.extend(cache_key("content:news-detail", slug) for slug in slugs if slug)
+    for key in keys:
+        runtime_state.delete(key)
+
+
+def optional_tournament_slug(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned or None
 
 
 def tournament_slugify(title: str) -> str:
@@ -166,7 +187,7 @@ def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
             "liveMatches": rows("SELECT * FROM live_matches"),
         }
 
-    return ok(get_or_set_json(cache_key("management:dashboard", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
+    return ok(build())
 
 
 @router.get("/tournaments")
@@ -216,9 +237,9 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     computed_accent = accent_for_status(computed_status, payload.accent)
     execute(
         """INSERT INTO tournaments(slug, name, sport, status, location, date, registration_start, registration_end, teams, capacity, team_size,
-          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, fee_breakdown_json, show_on_home,
+          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, rules_pdf, rules_text, fee_breakdown_json, show_on_home,
           block_repeat_registration)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             tournament_slug,
             payload.name,
@@ -242,6 +263,8 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
             payload.address,
             payload.sport_description,
             payload.tournament_description,
+            payload.rules_pdf,
+            payload.rules_text,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
             int(payload.show_on_home),
             int(payload.block_repeat_registration),
@@ -249,6 +272,7 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     )
     _save_tournament_children(tournament_slug, payload)
     log(user["email"], "tournament_created", "tournament", tournament_slug, f"Created {payload.name}")
+    clear_public_cache(tournament_slug)
     return ok(_tournament_detail(tournament_slug), "Tournament created")
 
 
@@ -269,7 +293,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     execute(
         """UPDATE tournaments SET name = ?, sport = ?, status = ?, location = ?, date = ?, registration_start = ?, registration_end = ?,
           teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, min_age = ?, max_age = ?, prize = ?, image = ?, poster = ?, accent = ?, address = ?,
-          sport_description = ?, tournament_description = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
+          sport_description = ?, tournament_description = ?, rules_pdf = ?, rules_text = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
         (
             payload.name,
             sport_name,
@@ -292,6 +316,8 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
             payload.address,
             payload.sport_description,
             payload.tournament_description,
+            payload.rules_pdf,
+            payload.rules_text,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
             int(payload.show_on_home),
             int(payload.block_repeat_registration),
@@ -300,6 +326,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     )
     _save_tournament_children(tournament_slug, payload)
     log(user["email"], "tournament_updated", "tournament", tournament_slug, f"Updated {payload.name}")
+    clear_public_cache(tournament_slug)
     return ok(_tournament_detail(tournament_slug), "Tournament updated")
 
 
@@ -309,14 +336,20 @@ def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("
     if not item:
         raise HTTPException(status_code=404, detail="Tournament not found")
     ensure_tournament_access(user, item)
-    blockers = row("SELECT COUNT(*) AS count FROM registrations WHERE tournament_slug = ?", (tournament_slug,))
-    if blockers and blockers["count"]:
-        raise HTTPException(status_code=409, detail="Tournament has registrations. Archive or complete it instead of deleting.")
     ensure_tournament_access(user, item)
-    for table in ["tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_connections", "bracket_nodes", "notification_events"]:
+    registration_ids = [item["id"] for item in rows("SELECT id FROM registrations WHERE tournament_slug = ?", (tournament_slug,))]
+    for registration_id in registration_ids:
+        execute("DELETE FROM registration_documents WHERE registration_id = ?", (registration_id,))
+        execute("DELETE FROM registration_members WHERE registration_id = ?", (registration_id,))
+        execute("DELETE FROM payments WHERE registration_id = ?", (registration_id,))
+    for post in rows("SELECT slug FROM news_posts WHERE tournament_slug = ?", (tournament_slug,)):
+        execute("DELETE FROM news_blocks WHERE post_slug = ?", (post["slug"],))
+        execute("DELETE FROM news_social WHERE news_slug = ?", (post["slug"],))
+    for table in ["registrations", "payment_intents", "news_posts", "tournament_prizes", "tournament_cities", "tournament_manager_assignments", "bracket_round_schedules", "group_bracket_matches", "bracket_connections", "bracket_nodes", "notification_events"]:
         execute(f"DELETE FROM {table} WHERE tournament_slug = ?", (tournament_slug,))
     execute("DELETE FROM tournaments WHERE slug = ?", (tournament_slug,))
     log(user["email"], "tournament_deleted", "tournament", tournament_slug, f"Deleted {item['name']}")
+    clear_public_cache(tournament_slug)
     return ok({"deleted": True, "slug": tournament_slug}, "Tournament deleted")
 
 
@@ -355,7 +388,7 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
     execute(
         """INSERT INTO news_posts(slug, title, short_description, image, category, sport, tournament_slug, city, status, is_highlight, author_id, published_at, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, int(payload.is_highlight), user["id"], published_at, now, now),
+        (slug, payload.title, payload.short_description, payload.image, payload.category, payload.sport, optional_tournament_slug(payload.tournament_slug), payload.city, payload.status, int(payload.is_highlight), user["id"], published_at, now, now),
     )
     statements = [
         (
@@ -367,6 +400,7 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
     if statements:
         execute_many(statements)
     log(user["email"], "news_created", "news", slug, f"News post created for {payload.city}")
+    clear_public_cache(slug)
     return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post created")
 
 
@@ -383,7 +417,7 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
         """UPDATE news_posts
            SET title = ?, short_description = ?, image = ?, category = ?, sport = ?, tournament_slug = ?, city = ?, status = ?, is_highlight = ?, published_at = ?, updated_at = ?
            WHERE slug = ?""",
-        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, payload.tournament_slug, payload.city, payload.status, int(payload.is_highlight), published_at, now, slug),
+        (payload.title, payload.short_description, payload.image, payload.category, payload.sport, optional_tournament_slug(payload.tournament_slug), payload.city, payload.status, int(payload.is_highlight), published_at, now, slug),
     )
     execute("DELETE FROM news_blocks WHERE post_slug = ?", (slug,))
     statements = [
@@ -396,8 +430,77 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
     if statements:
         execute_many(statements)
     log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
+    clear_public_cache(slug)
     return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post updated")
 
+
+@router.get("/gallery")
+def gallery_albums(user: dict = Depends(require_roles("super_admin", "management"))):
+    cities = manager_cities(user)
+    if user["role"] != "super_admin" and not cities:
+        return ok([])
+    if user["role"] == "super_admin":
+        return ok(rows("SELECT * FROM gallery_albums ORDER BY sort_order, title"))
+    placeholders = ",".join(["?"] * len(cities))
+    return ok(rows(f"SELECT * FROM gallery_albums WHERE city IN ({placeholders}) ORDER BY sort_order, title", cities))
+
+
+@router.post("/gallery")
+def create_gallery_album(payload: GalleryAlbumPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    if payload.city:
+        ensure_city_access(user, payload.city)
+    base_slug = slugify(payload.title)
+    slug = base_slug
+    counter = 2
+    while row("SELECT slug FROM gallery_albums WHERE slug = ?", (slug,)):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    date_label = " - ".join([value for value in [payload.from_date, payload.to_date] if value]) or payload.from_date or payload.to_date or "Published gallery"
+    month_label = payload.from_date[:7] if payload.from_date else ""
+    execute(
+        """INSERT INTO gallery_albums(slug, title, sport, city, date_label, month_label, day_count, cover, summary, sort_order, published)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (slug, payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, 1, payload.image, payload.description, payload.sort_order, int(payload.published)),
+    )
+    log(user["email"], "gallery_created", "gallery", slug, f"Gallery album created: {payload.title}")
+    clear_public_cache()
+    return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery created")
+
+
+@router.patch("/gallery/{slug}")
+def update_gallery_album(slug: str, payload: GalleryAlbumPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+    if item["city"]:
+        ensure_city_access(user, item["city"])
+    if payload.city:
+        ensure_city_access(user, payload.city)
+    date_label = " - ".join([value for value in [payload.from_date, payload.to_date] if value]) or payload.from_date or payload.to_date or item["date_label"]
+    month_label = payload.from_date[:7] if payload.from_date else item["month_label"]
+    execute(
+        """UPDATE gallery_albums
+           SET title = ?, sport = ?, city = ?, date_label = ?, month_label = ?, cover = ?, summary = ?, sort_order = ?, published = ?
+           WHERE slug = ?""",
+        (payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, payload.image, payload.description, payload.sort_order, int(payload.published), slug),
+    )
+    log(user["email"], "gallery_updated", "gallery", slug, f"Gallery album updated: {payload.title}")
+    clear_public_cache()
+    return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery updated")
+
+
+@router.delete("/gallery/{slug}")
+def delete_gallery_album(slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Gallery not found")
+    if item["city"]:
+        ensure_city_access(user, item["city"])
+    execute("DELETE FROM gallery_social WHERE image_key = ?", (f"album:{slug}",))
+    execute("DELETE FROM gallery_albums WHERE slug = ?", (slug,))
+    log(user["email"], "gallery_deleted", "gallery", slug, f"Gallery album deleted: {item['title']}")
+    clear_public_cache()
+    return ok({"deleted": True, "slug": slug}, "Gallery deleted")
 
 @router.patch("/sports/{sport_slug}/home-visibility")
 def update_sport_home_visibility(sport_slug: str, payload: SportHomeVisibilityPayload, user: dict = Depends(require_roles("super_admin", "management"))):
@@ -524,7 +627,7 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
     accepted = rows(
         """SELECT id, team_name AS name, captain_name, status
            FROM registrations
-           WHERE tournament_slug = ? AND status = 'accepted'
+           WHERE tournament_slug = ? AND status IN ('accepted', 'pending_approval', 'approved')
            ORDER BY created_at""",
         (tournament_slug,),
     )
@@ -535,6 +638,69 @@ def bracket_workspace(tournament_slug: str, _: dict = Depends(require_roles("sup
         "roundSchedules": rows("SELECT round, bucket, scheduled_at FROM bracket_round_schedules WHERE tournament_slug = ? ORDER BY round, bucket", (tournament_slug,)),
         "notifications": rows("SELECT * FROM notification_events WHERE tournament_slug = ? ORDER BY created_at DESC LIMIT 10", (tournament_slug,)),
     })
+
+
+@router.get("/group-brackets/{tournament_slug}")
+def group_bracket_workspace(tournament_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    accepted = rows(
+        """SELECT id, team_name AS name, captain_name, status
+           FROM registrations
+           WHERE tournament_slug = ? AND status IN ('accepted', 'pending_approval', 'approved')
+           ORDER BY created_at""",
+        (tournament_slug,),
+    )
+    return ok({
+        "tournament": item,
+        "acceptedTeams": accepted,
+        "matches": rows(
+            """SELECT id, round, team_1, team_2, starts_at, ends_at, status, sort_order, published
+               FROM group_bracket_matches
+               WHERE tournament_slug = ?
+               ORDER BY sort_order, round""",
+            (tournament_slug,),
+        ),
+        "notifications": rows("SELECT * FROM notification_events WHERE tournament_slug = ? ORDER BY created_at DESC LIMIT 10", (tournament_slug,)),
+    })
+
+
+@router.post("/group-brackets/{tournament_slug}/save")
+def save_group_bracket(tournament_slug: str, payload: GroupBracketSavePayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    execute("DELETE FROM group_bracket_matches WHERE tournament_slug = ?", (tournament_slug,))
+    timestamp = datetime.now(timezone.utc).isoformat()
+    statements: list[tuple[str, tuple]] = []
+    for index, match in enumerate(payload.matches, start=1):
+        statements.append((
+            """INSERT INTO group_bracket_matches(
+              id, tournament_slug, round, team_1, team_2, starts_at, ends_at,
+              status, sort_order, published, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                match.id or f"gbm_{uuid4().hex[:12]}",
+                tournament_slug,
+                match.round,
+                match.team_1,
+                match.team_2,
+                match.starts_at,
+                match.ends_at,
+                match.status,
+                match.sort_order or index,
+                int(payload.publish),
+                timestamp,
+                timestamp,
+            ),
+        ))
+    if statements:
+        execute_many(statements)
+    log(user["email"], "group_bracket_saved", "tournament", tournament_slug, payload.audit_reason)
+    return group_bracket_workspace(tournament_slug, user)
 
 
 @router.post("/brackets/{tournament_slug}/save")
@@ -576,20 +742,53 @@ def advance_winner(tournament_slug: str, payload: WinnerAdvancePayload, user: di
 @router.post("/brackets/{tournament_slug}/notify")
 def notify_bracket(tournament_slug: str, payload: NotificationSendPayload, user: dict = Depends(require_roles("super_admin", "management"))):
     event_id = f"notify_{uuid4().hex[:12]}"
-    delivery_results = []
-    if "sms" in payload.channels:
-        delivery_results.append(send_sms_message(settings.twilio_default_to or "", payload.message))
-    if "whatsapp" in payload.channels:
-        delivery_results.append(send_whatsapp_message(settings.twilio_default_to or "", payload.message))
+    delivery_results = [send_whatsapp_message(settings.twilio_default_to or "", payload.message)]
     execute(
         "INSERT INTO notification_events(id, tournament_slug, audience, channels, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (event_id, tournament_slug, payload.audience, ",".join(payload.channels), payload.message, "local_sent", datetime.now(timezone.utc).isoformat()),
+        (event_id, tournament_slug, payload.audience, "whatsapp", payload.message, "local_sent", datetime.now(timezone.utc).isoformat()),
     )
-    log(user["email"], "manual_notification_sent", "notification", event_id, f"Sent bracket notification via {', '.join(payload.channels)}")
+    log(user["email"], "manual_notification_sent", "notification", event_id, "Sent bracket notification via WhatsApp")
     return ok({
         "event": row("SELECT * FROM notification_events WHERE id = ?", (event_id,)),
         "deliveries": [{"provider": item.provider, "ok": item.ok, "message": item.message} for item in delivery_results],
     }, "Manual notification stored locally")
+
+
+@router.post("/group-brackets/{tournament_slug}/send-reminders")
+def send_group_bracket_reminders(tournament_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    ensure_tournament_access(user, item)
+    now = datetime.now(timezone.utc)
+    from_time = (now + timedelta(days=2)).date().isoformat()
+    to_time = (now + timedelta(days=3)).date().isoformat()
+    matches = rows(
+        """SELECT round, team_1, team_2, starts_at, ends_at, status
+           FROM group_bracket_matches
+           WHERE tournament_slug = ? AND published = 1 AND starts_at >= ? AND starts_at < ?
+           ORDER BY starts_at, sort_order""",
+        (tournament_slug, from_time, to_time),
+    )
+    deliveries = []
+    for match in matches:
+        message = (
+            "Smart Sportz match reminder.\n"
+            f"Tournament: {item['name']}\n"
+            f"Round: {match['round']}\n"
+            f"Teams: {match['team_1'] or 'TBD'} vs {match['team_2'] or 'TBD'}\n"
+            f"Match time: {match['starts_at'] or 'TBA'} to {match['ends_at'] or 'TBA'}\n"
+            "Reminder: your match is scheduled in 2 days."
+        )
+        event_id = f"notify_{uuid4().hex[:12]}"
+        result = send_whatsapp_message(settings.twilio_default_to or "", message)
+        execute(
+            "INSERT INTO notification_events(id, tournament_slug, audience, channels, message, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (event_id, tournament_slug, f"{match['team_1']}, {match['team_2']}", "whatsapp", message, "local_sent", datetime.now(timezone.utc).isoformat()),
+        )
+        deliveries.append({"provider": result.provider, "ok": result.ok, "message": result.message})
+    log(user["email"], "match_reminders_sent", "notification", tournament_slug, f"{len(deliveries)} WhatsApp reminders")
+    return ok({"count": len(deliveries), "deliveries": deliveries}, "WhatsApp reminders processed")
 
 
 @router.get("/matches")
