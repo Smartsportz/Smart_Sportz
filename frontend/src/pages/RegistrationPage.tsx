@@ -236,7 +236,7 @@ function completedRecordFromBackend(registration: BackendRegistration, tournamen
   };
 }
 
-function amountForTournament(slug: string, tournament?: Record<string, any>) {
+function amountForTournament(_slug: string, tournament?: Record<string, any>) {
   const feeLines = Array.isArray(tournament?.feeBreakdown)
     ? tournament?.feeBreakdown
     : Array.isArray(tournament?.fee_breakdown)
@@ -244,13 +244,11 @@ function amountForTournament(slug: string, tournament?: Record<string, any>) {
       : [];
   const feeTotal = feeLines.reduce((total: number, line: any) => total + Number(line?.value || 0), 0);
   if (feeTotal > 0) return feeTotal * 100;
-  if (slug.includes("corporate")) return 129900;
-  if (slug.includes("football")) return 349900;
-  return 517900;
+  return 0;
 }
 
 function totalPayableForAmount(amount: number) {
-  return amount + Math.round(amount * 0.18);
+  return amount;
 }
 
 function formatInr(cents: number) {
@@ -284,20 +282,12 @@ function buildAppUpiLinks(upiIntent: string) {
   ];
 }
 
-function prizePoolAmount(prize: string) {
-  const number = Number(prize.replace(/[^\d]/g, ""));
-  return Number.isFinite(number) ? number * 100 : 0;
-}
-
-function prizeBreakdown(prize: string) {
-  const total = prizePoolAmount(prize);
-  const first = Math.round(total * 0.6);
-  const second = Math.round(total * 0.3);
-  return [
-    { label: "1st Prize", amount: first },
-    { label: "2nd Prize", amount: second },
-    { label: "3rd Prize", amount: total - first - second },
-  ];
+function tournamentPrizeLines(tournament: Record<string, any>) {
+  return Array.isArray(tournament.prizes)
+    ? tournament.prizes
+        .map((line: any) => ({ label: String(line?.label ?? `${line?.position ?? ""} Prize`).trim(), amount: Number(line?.amount || 0) }))
+        .filter((line) => line.label && line.amount > 0)
+    : [];
 }
 
 function formatFileSize(size?: number) {
@@ -405,7 +395,11 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
 function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
   const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
-  if (!uploadedRulesPdf) return;
+  const isPdfSource = /^data:application\/pdf/i.test(uploadedRulesPdf) || /^https?:\/\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf) || /^\/media\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf);
+  if (!uploadedRulesPdf || !isPdfSource) {
+    window.alert("Rules PDF is not uploaded for this tournament.");
+    return;
+  }
   const link = document.createElement("a");
   link.href = uploadedRulesPdf;
   link.download = uploadedRulesPdf.split("/").pop() || `${tournament.slug}-rules-and-conditions.pdf`;
@@ -471,8 +465,8 @@ function RegistrationShell({ children }: { children: React.ReactNode }) {
 }
 
 function RegistrationSummary({ tournament, amount, showTimeline = false }: { tournament: Record<string, any>; amount: number; showTimeline?: boolean }) {
-  const fees = Math.round(amount * 0.18);
   const total = totalPayableForAmount(amount);
+  const prizes = tournamentPrizeLines(tournament);
   return (
     <aside className="registration-side">
       <section className="registration-summary-card">
@@ -489,18 +483,17 @@ function RegistrationSummary({ tournament, amount, showTimeline = false }: { tou
         </div>
         <div className="summary-lines">
           <p><span>Venue</span><b>{tournament.location}</b></p>
-          <p><span>Prize Pool</span><b>{tournament.prize}</b></p>
           <p><span>Slots</span><b>{String(tournament.teams).padStart(2, "0")}/{tournament.capacity} Filled</b></p>
         </div>
-        <div className="prize-split">
-          {prizeBreakdown(tournament.prize).map((item) => <p key={item.label}><span>{item.label}</span><b>{formatInr(item.amount)}</b></p>)}
-        </div>
+        {prizes.length > 0 && (
+          <div className="prize-split">
+            {prizes.map((item) => <p key={item.label}><span>{item.label}</span><b>{formatInr(item.amount * 100)}</b></p>)}
+          </div>
+        )}
         <div className="summary-lines total-lines">
-          <p><span>Registration Fee</span><b>{formatInr(amount)}</b></p>
-          <p><span>Platform & GST (18%)</span><b>{formatInr(fees)}</b></p>
-          <p className="payable"><span>Total Payable</span><b>{formatInr(total)}</b></p>
+          <p className="payable"><span>Registration Fee</span><b>{amount > 0 ? formatInr(total) : "Not configured"}</b></p>
         </div>
-        <button className="btn btn-secondary wide" type="button"><Download size={16} />Download Rulebook</button>
+        <button className="btn btn-secondary wide" type="button" onClick={() => downloadRulesFile(tournament as any)}><Download size={16} />Download Rulebook</button>
       </section>
       {showTimeline && (
         <section className="registration-timeline">
@@ -691,6 +684,7 @@ function parseExcelFile(file: File): Promise<ImportedRosterEntry[]> {
 
 function normalizeTournamentRecord(record: Record<string, any>, fallback: (typeof tournaments)[number]) {
   const feeBreakdown = Array.isArray(record.fee_breakdown) ? record.fee_breakdown : Array.isArray(record.feeBreakdown) ? record.feeBreakdown : (fallback as any).feeBreakdown ?? [];
+  const prizes = Array.isArray(record.prizes) ? record.prizes : [];
   return {
     ...fallback,
     ...record,
@@ -704,6 +698,7 @@ function normalizeTournamentRecord(record: Record<string, any>, fallback: (typeo
     rulesPdf: record.rules_pdf ?? (fallback as any).rulesPdf ?? "",
     rulesText: record.rules_text ?? (fallback as any).rulesText ?? "",
     feeBreakdown,
+    prizes,
     show_on_home: Boolean(record.show_on_home ?? (fallback as any).show_on_home),
     cities: Array.isArray(record.cities) && record.cities.length ? record.cities : fallback.cities,
   };

@@ -753,9 +753,8 @@ function AdminTournamentsDbPanel() {
             <div className="form-grid">
               <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) patchForm({ rulesPdf: `/rules/${file.name}` });
+                if (file) void fileToDataUrl(file).then((rulesPdf) => patchForm({ rulesPdf }));
               }} /></label>
-              <label>Rules PDF path<input value={form.rulesPdf} onChange={(event) => patchForm({ rulesPdf: event.target.value })} placeholder="/rules/tournament-rules.pdf" /></label>
               <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} placeholder="Rules shown in the registration acceptance step." /></label>
             </div>
             <label className="visibility-row"><span><b>Add new upcoming tournament</b><small>Show this tournament in the Upcoming Tournament row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
@@ -1830,8 +1829,7 @@ export function AdminTournamentEditorPage() {
                 <div className="form-grid">
                   <label>Sport description<textarea value={form.sportDescription} onChange={(event) => patchForm({ sportDescription: event.target.value })} /></label>
                   <label>Tournament description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} /></label>
-                  <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) patchForm({ rulesPdf: `/rules/${file.name}` }); }} /></label>
-                  <label>Rules PDF path<input value={form.rulesPdf} onChange={(event) => patchForm({ rulesPdf: event.target.value })} placeholder="/rules/tournament-rules.pdf" /></label>
+                  <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((rulesPdf) => patchForm({ rulesPdf })); }} /></label>
                   <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} /></label>
                 </div>
                 <div className="admin-flow-checks">

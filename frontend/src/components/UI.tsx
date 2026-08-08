@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronRight, Download, Search, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -315,17 +315,40 @@ function downloadTableCsv(columns: string[], rows: Array<Array<React.ReactNode>>
 }
 
 export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<React.ReactNode>> }) {
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+
+  useEffect(() => {
+    const update = () => setScrollWidth(tableRef.current?.scrollWidth ?? 0);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [rows, columns]);
+
+  function syncScroll(source: "top" | "body") {
+    const top = topScrollRef.current;
+    const body = bodyScrollRef.current;
+    if (!top || !body) return;
+    if (source === "top") body.scrollLeft = top.scrollLeft;
+    else top.scrollLeft = body.scrollLeft;
+  }
+
   return (
     <div className="table-wrap">
       {rows.length > 0 && (
-        <div className="table-actions">
+        <div className="table-export-actions">
           <button type="button" onClick={() => downloadTableCsv(columns, rows)}><Download size={16} /> Download</button>
         </div>
       )}
-      <table>
-        <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
-      </table>
+      <div className="table-scroll-top" ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
+      <div className="table-scroll-body" ref={bodyScrollRef} onScroll={() => syncScroll("body")}>
+        <table ref={tableRef}>
+          <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
+          <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </div>
   );
 }

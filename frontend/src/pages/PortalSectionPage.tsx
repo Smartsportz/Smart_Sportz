@@ -1,14 +1,23 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { managementSidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
+import { managementSidebar, sidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
 import { apiRequest } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 const userContent = {
   profile: ["Identity verification", "Captain and player details", "Emergency contact", "Document upload"],
@@ -67,6 +76,8 @@ type TournamentFormState = {
   address: string;
   sportDescription: string;
   tournamentDescription: string;
+  rulesPdf: string;
+  rulesText: string;
   showOnHome: boolean;
   feeBreakdown: MoneyLine[];
   prizes: PrizeLine[];
@@ -92,6 +103,8 @@ const emptyTournamentForm: TournamentFormState = {
   address: "",
   sportDescription: "",
   tournamentDescription: "",
+  rulesPdf: "",
+  rulesText: "",
   showOnHome: true,
   feeBreakdown: [{ label: "Entry Fee", value: 5000 }],
   prizes: [
@@ -131,6 +144,8 @@ function formFromTournament(item?: Record<string, any>): TournamentFormState {
     address: item.address ?? "",
     sportDescription: item.sport_description ?? item.sportDescription ?? "",
     tournamentDescription: item.tournament_description ?? item.tournamentDescription ?? "",
+    rulesPdf: item.rules_pdf ?? item.rulesPdf ?? "",
+    rulesText: item.rules_text ?? item.rulesText ?? "",
     showOnHome: Boolean(item.show_on_home ?? item.showOnHome ?? true),
     feeBreakdown,
     prizes,
@@ -272,8 +287,12 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
 }
 
 export function ManagementSectionPage({ section }: { section: keyof typeof managementContent }) {
+  const location = useLocation();
   const title = section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const { token } = useAuth();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  const portalSidebar = isAdminRoute ? sidebar : managementSidebar;
+  const dashboardPath = isAdminRoute ? "/admin/dashboard" : "/management/dashboard";
   const [managerDashboard, setManagerDashboard] = useState<ManagerDashboardData | null>(null);
   const [managerNews, setManagerNews] = useState<ManagerNewsData | null>(null);
   const [sectionRecords, setSectionRecords] = useState<Array<Record<string, any>>>([]);
@@ -431,6 +450,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       address: tournamentForm.address,
       sport_description: tournamentForm.sportDescription,
       tournament_description: tournamentForm.tournamentDescription,
+      rules_pdf: tournamentForm.rulesPdf,
+      rules_text: tournamentForm.rulesText,
       fee_breakdown: tournamentForm.feeBreakdown.filter((line) => line.label.trim()),
       prizes: tournamentForm.prizes,
       cities: selectedCities,
@@ -659,7 +680,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
 
   return (
     <Page>
-      <PortalShell title={title} subtitle="Management portal section for tournament-specific operations." sidebar={managementSidebar} action={<Link className="btn btn-primary" to="/management/dashboard">Dashboard</Link>}>
+      <PortalShell title={title} subtitle="Management portal section for tournament-specific operations." sidebar={portalSidebar} action={<Link className="btn btn-primary" to={dashboardPath}>Dashboard</Link>}>
         {managerError && <div className="form-alert">{managerError}</div>}
         {managerMessage && <p className="form-note">{managerMessage}</p>}
         {primaryContent}
@@ -750,6 +771,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                   <div className="form-grid">
                     <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
                     <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
+                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void fileToDataUrl(file).then((rulesPdf) => patchTournamentForm({ rulesPdf })); }} /></label>
+                    <label>Rules acceptance text<textarea value={tournamentForm.rulesText} onChange={(event) => patchTournamentForm({ rulesText: event.target.value })} /></label>
                   </div>
                   <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
                   <div className="registration-actions compact-actions">

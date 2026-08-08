@@ -1,4 +1,4 @@
-import { Bell, Plus } from "lucide-react";
+import { Bell, Download, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -51,6 +51,29 @@ function statusAccent(status: string) {
   if (status === "live") return "orange";
   if (status === "completed") return "emerald";
   return "blue";
+}
+
+function downloadRoundCsv(matches: GroupMatch[]) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const rows = [
+    ["Round", "Team 1", "Team 2", "From", "To", "Status"],
+    ...matches.map((match) => [
+      match.round,
+      match.team_1 || "TBD",
+      match.team_2 || "TBD",
+      match.starts_at || "-",
+      match.ends_at || "-",
+      statusLabel(match.status),
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(escape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `smart-sportz-rounds-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function TournamentRoundsPage() {
@@ -264,7 +287,10 @@ export function BracketWorkspacePage() {
               <h2>Round Table</h2>
               <p>Add rounds manually, select teams from accepted teams, set match timing, and publish to public rounds.</p>
             </div>
-            <button className="btn btn-secondary" type="button" onClick={addMatch}><Plus size={16} /> Add round</button>
+            <div className="registration-actions compact-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => downloadRoundCsv(matches)}><Download size={16} /> Download data</button>
+              <button className="btn btn-secondary" type="button" onClick={addMatch}><Plus size={16} /> Add round</button>
+            </div>
           </div>
           <div className="group-bracket-table">
             <div className="group-bracket-head">
