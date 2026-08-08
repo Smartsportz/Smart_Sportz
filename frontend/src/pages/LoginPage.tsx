@@ -45,7 +45,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
-  const emailPlaceholder = loginPreset === "management"
+  /* const emailPlaceholder = loginPreset === "management"
     ? "manager@smartsportz.in"
     : loginPreset === "participant"
       ? "user@smartsportz.in"
@@ -55,7 +55,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
     : loginPreset === "participant"
       ? "user123"
       : "admin123";
-
+  */
   function applyLoginPreset(preset: "super_admin" | "management" | "participant") {
     setLoginPreset(preset);
     setEmail("");
@@ -202,14 +202,14 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
                   : "Please enter your credentials to access your dashboard."}
           </p>
           {!challenge && mode === "signup" && <label>Full name<input placeholder="Team captain name" value={name} onChange={(event) => setName(event.target.value)} /></label>}
-          {!challenge && <label>Email address<input placeholder={emailPlaceholder} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
+          {!challenge && <label>Email address<input placeholder='example@gmail.com' value={email} onChange={(event) => setEmail(event.target.value)} /></label>}   {/* removed the placeholder of emailPlaceholder */}
           {!challenge && mode === "signup" && <label>Phone number<input placeholder="+916374409006" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>}
           {!challenge && !recovery && (
             <label className="password-field">
               Password
               <div className="password-input-wrap">
                 <input
-                  placeholder={passwordPlaceholder}
+                  placeholder="*****"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -250,13 +250,15 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
           <button type="submit" className="btn btn-primary wide" disabled={loading}>
             {loading ? "Please wait..." : challenge ? "Verify OTP" : recovery ? "Send OTP" : mode === "signup" ? "Create and verify account" : "Sign in"}
           </button>
+          {/*
           {!recovery && !challenge && mode === "login" && (
             <div className="login-help">
               <button type="button" onClick={() => applyLoginPreset("super_admin")}>Super Admin</button>
               <button type="button" onClick={() => applyLoginPreset("management")}>Management</button>
               <button type="button" onClick={() => applyLoginPreset("participant")}>Participant</button>
             </div>
-          )}
+          )} 
+            */}
           {!recovery && !challenge && (
             <button className="auth-switch" type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
               {mode === "login" ? "I do not have an account already" : "I already have an account"}

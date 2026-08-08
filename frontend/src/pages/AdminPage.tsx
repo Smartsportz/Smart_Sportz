@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search, Edit, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search, Edit2, Eye, EyeOff, Trash } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
@@ -878,7 +878,7 @@ export function AdminCMSEditPage() {
     }
 
     apiRequest(endpoint, {}, token)
-      .then((data) => {
+      .then((data: any) => {
         setItem(data);
         setFormData(data);
         setLoading(false);
@@ -1050,7 +1050,7 @@ function AdminCmsDbPanel() {
     item.tournament_slug || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
-      <Link to={`/admin/cms/edit/discovery/${item.slug}`}><Edit size={14} /> Edit</Link>
+      <Link to={`/admin/cms/edit/discovery/${item.slug}`}><Edit2 size={14} /> Edit</Link>
       <Link to={item.register_path || "/"}><Eye size={14} /> View</Link>
     </span>,
   ]);
@@ -1061,7 +1061,7 @@ function AdminCmsDbPanel() {
     item.stage_label || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
-      <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><Edit size={14} /> Edit</Link>
+      <Link to={`/admin/cms/edit/live-highlight/${item.id}`}><Edit2 size={14} /> Edit</Link>
       <Link to={item.link_path || "/"}><Eye size={14} /> View</Link>
     </span>,
   ]);
@@ -1072,7 +1072,7 @@ function AdminCmsDbPanel() {
     item.link_url || "-",
     <span className={`status ${item.published ? "emerald" : "orange"}`}>{item.published ? "Published" : "Draft"}</span>,
     <span className="table-actions">
-      <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><Edit size={14} /> Edit</Link>
+      <Link to={`/admin/cms/edit/sponsor/${item.slug}`}><Edit2 size={14} /> Edit</Link>
       {item.link_url && <Link to={item.link_url}><Eye size={14} /> View</Link>}
     </span>,
   ]);
@@ -1293,7 +1293,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
       let result: AnnouncementRecord;
       if (editingId) {
         // Update existing announcement
-        result = await apiRequest(`/admin/announcements/${editingId}`, {
+        result = await apiRequest<AnnouncementRecord>(`/admin/announcements/${editingId}`, {
           method: "PUT",
           body: JSON.stringify(payload)
         }, token);
@@ -1301,7 +1301,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
         setMessage("Announcement updated successfully!");
       } else {
         // Create new announcement
-        result = await apiRequest("/admin/announcements", {
+        result = await apiRequest<AnnouncementRecord>("/admin/announcements", {
           method: "POST",
           body: JSON.stringify(payload)
         }, token);
@@ -1321,7 +1321,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
 
   async function toggleVisibility(id: string) {
     try {
-      const updated = await apiRequest(`/admin/announcements/${id}/publish`, {
+      const updated = await apiRequest<AnnouncementRecord>(`/admin/announcements/${id}/publish`, {
         method: "PATCH",
         body: JSON.stringify({})
       }, token);
@@ -1371,7 +1371,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
       </button>
       <button className="btn btn-secondary tiny-btn" onClick={() => openDraft(item)}>Edit</button>
       <button className="btn btn-danger tiny-btn" onClick={() => setDeleteConfirm(item)}>
-        <Trash2 size={14} />
+        <Trash size={14} />
       </button>
     </span>,
   ]);
@@ -1541,7 +1541,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
             </p>
             <div className="registration-actions compact-actions" style={{ justifyContent: "center" }}>
               <button className="btn btn-danger" type="button" onClick={confirmDelete}>
-                <Trash2 size={16} /> Yes, Delete
+                <Trash size={16} /> Yes, Delete
               </button>
               <button className="btn btn-secondary" type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button>
             </div>
