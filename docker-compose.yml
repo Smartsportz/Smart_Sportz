@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: smart_sportz
+      POSTGRES_USER: smart_sportz
+      POSTGRES_PASSWORD: smart_sportz_local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smart_sportz -d smart_sportz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5433:5432"
+    volumes:
+      - smart_sportz_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "6379:6379"
+    volumes:
+      - smart_sportz_redis:/data
+
+  backend-init:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.cli", "init-db"]
+    environment:
+      APP_ENV: docker
+      APP_SECRET_KEY: change-this-docker-secret
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      POSTGRES_PRIMARY_SCHEMA: primary_app
+      POSTGRES_MIRROR_SCHEMA: mirror_backup
+      POSTGRES_AUDIT_SCHEMA: audit_event
+      REDIS_URL: redis://redis:6379/0
+      INIT_DB_ON_STARTUP: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: docker
+      APP_SECRET_KEY: change-this-docker-secret
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      POSTGRES_PRIMARY_SCHEMA: primary_app
+      POSTGRES_MIRROR_SCHEMA: mirror_backup
+      POSTGRES_AUDIT_SCHEMA: audit_event
+      REDIS_URL: redis://redis:6379/0
+      INIT_DB_ON_STARTUP: "false"
+      PUBLIC_CACHE_TTL_SECONDS: "45"
+      DASHBOARD_CACHE_TTL_SECONDS: "20"
+      ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      WEB_CONCURRENCY: "2"
+    depends_on:
+      backend-init:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_BASE_PATH: /
+        VITE_API_BASE_URL: /api/v1
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  smart_sportz_postgres:
+  smart_sportz_redis:

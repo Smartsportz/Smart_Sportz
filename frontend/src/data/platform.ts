@@ -44,6 +44,30 @@ export const navItems = [
 
 export const tournaments = [
   {
+    slug: "smart-sportz-city-cup-showcase",
+    name: "Smart Sportz City Cup Showcase",
+    sport: "Multi Sport",
+    status: "Featured",
+    phase: "featured",
+    location: "India",
+    date: "2026 Season",
+    registrationStart: "",
+    registrationEnd: "",
+    cities: ["Mumbai", "Bengaluru", "Chennai"],
+    teams: 0,
+    capacity: 0,
+    teamSize: 0,
+    minAge: 0,
+    maxAge: 0,
+    prize: "",
+    image: assets.cricket,
+    poster: "/assets/poster.jpeg",
+    accent: "emerald",
+    show_on_home: true,
+    featureOnly: true,
+    tournamentDescription: "A manager-selected tournament showcase for premium public discovery, city interest, and event promotion.",
+  },
+  {
     slug: "mumbai-premier-bash",
     name: "Mumbai Premier Bash 2026",
     sport: "Cricket",
@@ -57,8 +81,11 @@ export const tournaments = [
     teams: 32,
     capacity: 48,
     teamSize: 16,
+    minAge: 18,
+    maxAge: 45,
     prize: "₹25,00,000",
     image: assets.cricket,
+    poster: "/assets/poster.jpeg",
     accent: "emerald",
   },
   {
@@ -75,8 +102,11 @@ export const tournaments = [
     teams: 18,
     capacity: 24,
     teamSize: 16,
+    minAge: 18,
+    maxAge: 50,
     prize: "₹12,00,000",
     image: assets.cricket,
+    poster: "/assets/poster.jpeg",
     accent: "orange",
   },
   {
@@ -93,8 +123,11 @@ export const tournaments = [
     teams: 24,
     capacity: 32,
     teamSize: 22,
+    minAge: 14,
+    maxAge: 19,
     prize: "₹8,50,000",
     image: assets.football,
+    poster: "/assets/poster.jpeg",
     accent: "blue",
   },
   {
@@ -111,8 +144,11 @@ export const tournaments = [
     teams: 16,
     capacity: 16,
     teamSize: 12,
+    minAge: 18,
+    maxAge: 40,
     prize: "₹10,00,000",
     image: assets.basketball,
+    poster: "/assets/poster.jpeg",
     accent: "emerald",
   },
   {
@@ -129,8 +165,11 @@ export const tournaments = [
     teams: 20,
     capacity: 20,
     teamSize: 12,
+    minAge: 16,
+    maxAge: 38,
     prize: "₹6,00,000",
     image: assets.volleyball,
+    poster: "/assets/poster.jpeg",
     accent: "pink",
   },
   {
@@ -147,9 +186,72 @@ export const tournaments = [
     teams: 20,
     capacity: 20,
     teamSize: 16,
+    minAge: 18,
+    maxAge: 45,
     prize: "₹15,00,000",
     image: assets.cricket,
+    poster: "/assets/poster.jpeg",
     accent: "blue",
+  },
+];
+
+export type TournamentStatus = "Upcoming" | "Registration Open" | "Registration Closed" | "Live" | "Completed";
+
+function parseRegistrationDate(value: string) {
+  const parsed = new Date(`${value} 00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function getRuntimeTournamentStatus(item: { status: string; registrationStart?: string; registrationEnd?: string }) {
+  if (item.status === "Live" || item.status === "Completed") {
+    return item.status as TournamentStatus;
+  }
+  const start = parseRegistrationDate(item.registrationStart ?? "");
+  const end = parseRegistrationDate(item.registrationEnd ?? "");
+  if (!start || !end) {
+    return item.status as TournamentStatus;
+  }
+  const today = new Date();
+  if (today < start) {
+    return "Upcoming";
+  }
+  if (today > end) {
+    return "Registration Closed";
+  }
+  return "Registration Open";
+}
+
+export function getRuntimeTournamentAccent(status: string, fallback: string) {
+  if (status === "Registration Open") return "emerald";
+  if (status === "Upcoming") return "blue";
+  if (status === "Registration Closed") return "slate";
+  return fallback;
+}
+
+export function withRuntimeTournamentStatus<T extends { status: string; accent: string; registrationStart?: string; registrationEnd?: string }>(item: T) {
+  const status = getRuntimeTournamentStatus(item);
+  return { ...item, status, accent: getRuntimeTournamentAccent(status, item.accent) };
+}
+
+export type TournamentNotice = {
+  id: string;
+  tournamentSlug: string;
+  title: string;
+  description: string;
+  image: string;
+  published: boolean;
+  updatedBy: "admin" | "manager";
+};
+
+export const tournamentNotices: TournamentNotice[] = [
+  {
+    id: "notice_mumbai_premier_registration",
+    tournamentSlug: "mumbai-premier-bash",
+    title: "Mumbai Premier Bash registration window is live",
+    description: "Teams from Mumbai, Navi Mumbai, and Thane can submit roster, documents, and payment before the final registration deadline.",
+    image: assets.cricket,
+    published: true,
+    updatedBy: "manager",
   },
 ];
 
@@ -191,6 +293,150 @@ export const liveMatches = [
     image: assets.football,
   },
 ];
+
+export type TournamentArchivePlayer = {
+  team: string;
+  name: string;
+  role: string;
+  score: string;
+  record: string;
+};
+
+export type TournamentArchiveMatch = {
+  id: string;
+  round: string;
+  title: string;
+  teamA: string;
+  teamB: string;
+  scoreA: string;
+  scoreB: string;
+  winner: string;
+  venue: string;
+  date: string;
+  videoUrl: string;
+  summary: string;
+  players: TournamentArchivePlayer[];
+};
+
+export type TournamentArchive = {
+  tournamentSlug: string;
+  champion: string;
+  runnerUp: string;
+  mvp: string;
+  finalScore: string;
+  attendance: string;
+  investment: string;
+  partners: string[];
+  managers: string[];
+  operations: string[];
+  description: string;
+  rounds: Array<{
+    name: string;
+    stageNote: string;
+    matches: TournamentArchiveMatch[];
+  }>;
+};
+
+const cricketArchivePlayers = (teamA: string, teamB: string): TournamentArchivePlayer[] => [
+  { team: teamA, name: "Rohan Sharma", role: "Captain", score: "74 (42)", record: "Player of the match" },
+  { team: teamA, name: "Nikhil Rao", role: "All-rounder", score: "39 (24) + 1/18", record: "Best impact phase" },
+  { team: teamA, name: "Amit Varma", role: "Bowler", score: "3/22", record: "Powerplay wickets" },
+  { team: teamB, name: "Kabir Malik", role: "Opener", score: "52 (38)", record: "Top scorer" },
+  { team: teamB, name: "Imran Ali", role: "Bowler", score: "2/26", record: "Death over control" },
+  { team: teamB, name: "Vikram Sen", role: "Keeper", score: "31 (19)", record: "Fast finish attempt" },
+];
+
+const volleyballArchivePlayers = (teamA: string, teamB: string): TournamentArchivePlayer[] => [
+  { team: teamA, name: "Arun Dev", role: "Setter", score: "42 assists", record: "Best setter" },
+  { team: teamA, name: "Kiran Thomas", role: "Outside hitter", score: "21 kills", record: "Final MVP" },
+  { team: teamA, name: "Joseph Mathew", role: "Libero", score: "18 digs", record: "Defensive leader" },
+  { team: teamB, name: "Vishnu Raj", role: "Middle blocker", score: "7 blocks", record: "Net control" },
+  { team: teamB, name: "Sameer Khan", role: "Opposite", score: "19 points", record: "Best attack run" },
+  { team: teamB, name: "Rahul Menon", role: "Setter", score: "36 assists", record: "Tempo control" },
+];
+
+export const tournamentArchives: TournamentArchive[] = [
+  {
+    tournamentSlug: "kerala-volleyball-classic",
+    champion: "Kochi Spikers",
+    runnerUp: "Calicut Smashers",
+    mvp: "Kiran Thomas",
+    finalScore: "25-21, 22-25, 25-19, 25-23",
+    attendance: "18,400 total spectators",
+    investment: "INR 38L operations, broadcast, venue, and prize support",
+    partners: ["Kerala Sports Council", "SmartSportz Media", "Pulse Hydration"],
+    managers: ["Anil Joseph - Tournament Director", "Meera Nair - Match Operations", "Rahul Das - Media Lead"],
+    operations: ["20-team knockout draw", "6 venue courts", "32 published match reports", "Digital certificates issued"],
+    description: "Completed volleyball season archive with official scorecards, round-wise media, partner visibility, manager notes, and team/player records.",
+    rounds: [
+      {
+        name: "Quarter Final",
+        stageNote: "Four elimination matches with live score verification and replay review.",
+        matches: [
+          { id: "kv-qf-1", round: "Quarter Final", title: "Kochi Spikers vs Trivandrum Aces", teamA: "Kochi Spikers", teamB: "Trivandrum Aces", scoreA: "3", scoreB: "1", winner: "Kochi Spikers", venue: "Rajiv Gandhi Indoor Stadium", date: "Dec 07, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Kochi controlled serve pressure early and closed the fourth set through repeated left-side attacks.", players: volleyballArchivePlayers("Kochi Spikers", "Trivandrum Aces") },
+          { id: "kv-qf-2", round: "Quarter Final", title: "Calicut Smashers vs Thrissur Nets", teamA: "Calicut Smashers", teamB: "Thrissur Nets", scoreA: "3", scoreB: "2", winner: "Calicut Smashers", venue: "Kochi Central Court", date: "Dec 08, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Calicut survived two match-point phases and advanced through a disciplined fifth-set block rotation.", players: volleyballArchivePlayers("Calicut Smashers", "Thrissur Nets") },
+        ],
+      },
+      {
+        name: "Semi Final",
+        stageNote: "Top four teams advanced into a two-match semi-final night.",
+        matches: [
+          { id: "kv-sf-1", round: "Semi Final", title: "Kochi Spikers vs Kannur Royals", teamA: "Kochi Spikers", teamB: "Kannur Royals", scoreA: "3", scoreB: "0", winner: "Kochi Spikers", venue: "Rajiv Gandhi Indoor Stadium", date: "Dec 10, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Kochi used quick middle combinations to keep Kannur out of system throughout the match.", players: volleyballArchivePlayers("Kochi Spikers", "Kannur Royals") },
+          { id: "kv-sf-2", round: "Semi Final", title: "Calicut Smashers vs Alappuzha Waves", teamA: "Calicut Smashers", teamB: "Alappuzha Waves", scoreA: "3", scoreB: "1", winner: "Calicut Smashers", venue: "Kochi Central Court", date: "Dec 10, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Calicut's captain led a late third-set comeback that decided the match momentum.", players: volleyballArchivePlayers("Calicut Smashers", "Alappuzha Waves") },
+        ],
+      },
+      {
+        name: "Final",
+        stageNote: "Championship match with recorded video, awards, and official player score sheet.",
+        matches: [
+          { id: "kv-final", round: "Final", title: "Kochi Spikers vs Calicut Smashers", teamA: "Kochi Spikers", teamB: "Calicut Smashers", scoreA: "3", scoreB: "1", winner: "Kochi Spikers", venue: "Rajiv Gandhi Indoor Stadium", date: "Dec 12, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Kochi lifted the Classic trophy after a balanced attacking night and strong receive formation.", players: volleyballArchivePlayers("Kochi Spikers", "Calicut Smashers") },
+        ],
+      },
+    ],
+  },
+  {
+    tournamentSlug: "delhi-cricket-champions",
+    champion: "Delhi Capitals Academy",
+    runnerUp: "Noida Strikers",
+    mvp: "Rohan Sharma",
+    finalScore: "Delhi Capitals Academy won by 18 runs",
+    attendance: "24,200 total spectators",
+    investment: "INR 52L prize pool, venue production, officials, and media operations",
+    partners: ["Delhi Cricket Board", "SmartSportz Broadcast", "Nexa Sports"],
+    managers: ["Sanjay Mehta - Tournament Director", "Pooja Arora - Registration Lead", "Farhan Khan - Score Operations"],
+    operations: ["20-team seeded knockout", "40 match scorecards", "12 recorded highlight reels", "Payment and certificate archive completed"],
+    description: "Completed cricket archive with verified scorecards, recorded round videos, partner reports, manager notes, and team/player score details.",
+    rounds: [
+      {
+        name: "Round-1",
+        stageNote: "Opening elimination matches used automated team seeding and live score validation.",
+        matches: [
+          { id: "dc-r1-1", round: "Round-1", title: "Delhi Capitals Academy vs Faridabad Lions", teamA: "Delhi Capitals Academy", teamB: "Faridabad Lions", scoreA: "168/6", scoreB: "142/9", winner: "Delhi Capitals Academy", venue: "Arun Jaitley Practice Oval", date: "Nov 07, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Delhi controlled the middle overs and defended with three wickets in the final spell.", players: cricketArchivePlayers("Delhi Capitals Academy", "Faridabad Lions") },
+          { id: "dc-r1-2", round: "Round-1", title: "Noida Strikers vs Ghaziabad United", teamA: "Noida Strikers", teamB: "Ghaziabad United", scoreA: "151/5", scoreB: "148/8", winner: "Noida Strikers", venue: "Delhi Youth Ground", date: "Nov 08, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Noida won a tight chase through calm lower-order hitting and a final-over boundary.", players: cricketArchivePlayers("Noida Strikers", "Ghaziabad United") },
+        ],
+      },
+      {
+        name: "Semi Final",
+        stageNote: "Two high-pressure matches selected the finalists through score-linked progression.",
+        matches: [
+          { id: "dc-sf-1", round: "Semi Final", title: "Delhi Capitals Academy vs South Delhi Hawks", teamA: "Delhi Capitals Academy", teamB: "South Delhi Hawks", scoreA: "181/4", scoreB: "166/7", winner: "Delhi Capitals Academy", venue: "Arun Jaitley Practice Oval", date: "Nov 20, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "A 92-run second-wicket stand took Delhi into the final with a comfortable defense.", players: cricketArchivePlayers("Delhi Capitals Academy", "South Delhi Hawks") },
+          { id: "dc-sf-2", round: "Semi Final", title: "Noida Strikers vs Gurgaon Titans", teamA: "Noida Strikers", teamB: "Gurgaon Titans", scoreA: "159/8", scoreB: "154/9", winner: "Noida Strikers", venue: "Delhi Youth Ground", date: "Nov 21, 2025", videoUrl: "https://www.youtube.com/embed/ysz5S6PUM-U", summary: "Noida defended five runs in the final over with two yorkers and a run-out.", players: cricketArchivePlayers("Noida Strikers", "Gurgaon Titans") },
+        ],
+      },
+      {
+        name: "Final",
+        stageNote: "Final match archive includes full scorecard, recorded stream, awards, and player rankings.",
+        matches: [
+          { id: "dc-final", round: "Final", title: "Delhi Capitals Academy vs Noida Strikers", teamA: "Delhi Capitals Academy", teamB: "Noida Strikers", scoreA: "176/5", scoreB: "158/8", winner: "Delhi Capitals Academy", venue: "Arun Jaitley Practice Oval", date: "Nov 24, 2025", videoUrl: "https://www.youtube.com/embed/ThqHtJOfCK0", summary: "Delhi won the title by 18 runs after an aggressive powerplay and disciplined death bowling.", players: cricketArchivePlayers("Delhi Capitals Academy", "Noida Strikers") },
+        ],
+      },
+    ],
+  },
+];
+
+export function archiveForTournament(slug: string) {
+  return tournamentArchives.find((archive) => archive.tournamentSlug === slug);
+}
 
 export const teams = [
   { slug: "mumbai-mavericks", name: "Mumbai Mavericks", rank: "#01", sport: "Cricket", players: 18, wins: 15, rating: 92, image: assets.cricket },
@@ -267,6 +513,7 @@ export const registrationQueue = [
 ];
 
 export const sports = [
+  { slug: "chess", name: "Chess", icon: Trophy, active: 9, color: "emerald" },
   { slug: "cricket", name: "Cricket", icon: Trophy, active: 42, color: "emerald" },
   { slug: "football", name: "Football", icon: Medal, active: 36, color: "blue" },
   { slug: "basketball", name: "Basketball", icon: Zap, active: 18, color: "orange" },
@@ -287,36 +534,41 @@ export const dashboardStats = [
 export const sidebar = [
   { label: "Dashboard", path: "/admin/dashboard", icon: BarChart3 },
   { label: "Tournaments", path: "/admin/tournaments", icon: Trophy },
+  { label: "Group Bracket", path: "/admin/group-bracket", icon: Zap },
   { label: "Users", path: "/admin/users", icon: Users },
-  { label: "Roles", path: "/admin/roles", icon: ShieldCheck },
+  { label: "Managers", path: "/admin/managers", icon: ShieldCheck },
+  { label: "Roles", path: "/admin/roles", icon: ShieldCheck, hidden: true },
+  { label: "Registrations", path: "/admin/registrations", icon: FileText },
   { label: "Teams", path: "/admin/teams", icon: Users },
-  { label: "Players", path: "/admin/players", icon: Medal },
+  { label: "Players", path: "/admin/players", icon: Medal, hidden: true },
   { label: "Payments", path: "/admin/payments", icon: CircleDollarSign },
   { label: "CMS", path: "/admin/cms", icon: FileText },
+  { label: "News", path: "/admin/news", icon: GalleryHorizontal },
+  { label: "Gallery", path: "/admin/gallery", icon: GalleryHorizontal },
+  { label: "Announcements", path: "/admin/announcements", icon: FileText },
   { label: "Reports", path: "/admin/reports", icon: BarChart3 },
   { label: "Logs", path: "/admin/logs", icon: ShieldCheck },
-  { label: "Settings", path: "/admin/settings", icon: Settings },
 ];
 
 export const userSidebar = [
   { label: "Home", path: "/user/dashboard", icon: BarChart3 },
-  { label: "Tournament", path: "/user/registrations", icon: Trophy },
-  { label: "Gallery", path: "/user/documents", icon: GalleryHorizontal },
-  { label: "Live", path: "/user/payments", icon: Activity },
+  { label: "My Tournaments", path: "/user/registrations", icon: Trophy },
+  { label: "Payments", path: "/user/payments", icon: CircleDollarSign },
+  { label: "Team Members", path: "/user/members", icon: Users },
   { label: "Certificates", path: "/user/certificates", icon: Medal },
-  { label: "News", path: "/user/schedules", icon: CalendarDays },
-  { label: "Documents", path: "/user/documents", icon: FileText },
   { label: "Settings", path: "/user/settings", icon: ShieldCheck },
 ];
 
 export const managementSidebar = [
   { label: "Dashboard", path: "/management/dashboard", icon: BarChart3 },
-  { label: "Tournament", path: "/management/tournaments", icon: Trophy },
+  { label: "Tournaments", path: "/management/tournaments", icon: Trophy },
   { label: "Registrations", path: "/management/registrations", icon: FileText },
   { label: "Matches", path: "/management/matches", icon: Activity },
+  { label: "Group Bracket", path: "/management/group-bracket", icon: Zap },
   { label: "Players", path: "/management/players", icon: Users },
   { label: "Announcements", path: "/management/announcements", icon: FileText },
   { label: "News", path: "/management/news", icon: GalleryHorizontal },
+  { label: "Gallery", path: "/management/gallery", icon: GalleryHorizontal },
   { label: "Reports", path: "/management/reports", icon: BarChart3 },
 ];
 
@@ -345,6 +597,7 @@ export const newsPosts = [
     tournamentSlug: "mumbai-premier-bash",
     city: "Mumbai",
     status: "Published",
+    highlight: true,
     date: "Jul 25, 2026",
     blocks: [
       { type: "heading", content: "Championship final recap" },
@@ -362,6 +615,7 @@ export const newsPosts = [
     tournamentSlug: "bangalore-corporate-t20",
     city: "Bengaluru",
     status: "Published",
+    highlight: true,
     date: "Jul 25, 2026",
     blocks: [
       { type: "heading", content: "Live match intelligence" },
@@ -379,6 +633,7 @@ export const newsPosts = [
     tournamentSlug: "national-youth-football",
     city: "Delhi",
     status: "Published",
+    highlight: false,
     date: "Jul 24, 2026",
     blocks: [
       { type: "heading", content: "Registration guidance" },
@@ -396,6 +651,7 @@ export const newsPosts = [
     tournamentSlug: "kerala-volleyball-classic",
     city: "Kochi",
     status: "Published",
+    highlight: false,
     date: "Dec 14, 2025",
     blocks: [
       { type: "heading", content: "Completed tournament archive" },
@@ -406,14 +662,15 @@ export const newsPosts = [
 ];
 
 export const sportHomeVisibility = [
-  { sportSlug: "cricket", showOnHome: true, sortOrder: 1 },
-  { sportSlug: "football", showOnHome: true, sortOrder: 2 },
-  { sportSlug: "basketball", showOnHome: true, sortOrder: 3 },
-  { sportSlug: "volleyball", showOnHome: false, sortOrder: 4 },
-  { sportSlug: "badminton", showOnHome: false, sortOrder: 5 },
-  { sportSlug: "table-tennis", showOnHome: false, sortOrder: 6 },
-  { sportSlug: "e-sports", showOnHome: false, sortOrder: 7 },
-  { sportSlug: "athletics", showOnHome: false, sortOrder: 8 },
+  { sportSlug: "chess", showOnHome: true, sortOrder: 1 },
+  { sportSlug: "cricket", showOnHome: true, sortOrder: 2 },
+  { sportSlug: "football", showOnHome: true, sortOrder: 3 },
+  { sportSlug: "basketball", showOnHome: true, sortOrder: 4 },
+  { sportSlug: "volleyball", showOnHome: false, sortOrder: 5 },
+  { sportSlug: "badminton", showOnHome: false, sortOrder: 6 },
+  { sportSlug: "table-tennis", showOnHome: false, sortOrder: 7 },
+  { sportSlug: "e-sports", showOnHome: false, sortOrder: 8 },
+  { sportSlug: "athletics", showOnHome: false, sortOrder: 9 },
 ];
 
 export const leaderboardRecords = [

@@ -1,202 +1,335 @@
-import { ArrowRight, Bell, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { Page, PortalShell } from "../components/UI";
-import { acceptedTeams, bracketConnections, bracketNodes, managementSidebar, tournaments } from "../data/platform";
-import { InfoPanel } from "./shared";
+import { Bell, Download, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { DataTable, Page, PortalShell } from "../components/UI";
+import { managementSidebar, sidebar } from "../data/platform";
+import { apiRequest } from "../lib/api";
 
-type BracketNode = typeof bracketNodes[number];
+type TeamSeed = { id?: string; name: string; seed?: number };
+type GroupMatch = {
+  id?: string;
+  round: string;
+  team_1: string;
+  team_2: string;
+  starts_at: string;
+  ends_at: string;
+  status: "upcoming" | "live" | "completed";
+  sort_order: number;
+  published?: number | boolean;
+};
 
-function bracketPath(from: BracketNode, to: BracketNode) {
-  const startX = from.x + (from.x < to.x ? 4 : -4);
-  const startY = from.y;
-  const endX = to.x + (from.x < to.x ? -4 : 4);
-  const endY = to.y;
-  const midX = (startX + endX) / 2;
-  return `M ${startX} ${startY} H ${midX} V ${endY} H ${endX}`;
+const emptyMatch = (sortOrder: number): GroupMatch => ({
+  round: "",
+  team_1: "",
+  team_2: "",
+  starts_at: "",
+  ends_at: "",
+  status: "upcoming",
+  sort_order: sortOrder,
+});
+
+function DeleteIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M6 6l1 14h10l1-14" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
 }
 
-const bracketStages = [
-  { label: "Round-1", x: 8 },
-  { label: "Quarter", x: 34 },
-  { label: "Semi-Final", x: 60 },
-  { label: "Final", x: 80 },
-  { label: "Champion", x: 94 },
-];
+function statusLabel(status: string) {
+  if (status === "live") return "Live";
+  if (status === "completed") return "Completed";
+  return "Upcoming";
+}
 
-function BracketCanvas({
-  nodes,
-  editable = false,
-  publicMode = false,
-  hideTeams = false,
-  onDropTeam,
-  onSelect,
-  selected,
-}: {
-  nodes: BracketNode[];
-  editable?: boolean;
-  publicMode?: boolean;
-  hideTeams?: boolean;
-  onDropTeam?: (nodeId: string, team: string) => void;
-  onSelect?: (node: BracketNode) => void;
-  selected?: string;
-}) {
-  return (
-    <section className={`bracket-canvas panel ${publicMode ? "public-bracket" : ""}`}>
-      {bracketStages.map((stage) => (
-        <div className="round-label" key={stage.label} style={{ left: `${stage.x}%` }}>{stage.label}</div>
-      ))}
-      <svg className="bracket-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        {bracketConnections.map(([source, target]) => {
-          const from = nodes.find((node) => node.id === source);
-          const to = nodes.find((node) => node.id === target);
-          if (!from || !to) return null;
-          return <path key={`${source}-${target}`} d={bracketPath(from, to)} />;
-        })}
-      </svg>
-      {nodes.map((node) => (
-        <button
-          className={`bracket-node ${node.status} ${selected === node.id ? "selected" : ""}`}
-          key={node.id}
-          style={{ left: `${node.x}%`, top: `${node.y}%` }}
-          onClick={() => onSelect?.(node)}
-          onDragOver={(event) => editable && event.preventDefault()}
-          onDrop={(event) => {
-            if (!editable) return;
-            onDropTeam?.(node.id, event.dataTransfer.getData("text/team"));
-          }}
-        >
-          <span className="node-mark">{publicMode ? "" : node.team ? node.team.charAt(0) : <Plus size={18} />}</span>
-          {!hideTeams && <b>{node.team || (publicMode ? "TBD" : node.label)}</b>}
-        </button>
-      ))}
-    </section>
-  );
+function statusAccent(status: string) {
+  if (status === "live") return "orange";
+  if (status === "completed") return "emerald";
+  return "blue";
+}
+
+function downloadRoundCsv(matches: GroupMatch[]) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const rows = [
+    ["Round", "Team 1", "Team 2", "From", "To", "Status"],
+    ...matches.map((match) => [
+      match.round,
+      match.team_1 || "TBD",
+      match.team_2 || "TBD",
+      match.starts_at || "-",
+      match.ends_at || "-",
+      statusLabel(match.status),
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(escape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `smart-sportz-rounds-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function TournamentRoundsPage() {
   const { slug } = useParams();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[0];
-  const hideTeams = tournament.phase === "upcoming";
+  const [tournament, setTournament] = useState<Record<string, any> | null>(null);
+  const [matches, setMatches] = useState<GroupMatch[]>([]);
+
+  useEffect(() => {
+    if (!slug) return;
+    apiRequest<Record<string, any>>(`/public/tournaments/${slug}`)
+      .then(setTournament)
+      .catch(() => setTournament(null));
+    apiRequest<{ matches?: GroupMatch[] }>(`/public/tournaments/${slug}/bracket`)
+      .then((payload) => setMatches(payload.matches ?? []))
+      .catch(() => setMatches([]));
+  }, [slug]);
 
   return (
     <Page>
       <section className="page-hero bracket-page-hero">
-        <p className="eyebrow">{tournament.status} Rounds</p>
-        <h1>{tournament.name} Bracket</h1>
-        <p>Public bracket view with active progression, archived rounds, score-linked winner paths, and clickable match/player score details.</p>
+        <p className="eyebrow">{tournament?.status ?? "Tournament"} Rounds</p>
+        <h1>{tournament?.name ?? slug} Rounds</h1>
+        <p>Published group bracket rounds are listed with teams, match timing, and current status.</p>
         <div className="hero-actions">
-          <Link className="btn btn-primary" to={`/tournaments/${tournament.slug}`}>Tournament detail</Link>
+          <Link className="btn btn-primary" to={`/tournaments/${slug}`}>Tournament detail</Link>
           <Link className="btn btn-secondary" to="/live">Live hub</Link>
         </div>
       </section>
-      <BracketCanvas nodes={bracketNodes} publicMode hideTeams={hideTeams} />
-      <div className="detail-grid">
-        {hideTeams ? (
-          <InfoPanel title="Upcoming Round Preview" items={["Round slots are visible before registration closes", "Teams appear after manager accepts registrations", "Seeding is published only after manager saves the bracket", "No editable plus controls are shown on the public page"]} highlight />
+      <section className="panel">
+        {matches.length ? (
+          <DataTable
+            columns={["Round", "Team 1", "Team 2", "From", "To", "Status"]}
+            rows={matches.map((match) => [
+              match.round,
+              match.team_1 || "TBD",
+              match.team_2 || "TBD",
+              match.starts_at || "-",
+              match.ends_at || "-",
+              <span className={`status ${statusAccent(match.status)}`}>{statusLabel(match.status)}</span>,
+            ])}
+          />
         ) : (
-          <InfoPanel title="Round Details" items={["Round-1: Mumbai Mavericks vs India Forge", "Round-1: Bengaluru Bulls vs Chennai Chargers", "Semi-Final: India Forge advanced", "Final slot pending live result"]} highlight />
+          <div className="user-empty-state">
+            <h2>No published rounds</h2>
+            <p>Rounds will appear after admin or manager saves and publishes the group bracket table.</p>
+          </div>
         )}
-        <InfoPanel title="Score Records" items={["Player scorecards", "Team score history", "Highlights", "Winner and runner-up records"]} to="/leaderboards" />
-      </div>
+      </section>
     </Page>
   );
 }
 
 export function BracketWorkspacePage() {
-  const { slug = "bangalore-corporate-t20" } = useParams();
-  const tournament = tournaments.find((item) => item.slug === slug) ?? tournaments[1];
-  const [nodes, setNodes] = useState<BracketNode[]>(bracketNodes);
-  const [selectedId, setSelectedId] = useState(nodes[0]?.id);
-  const [dirty, setDirty] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [channels, setChannels] = useState({ sms: true, email: true });
-  const [notice, setNotice] = useState("Auto bracket generated from accepted teams.");
-  const selected = useMemo(() => nodes.find((node) => node.id === selectedId), [nodes, selectedId]);
+  const { slug } = useParams();
+  const location = useLocation();
+  const { token } = useAuth();
+  const isAdmin = location.pathname.startsWith("/admin");
+  const portalSidebar = isAdmin ? sidebar : managementSidebar;
+  const tournamentsPath = isAdmin ? "/admin/tournaments" : "/management/tournaments";
+  const [records, setRecords] = useState<Array<Record<string, any>>>([]);
+  const [teams, setTeams] = useState<TeamSeed[]>([]);
+  const [matches, setMatches] = useState<GroupMatch[]>([]);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const selectedTournament = useMemo(
+    () => records.find((item) => item.slug === slug),
+    [records, slug],
+  );
 
-  function updateNode(nodeId: string, patch: Partial<BracketNode>) {
-    setNodes((items) => items.map((node) => node.id === nodeId ? { ...node, ...patch } : node));
-    setDirty(true);
-    setSaved(false);
+  useEffect(() => {
+    let active = true;
+    apiRequest<Array<Record<string, any>>>(isAdmin ? "/admin/tournaments" : "/management/tournaments", {}, token)
+      .then((items) => {
+        if (active) setRecords(items);
+      })
+      .catch((caught) => {
+        if (active) setError(caught instanceof Error ? caught.message : "Could not load tournaments.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, token]);
+
+  useEffect(() => {
+    if (!slug) return;
+    let active = true;
+    setError("");
+    apiRequest<{ acceptedTeams: TeamSeed[]; matches: GroupMatch[] }>(`/management/group-brackets/${slug}`, {}, token)
+      .then((payload) => {
+        if (!active) return;
+        setTeams(payload.acceptedTeams ?? []);
+        setMatches(payload.matches?.length ? payload.matches : [emptyMatch(1)]);
+      })
+      .catch((caught) => {
+        if (active) setError(caught instanceof Error ? caught.message : "Could not load group bracket.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug, token]);
+
+  function updateMatch(index: number, patch: Partial<GroupMatch>) {
+    setMatches((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   }
 
-  function assignTeam(nodeId: string, team: string) {
-    if (!team) return;
-    updateNode(nodeId, { team, label: team, status: "paired" });
-    setNotice(`${team} assigned. Save is required before users see the change.`);
+  function addMatch() {
+    setMatches((items) => [...items, emptyMatch(items.length + 1)]);
   }
 
-  function toolbarAction(action: string) {
-    if (!selected) return;
-    const nextStatus = action === "Cancel" ? "cancelled" : action === "Rematch" ? "rematch" : action === "Delete" ? "empty" : selected.status;
-    updateNode(selected.id, action === "Delete" ? { team: "", label: "+", status: nextStatus } : { status: nextStatus });
-    setNotice(`${action} prepared for ${selected.team || selected.label}. Save to persist the workspace.`);
+  function removeMatch(index: number) {
+    setMatches((items) => items.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, sort_order: itemIndex + 1 })));
   }
 
-  function saveWorkspace() {
-    setDirty(false);
-    setSaved(true);
-    setNotice("Bracket saved. Manual notification can now be sent to teams.");
+  async function saveGroupBracket() {
+    if (!slug) return;
+    setMessage("");
+    setError("");
+    try {
+      const saved = await apiRequest<{ matches: GroupMatch[] }>(`/management/group-brackets/${slug}/save`, {
+        method: "POST",
+        body: JSON.stringify({
+          publish: true,
+          audit_reason: "Saved group bracket table from portal",
+          matches: matches.map((match, index) => ({ ...match, sort_order: index + 1 })),
+        }),
+      }, token);
+      setMatches(saved.matches ?? matches);
+      setMessage("Group bracket saved and published to public rounds.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save group bracket.");
+    }
+  }
+
+  async function sendMessage() {
+    if (!slug) return;
+    const selectedTeams = Array.from(new Set(matches.flatMap((match) => [match.team_1, match.team_2]).filter(Boolean)));
+    if (!selectedTeams.length) {
+      setError("Select teams before sending a bracket message.");
+      return;
+    }
+    setMessage("");
+    setError("");
+    try {
+      await apiRequest(`/management/brackets/${slug}/notify`, {
+        method: "POST",
+        body: JSON.stringify({
+          channels: ["whatsapp"],
+          audience: selectedTeams.join(", "),
+          message: [
+            `Smart Sportz match selection update.`,
+            `Tournament: ${selectedTournament?.name ?? slug}`,
+            ...matches
+              .filter((match) => match.team_1 || match.team_2)
+              .map((match) => `${match.round || "Round"}: ${match.team_1 || "TBD"} vs ${match.team_2 || "TBD"} from ${match.starts_at || "TBA"} to ${match.ends_at || "TBA"} (${statusLabel(match.status)})`),
+          ].join("\n"),
+        }),
+      }, token);
+      setMessage("Message sent for selected bracket teams.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not send team message.");
+    }
+  }
+
+  async function sendTwoDayReminders() {
+    if (!slug) return;
+    setMessage("");
+    setError("");
+    try {
+      const result = await apiRequest<{ count: number }>(`/management/group-brackets/${slug}/send-reminders`, {
+        method: "POST",
+      }, token);
+      setMessage(`${result.count} WhatsApp reminder${result.count === 1 ? "" : "s"} processed for matches two days away.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not send match reminders.");
+    }
+  }
+
+  if (!slug) {
+    return (
+      <Page>
+        <PortalShell title="Group Bracket" subtitle="Select an existing tournament to manage round rows." sidebar={portalSidebar}>
+          {error && <div className="form-alert">{error}</div>}
+          <DataTable
+            columns={["Tournament", "Sport", "City", "Status", "Action"]}
+            rows={records.map((item) => [
+              item.name,
+              item.sport,
+              item.location,
+              <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>,
+              <Link to={`${tournamentsPath}/${item.slug}/bracket`}>Open group bracket</Link>,
+            ])}
+          />
+        </PortalShell>
+      </Page>
+    );
   }
 
   return (
     <Page>
       <PortalShell
-        title="Bracket Allocation Workspace"
-        subtitle={`${tournament.name} manager workspace. Auto bracket first, then manual edits before save and publish.`}
-        sidebar={managementSidebar}
-        action={<Link className="btn btn-secondary" to={`/tournaments/${tournament.slug}/rounds`}>Public rounds</Link>}
+        title="Group Bracket"
+        subtitle={selectedTournament ? `${selectedTournament.name} round table` : "Round table"}
+        sidebar={portalSidebar}
+        action={<Link className="btn btn-secondary" to={tournamentsPath}>All tournaments</Link>}
       >
-        <div className="workspace-status">
-          <span className={`status ${dirty ? "orange" : "emerald"}`}>{dirty ? "Unsaved changes" : "Saved"}</span>
-          <p>{notice}</p>
-        </div>
-        <div className="bracket-workspace">
-          <aside className="team-bank panel">
-            <h3>Accepted Teams</h3>
-            {acceptedTeams.map((team) => (
-              <button
-                draggable
-                className="team-pill"
-                key={team.id}
-                onDragStart={(event) => event.dataTransfer.setData("text/team", team.name)}
-                onClick={() => selected && assignTeam(selected.id, team.name)}
-              >
-                <img src={team.logo} alt="" />
-                <span>{team.name}</span>
-                <b>Seed {team.seed}</b>
-              </button>
-            ))}
-          </aside>
-          <BracketCanvas nodes={nodes} editable selected={selectedId} onSelect={(node) => setSelectedId(node.id)} onDropTeam={assignTeam} />
-          <aside className="inspector panel">
-            <h3>Node Inspector</h3>
-            <p><b>Round:</b> {selected?.round}</p>
-            <p><b>Team:</b> {selected?.team || "Empty slot"}</p>
-            <p><b>Status:</b> {selected?.status}</p>
-            <div className="inspector-actions">
-              <button className="btn btn-secondary" onClick={() => toolbarAction("Pair")}>Pair</button>
-              <button className="btn btn-secondary" onClick={() => toolbarAction("Next Round")}><ArrowRight size={16} /> Next round</button>
-              <button className="btn btn-secondary" onClick={() => toolbarAction("Repair")}>Repair</button>
-              <button className="btn btn-secondary" onClick={() => toolbarAction("Cancel")}>Cancel</button>
-              <button className="btn btn-secondary" onClick={() => toolbarAction("Rematch")}>Rematch</button>
-              <button className="btn btn-secondary" onClick={() => toolbarAction("Delete")}>Delete</button>
+        {message && <div className="form-alert success-alert">{message}</div>}
+        {error && <div className="form-alert">{error}</div>}
+        <section className="panel">
+          <div className="section-head-inline">
+            <div>
+              <h2>Round Table</h2>
+              <p>Add rounds manually, select teams from accepted teams, set match timing, and publish to public rounds.</p>
             </div>
-          </aside>
-        </div>
-        <div className="bracket-toolbar panel">
-          <button className="btn btn-primary" disabled={!dirty} onClick={saveWorkspace}>Save bracket</button>
-          <button className="btn btn-secondary" onClick={() => { setNodes(bracketNodes); setDirty(true); setSaved(false); }}>Regenerate auto bracket</button>
-          <button className="btn btn-secondary" onClick={() => { if (selected) assignTeam(selected.id, "India Forge"); }}>Advance winner</button>
-        </div>
-        {saved && (
-          <section className="notify-panel panel">
-            <h3>Manual Notification</h3>
-            <label><input type="checkbox" checked={channels.sms} onChange={(event) => setChannels({ ...channels, sms: event.target.checked })} /> SMS</label>
-            <label><input type="checkbox" checked={channels.email} onChange={(event) => setChannels({ ...channels, email: event.target.checked })} /> Email</label>
-            <button className="btn btn-primary" onClick={() => setNotice(`Notification sent by ${[channels.sms && "SMS", channels.email && "Email"].filter(Boolean).join(" and ")}.`)}><Bell size={18} /> Send update</button>
-          </section>
-        )}
+            <div className="registration-actions compact-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => downloadRoundCsv(matches)}><Download size={16} /> Download data</button>
+              <button className="btn btn-secondary" type="button" onClick={addMatch}><Plus size={16} /> Add round</button>
+            </div>
+          </div>
+          <div className="group-bracket-table">
+            <div className="group-bracket-head">
+              <span>Round</span>
+              <span>Team 1</span>
+              <span>Team 2</span>
+              <span>From</span>
+              <span>To</span>
+              <span>Status</span>
+              <span>Action</span>
+            </div>
+            {matches.map((match, index) => (
+              <div className="group-bracket-row" key={match.id ?? index}>
+                <input value={match.round} onChange={(event) => updateMatch(index, { round: event.target.value })} placeholder="Round 1" />
+                <select value={match.team_1} onChange={(event) => updateMatch(index, { team_1: event.target.value })}>
+                  <option value="">Select team</option>
+                  {teams.map((team) => <option key={`team1-${team.id ?? team.name}`} value={team.name}>{team.name}</option>)}
+                </select>
+                <select value={match.team_2} onChange={(event) => updateMatch(index, { team_2: event.target.value })}>
+                  <option value="">Select team</option>
+                  {teams.map((team) => <option key={`team2-${team.id ?? team.name}`} value={team.name}>{team.name}</option>)}
+                </select>
+                <input type="datetime-local" value={match.starts_at} onChange={(event) => updateMatch(index, { starts_at: event.target.value })} />
+                <input type="datetime-local" value={match.ends_at} onChange={(event) => updateMatch(index, { ends_at: event.target.value })} />
+                <select value={match.status} onChange={(event) => updateMatch(index, { status: event.target.value as GroupMatch["status"] })}>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="live">Live</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <button className="icon-btn danger-link" type="button" onClick={() => removeMatch(index)}><DeleteIcon size={16} /></button>
+              </div>
+            ))}
+          </div>
+          <div className="registration-actions compact-actions">
+            <button className="btn btn-primary" type="button" onClick={saveGroupBracket}>Save and Publish</button>
+            <button className="btn btn-secondary" type="button" onClick={sendMessage}><Bell size={16} /> Send selected teams message</button>
+            <button className="btn btn-secondary" type="button" onClick={sendTwoDayReminders}><Bell size={16} /> Send 2-day WhatsApp reminders</button>
+          </div>
+        </section>
       </PortalShell>
     </Page>
   );

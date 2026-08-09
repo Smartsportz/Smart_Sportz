@@ -1,14 +1,22 @@
 import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import { Page, TournamentCard } from "../components/UI";
-import { assets, sports, tournaments } from "../data/platform";
+import { assets, sports, withRuntimeTournamentStatus } from "../data/platform";
+import { apiRequest } from "../lib/api";
 import { InfoPanel, Metric, PageHero } from "./shared";
 
 export function SportDetailPage() {
   const { slug } = useParams();
-  const sport = sports.find((item) => item.slug === slug) ?? sports[0];
-  const related = tournaments.filter((item) => item.sport.toLowerCase() === sport.name.toLowerCase());
+  const [remoteSport, setRemoteSport] = useState<Record<string, any> | null>(null);
+  const [remoteTournaments, setRemoteTournaments] = useState<Array<Record<string, any>>>([]);
+  const sport = remoteSport ?? sports.find((item) => item.slug === slug) ?? sports[0];
+  const related = useMemo<any[]>(() => remoteTournaments.map((item) => withRuntimeTournamentStatus({
+    ...item,
+    registrationStart: item.registrationStart ?? item.registration_start,
+    registrationEnd: item.registrationEnd ?? item.registration_end,
+  } as any)), [remoteTournaments]);
   const grouped = {
-    upcoming: related.filter((item) => item.phase === "upcoming"),
+    upcoming: related.filter((item) => item.status === "Upcoming" || item.status === "Registration Open" || item.status === "Registration Closed"),
     live: related.filter((item) => item.phase === "live"),
     existing: related.filter((item) => item.phase === "existing"),
   };
@@ -17,6 +25,28 @@ export function SportDetailPage() {
     ["Live Tournaments", grouped.live],
     ["Existing / Completed Tournaments", grouped.existing],
   ] as const;
+  const activeCount = related.filter((item) => item.status !== "Completed").length;
+
+  useEffect(() => {
+    if (!slug) return;
+    let alive = true;
+    apiRequest<Record<string, any>>(`/public/sports/${slug}`)
+      .then((payload) => {
+        if (!alive) return;
+        setRemoteSport(payload);
+        setRemoteTournaments(Array.isArray(payload.tournaments) ? payload.tournaments : []);
+      })
+      .catch(() => {
+        if (!alive) {
+          return;
+        }
+        setRemoteSport(null);
+        setRemoteTournaments([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
 
   return (
     <Page>
@@ -24,7 +54,7 @@ export function SportDetailPage() {
       <section className="detail-hero">
         <img src={sport.name === "Football" ? assets.football : sport.name === "Basketball" ? assets.basketball : assets.cricket} alt="" />
         <div>
-          <span className={`status ${sport.color}`}>{sport.active} active tournaments</span>
+          <span className={`status ${sport.color ?? "emerald"}`}>{activeCount} active tournaments</span>
           <h1>{sport.name}</h1>
           <p>Manage sport-specific categories, eligibility rules, scoring templates, registration fields, fixture formats, and public discovery pages.</p>
           <a className="btn btn-primary" href="#sport-tournaments">View tournaments</a>
@@ -56,7 +86,7 @@ export function SportDetailPage() {
         <section className="panel">
           <h3>Active Category Metrics</h3>
           <div className="mini-grid">
-            <Metric label="Active" value={`${sport.active}`} />
+            <Metric label="Active" value={`${activeCount}`} />
             <Metric label="Related" value={`${related.length}`} />
             <Metric label="Templates" value="6" />
           </div>

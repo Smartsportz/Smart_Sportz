@@ -1,0 +1,10 @@
+.git
+.github
+frontend/node_modules
+frontend/dist
+backend/storage/*.db
+backend/storage/*.db-*
+*.png
+*.log
+.chrome-shot-profile*
+.edge-shot-profile*

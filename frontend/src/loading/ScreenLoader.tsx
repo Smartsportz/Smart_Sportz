@@ -1,6 +1,4 @@
-import { Activity, Medal, Trophy, Zap } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { CSSProperties } from "react";
 import { useLoading } from "./LoadingContext";
 
 export function ScreenLoader() {
@@ -20,11 +18,8 @@ export function ScreenLoader() {
           aria-label="Loading"
         >
           <div className="screen-swap-loader">
-            <div className="screen-swap-icons">
-              <Trophy style={{ "--d": "0s" } as CSSProperties} />
-              <Activity style={{ "--d": "1s" } as CSSProperties} />
-              <Medal style={{ "--d": "2s" } as CSSProperties} />
-              <Zap style={{ "--d": "3s" } as CSSProperties} />
+            <div className="screen-logo-loader">
+              <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Smart Sportz" />
             </div>
           </div>
           <span className="screen-loader-label">Loading Smart Sportz</span>

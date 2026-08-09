@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronRight, Moon, Search, Settings, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, ChevronRight, Download, Search, Settings } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { navItems } from "../data/platform";
+import { navItems, withRuntimeTournamentStatus } from "../data/platform";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -20,10 +20,22 @@ export function Page({ children, className = "" }: { children: React.ReactNode; 
   );
 }
 
-export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; setDarkMode: (value: boolean) => void }) {
+function BrandLogo({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link to="/" className={`brand ${compact ? "compact" : ""}`}>
+      <img className="brand-mark" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in logo" />
+      <span>SmartSportz.in</span>
+    </Link>
+  );
+}
+
+export function PublicHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const visibleNavItems = navItems.slice(0, 7).filter((item) => item.label !== "Teams");
+  const showSearch = false;
+  const showRegisterAction = false;
 
   useEffect(() => {
     setMenuOpen(false);
@@ -32,31 +44,27 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
   return (
     <header className={`site-header ${menuOpen ? "menu-open" : ""}`}>
       <div className="header-row">
-        <Link to="/" className="brand">
-          <span className="brand-mark">S</span>
-          <span>SmartSportz.in</span>
-        </Link>
+        <BrandLogo />
         <nav className="site-nav">
-          {navItems.slice(0, 7).map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink key={item.path} to={item.path}>
               {item.label}
             </NavLink>
           ))}
         </nav>
         <div className="header-actions">
-          <div className="search-pill">
-            <Search size={16} />
-            <span>Search events...</span>
-          </div>
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle dark mode">
-            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          {showSearch && (
+            <div className="search-pill">
+              <Search size={16} />
+              <span>Search events...</span>
+            </div>
+          )}
           {user ? (
             <Link to={user.homePath} className="btn btn-secondary desktop-action">{user.roleLabel}</Link>
           ) : (
             <Link to="/login" className="btn btn-secondary desktop-action">Login</Link>
           )}
-          <Link to="/tournaments" className="btn btn-primary desktop-action">Register</Link>
+          {showRegisterAction && <Link to="/tournaments" className="btn btn-primary desktop-action">Register</Link>}
           <button
             className="icon-btn mobile-menu-btn"
             type="button"
@@ -73,11 +81,13 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
         </div>
       </div>
       <nav className="mobile-menu" aria-label="Mobile navigation">
-        <div className="mobile-search">
-          <Search size={16} />
-          <span>Search events...</span>
-        </div>
-        {navItems.slice(0, 7).map((item) => (
+        {showSearch && (
+          <div className="mobile-search">
+            <Search size={16} />
+            <span>Search events...</span>
+          </div>
+        )}
+        {visibleNavItems.map((item) => (
           <NavLink key={item.path} to={item.path}>
             {item.label}
           </NavLink>
@@ -91,7 +101,7 @@ export function PublicHeader({ darkMode, setDarkMode }: { darkMode: boolean; set
           ) : (
             <Link to="/login" className="btn btn-secondary">Login</Link>
           )}
-          <Link to="/tournaments" className="btn btn-primary">Register</Link>
+          {showRegisterAction && <Link to="/tournaments" className="btn btn-primary">Register</Link>}
         </div>
       </nav>
     </header>
@@ -102,10 +112,7 @@ export function Footer() {
   return (
     <footer className="footer">
       <div>
-        <Link to="/" className="brand compact">
-          <span className="brand-mark">S</span>
-          <span>SmartSportz.in</span>
-        </Link>
+        <BrandLogo compact />
         <p>Enterprise sports tournament management for registrations, payments, live scoring, and analytics.</p>
       </div>
       <div className="footer-grid">
@@ -126,26 +133,47 @@ export function PortalShell({
 }: {
   title: string;
   subtitle: string;
-  sidebar: Array<{ label: string; path: string; icon: React.ComponentType<{ size?: number | string }> }>;
+  sidebar: Array<{ label: string; path: string; icon: React.ComponentType<{ size?: number | string }>; hidden?: boolean }>;
   children: React.ReactNode;
   action?: React.ReactNode;
 }) {
   const { user, logout } = useAuth();
-  const primaryAction = user?.role === "super_admin"
-    ? { label: "Create Tournament", path: "/admin/tournaments" }
-    : user?.role === "management"
-      ? { label: "Live Control", path: "/management/matches" }
-      : { label: "Register Team", path: "/tournaments/mumbai-premier-bash/register" };
-
+  const [portalMenuOpen, setPortalMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isUserPortal = user?.role === "user";
+  const initials = user?.name
+    ?.split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "U";
   return (
-    <div className="portal-shell">
+    <div className={`portal-shell ${isUserPortal ? "user-portal-shell" : ""} ${portalMenuOpen ? "portal-menu-open" : ""} ${sidebarCollapsed ? "portal-sidebar-collapsed" : ""}`}>
+      <header className={`portal-mobile-header ${isUserPortal ? "user-portal-mobile-header" : ""}`}>
+        <BrandLogo compact />
+        <button className="icon-btn" type="button" aria-label={portalMenuOpen ? "Close dashboard menu" : "Open dashboard menu"} onClick={() => setPortalMenuOpen((value) => !value)}>
+          <span className={`menu-glyph ${portalMenuOpen ? "is-open" : ""}`} aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        </button>
+      </header>
       <aside className="portal-sidebar">
-        <Link to="/" className="brand">
-          <span className="brand-mark">S</span>
-          <span>SmartSportz.in</span>
-        </Link>
+        <div className="portal-sidebar-head">
+          <button
+            className="portal-sidebar-toggle"
+            type="button"
+            aria-label={sidebarCollapsed ? "Open dashboard navigation" : "Close dashboard navigation"}
+            onClick={() => setSidebarCollapsed((value) => !value)}
+          >
+            <span className="portal-sidebar-toggle-glyph" aria-hidden="true" />
+          </button>
+          {!sidebarCollapsed && <BrandLogo />}
+        </div>
         <nav>
-          {sidebar.map((item) => {
+          {sidebar.filter((item) => !item.hidden).map((item) => {
             const Icon = item.icon;
             return (
               <NavLink key={item.path} to={item.path}>
@@ -155,22 +183,32 @@ export function PortalShell({
             );
           })}
         </nav>
-        <Link className="btn btn-primary wide" to={primaryAction.path}>{primaryAction.label}</Link>
-        <Link className="sidebar-link" to="/settings"><Settings size={16} /> Settings</Link>
+        {!isUserPortal && <Link className="sidebar-link" to="/settings"><Settings size={16} /> Settings</Link>}
         <button className="sidebar-link sidebar-button" type="button" onClick={logout}><ArrowRight size={16} /> Logout</button>
       </aside>
       <section className="portal-main">
-        <div className="portal-topbar">
-          <div>
-            <p className="eyebrow">Smart Sportz Enterprise</p>
-            <h1>{title}</h1>
-            <p>{subtitle}</p>
+        {(title || subtitle || action) && (
+          <div className="portal-topbar">
+            {(title || subtitle) && (
+              <div className="portal-title-stack">
+                {sidebarCollapsed && <BrandLogo compact />}
+                <div>
+                  <p className="eyebrow">Smart Sportz Enterprise</p>
+                  {title && <h1>{title}</h1>}
+                  {subtitle && <p>{subtitle}</p>}
+                </div>
+              </div>
+            )}
+            <div className="portal-actions">
+              {user && (isUserPortal ? (
+                <Link className="user-profile-avatar" to="/user/settings" aria-label="Open profile settings">
+                  <span>{initials}</span>
+                </Link>
+              ) : <span className="status blue">{user.roleLabel}</span>)}
+              {action}
+            </div>
           </div>
-          <div className="portal-actions">
-            {user && <span className="status blue">{user.roleLabel}</span>}
-            {action}
-          </div>
-        </div>
+        )}
         {children}
       </section>
     </div>
@@ -214,30 +252,40 @@ export function MetricCard({
 }
 
 export function TournamentCard({ item }: { item: any }) {
-  const canRegister = item.status === "Registration Open";
-  const isUpcoming = item.status === "Upcoming";
+  const tournament = withRuntimeTournamentStatus(item);
+  const isFeatureOnly = Boolean(item.featureOnly);
+  const canRegister = tournament.status === "Registration Open";
+  const isUpcoming = tournament.status === "Upcoming";
   const statusText = canRegister
-    ? `Register: ${item.registrationStart} - ${item.registrationEnd}`
+    ? `Register: ${tournament.registrationStart} - ${tournament.registrationEnd}`
     : isUpcoming
-      ? `Registration opens ${item.registrationStart}`
-      : item.status === "Live"
+      ? `Registration opens ${tournament.registrationStart}`
+      : tournament.status === "Live"
         ? "Live tournament in progress"
-        : `Registration closed ${item.registrationEnd}`;
+        : `Registration closed ${tournament.registrationEnd}`;
+  const destination = `/tournaments/${item.slug}`;
+  const actionLabel = canRegister || isUpcoming ? "View details" : "Rounds";
+  const minAge = Number((item as any).minAge ?? (item as any).min_age ?? 0);
+  const maxAge = Number((item as any).maxAge ?? (item as any).max_age ?? 0);
+  const ageLabel = minAge && maxAge ? `${minAge}-${maxAge} yrs` : minAge ? `${minAge}+ yrs` : maxAge ? `Up to ${maxAge} yrs` : "Open age";
+  const publishedMatchCount = Number(item.published_match_count ?? item.publishedMatchCount ?? 0);
+  const publishedRoundCount = Number(item.published_round_count ?? item.publishedRoundCount ?? 0);
 
   return (
-    <Link to={`/tournaments/${item.slug}`} className="click-card">
+    <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
-      <img src={item.image} alt={`${item.name} visual`} />
+      <img src={tournament.image} alt={`${tournament.name} visual`} />
       <div className="card-body">
-        <span className={`status ${item.accent}`}>{item.status}</span>
-        <h3>{item.name}</h3>
+        <span className={`status ${tournament.accent}`}>{tournament.status}</span>
+        <h3>{tournament.name}</h3>
         <p className="registration-window">{statusText}</p>
         <p>{item.sport} • {item.location} • {item.date}</p>
         <div className="card-meta">
-          <span>{item.teams}/{item.capacity} teams</span>
-          <span>{item.prize}</span>
+          <span>{tournament.teams}/{tournament.capacity} teams</span>
+          <span>{tournament.prize}</span>
+          <span>{publishedMatchCount > 0 ? `${publishedMatchCount} match${publishedMatchCount === 1 ? "" : "es"} / ${publishedRoundCount || 1} round${(publishedRoundCount || 1) === 1 ? "" : "s"}` : ageLabel}</span>
         </div>
-        <span className="inline-link">View details <ChevronRight size={16} /></span>
+        <span className="inline-link">{actionLabel} <ChevronRight size={16} /></span>
       </div>
     </motion.article>
     </Link>
@@ -259,13 +307,64 @@ export function LiveMatchCard({ match }: { match: any }) {
   );
 }
 
+function cellText(value: React.ReactNode): string {
+  if (value === null || value === undefined || typeof value === "boolean") return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(cellText).join(" ").trim();
+  if (typeof value === "object" && "props" in value) return cellText((value as React.ReactElement<any>).props.children);
+  return "";
+}
+
+function downloadTableCsv(columns: string[], rows: Array<Array<React.ReactNode>>) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const csv = [
+    columns.map(escape).join(","),
+    ...rows.map((row) => columns.map((_, index) => escape(cellText(row[index]))).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `smart-sportz-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<React.ReactNode>> }) {
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [scrollWidth, setScrollWidth] = useState(0);
+
+  useEffect(() => {
+    const update = () => setScrollWidth(tableRef.current?.scrollWidth ?? 0);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [rows, columns]);
+
+  function syncScroll(source: "top" | "body") {
+    const top = topScrollRef.current;
+    const body = bodyScrollRef.current;
+    if (!top || !body) return;
+    if (source === "top") body.scrollLeft = top.scrollLeft;
+    else top.scrollLeft = body.scrollLeft;
+  }
+
   return (
     <div className="table-wrap">
-      <table>
-        <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
-      </table>
+      {rows.length > 0 && (
+        <div className="table-export-actions">
+          <button type="button" onClick={() => downloadTableCsv(columns, rows)}><Download size={16} /> Download</button>
+        </div>
+      )}
+      <div className="table-scroll-top" ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
+      <div className="table-scroll-body" ref={bodyScrollRef} onScroll={() => syncScroll("body")}>
+        <table ref={tableRef}>
+          <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
+          <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </div>
   );
 }

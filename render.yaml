@@ -1,0 +1,76 @@
+services:
+  - type: web
+    name: smart-sportz-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 1 --bind 0.0.0.0:$PORT --timeout 60
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_NAME
+        value: Smart Sportz Backend
+      - key: APP_ENV
+        value: production
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_BACKEND
+        value: postgres
+      - key: DATABASE_PATH
+        value: storage/smart_sportz.db
+      - key: MIRROR_DATABASE_PATH
+        value: storage/smart_sportz_mirror.db
+      - key: AUDIT_DATABASE_PATH
+        value: storage/smart_sportz_audit.db
+      - key: DATABASE_URL
+        value: postgresql://postgres.kuoclwkexuzmkepokite:Smartsportz$001@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: MIRROR_DATABASE_URL
+        value: postgresql://postgres.kuoclwkexuzmkepokite:Smartsportz$001@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: AUDIT_DATABASE_URL
+        value: postgresql://postgres.kuoclwkexuzmkepokite:Smartsportz$001@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: SUPABASE_URL
+        value: https://kuoclwkexuzmkepokite.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_7NK_JFApSHcNepEbAaUKTA_NjAoZmQB
+      - key: SUPABASE_DIRECT_DATABASE_URL
+        value: postgresql://postgres:Smartsportz$001@db.kuoclwkexuzmkepokite.supabase.co:5432/postgres?sslmode=require
+      - key: POSTGRES_PRIMARY_SCHEMA
+        value: primary_app
+      - key: POSTGRES_MIRROR_SCHEMA
+        value: mirror_backup
+      - key: POSTGRES_AUDIT_SCHEMA
+        value: audit_event
+      - key: AUTO_MIRROR_SYNC
+        value: "false"
+      - key: BACKUP_DIR
+        value: storage/backups
+      - key: UPLOAD_DIR
+        value: storage/uploads
+      - key: REDIS_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        value: https://moved-seahorse-170162.upstash.io
+      - key: UPSTASH_REDIS_REST_TOKEN
+        value: gQAAAAAAApiyAAIgcDFlM2UwZjMzOTNhNDA0MDliOTFkNzAwYjcyNjJmNGUwNA
+      - key: INIT_DB_ON_STARTUP
+        value: "false"
+      - key: PUBLIC_CACHE_TTL_SECONDS
+        value: "300"
+      - key: DASHBOARD_CACHE_TTL_SECONDS
+        value: "120"
+      - key: OTP_DELIVERY_MODE
+        value: local
+      - key: NOTIFICATION_DELIVERY_MODE
+        value: whatsapp
+      - key: WHATSAPP_DELIVERY_ENABLED
+        value: "false"
+      - key: WHATSAPP_PROVIDER
+        value: disabled
+      - key: WHATSAPP_DEFAULT_TO
+        value: "+916374409006"
+      - key: GOOGLE_CLIENT_ID
+        value: 1052442707513-ht85fnn4ag34pvna47vv6cnorv4bto7c.apps.googleusercontent.com
+      - key: ALLOWED_ORIGINS
+        value: https://smart-sportz-dun.vercel.app,https://smart-sportz.vercel.app,https://smartsportz.github.io,https://smartsportz.github.io/Smart_Sportz,http://127.0.0.1:5173,http://localhost:5173

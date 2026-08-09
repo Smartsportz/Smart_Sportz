@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import quote_plus
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -28,7 +29,16 @@ def create_local_payment_intent(payload: PaymentIntentCreate):
     receipt_number = f"SS-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
     qr_payload = None
     if payload.method == "upi":
-        qr_payload = f"upi://pay?pa=smartsportz@local&pn=SmartSportz&am={payload.amount / 100:.2f}&tn={payload.team_name}"
+        qr_values = {
+            "pa": "smartsportz@upi",
+            "pn": "SmartSportz",
+            "am": f"{payload.amount / 100:.2f}",
+            "cu": "INR",
+            "tr": payment_id,
+            "tid": payment_id,
+            "tn": f"{tournament['name']} - {payload.team_name}",
+        }
+        qr_payload = "upi://pay?" + "&".join(f"{key}={quote_plus(value)}" for key, value in qr_values.items())
 
     execute(
         """

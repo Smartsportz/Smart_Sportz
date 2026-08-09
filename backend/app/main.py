@@ -6,14 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import settings
-from app.db.schema import init_schema
-from app.db.seed import seed_data, seed_operational_data
+from app.db.init_db import initialize_database
 
 
 def create_app() -> FastAPI:
-    init_schema()
-    seed_data()
-    seed_operational_data()
+    if settings.init_db_on_startup:
+        initialize_database()
 
     app = FastAPI(
         title=settings.app_name,

@@ -1,0 +1,234 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smart-sportz
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smart-sportz-config
+  namespace: smart-sportz
+data:
+  APP_ENV: production
+  DATABASE_BACKEND: postgres
+  POSTGRES_PRIMARY_SCHEMA: primary_app
+  POSTGRES_MIRROR_SCHEMA: mirror_backup
+  POSTGRES_AUDIT_SCHEMA: audit_event
+  REDIS_URL: redis://redis:6379/0
+  INIT_DB_ON_STARTUP: "false"
+  PUBLIC_CACHE_TTL_SECONDS: "45"
+  DASHBOARD_CACHE_TTL_SECONDS: "20"
+  ALLOWED_ORIGINS: https://smart-sportz.example.com,http://localhost:8080
+  WEB_CONCURRENCY: "2"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: smart-sportz-secrets
+  namespace: smart-sportz
+type: Opaque
+stringData:
+  APP_SECRET_KEY: replace-with-long-random-secret
+  DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DATABASE
+  MIRROR_DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DATABASE
+  AUDIT_DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DATABASE
+  RESEND_API_KEY: ""
+  TWILIO_ACCOUNT_SID: ""
+  TWILIO_AUTH_TOKEN: ""
+  TWILIO_VERIFY_SERVICE_SID: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: smart-sportz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: smart-sportz
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backend-init-db
+  namespace: smart-sportz
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: backend-init-db
+          image: smartsportz/backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.cli", "init-db"]
+          envFrom:
+            - configMapRef:
+                name: smart-sportz-config
+            - secretRef:
+                name: smart-sportz-secrets
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: smart-sportz
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: smartsportz/backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: smart-sportz-config
+            - secretRef:
+                name: smart-sportz-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 8
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 150m
+              memory: 256Mi
+            limits:
+              cpu: 750m
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: smart-sportz
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: smart-sportz
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: smartsportz/frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: smart-sportz
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smart-sportz
+  namespace: smart-sportz
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: smart-sportz.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
