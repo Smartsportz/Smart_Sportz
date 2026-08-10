@@ -2,7 +2,7 @@ import { Activity, Clock, MapPin, Radio, ShieldCheck, Users } from "lucide-react
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Page } from "../components/UI";
-import { apiRequest } from "../lib/api";
+import { apiRequest, websocketUrl } from "../lib/api";
 import { liveMatches, timeline } from "../data/platform";
 
 type LivePerson = {
@@ -119,8 +119,40 @@ export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string })
   }, []);
 
   useEffect(() => {
+    const socket = new WebSocket(websocketUrl("/live/ws"));
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { event?: string; data?: LiveMatchDetail[] };
+        if ((payload.event === "live:list:snapshot" || payload.event === "live:list:update") && Array.isArray(payload.data) && payload.data.length) {
+          setMatches(payload.data);
+          setSelectedId((current) => payload.data?.some((item) => item.id === current) ? current : payload.data?.[0]?.id || current);
+        }
+      } catch {
+        return;
+      }
+    };
+    return () => socket.close();
+  }, []);
+
+  useEffect(() => {
     if (initialMatchId) setSelectedId(initialMatchId);
   }, [initialMatchId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const socket = new WebSocket(websocketUrl(`/live/ws/${selectedId}`));
+    socket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { event?: string; data?: LiveMatchDetail };
+        if ((payload.event === "score:snapshot" || payload.event === "score:update") && payload.data?.id) {
+          setMatches((current) => current.map((match) => match.id === payload.data?.id ? { ...match, ...payload.data } : match));
+        }
+      } catch {
+        return;
+      }
+    };
+    return () => socket.close();
+  }, [selectedId]);
 
   const homeStats = selected.teamStats?.home ?? {};
   const awayStats = selected.teamStats?.away ?? {};

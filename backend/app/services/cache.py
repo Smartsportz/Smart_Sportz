@@ -30,7 +30,4 @@ def get_or_set_json(key: str, factory: Callable[[], T], ttl_seconds: int | None 
 
 
 def invalidate_prefix(prefix: str) -> None:
-    # RuntimeState intentionally exposes only key-level operations. Redis
-    # production deployments rely on short TTLs; this is a no-op hook for
-    # future explicit invalidation without coupling routes to Redis internals.
-    _ = prefix
+    runtime_state.delete_prefix(prefix)

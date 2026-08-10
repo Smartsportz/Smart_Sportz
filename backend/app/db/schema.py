@@ -365,6 +365,15 @@ CREATE TABLE IF NOT EXISTS news_social (
   FOREIGN KEY(news_slug) REFERENCES news_posts(slug)
 );
 
+CREATE TABLE IF NOT EXISTS news_likes (
+  id TEXT PRIMARY KEY,
+  news_slug TEXT NOT NULL,
+  actor_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(news_slug, actor_key),
+  FOREIGN KEY(news_slug) REFERENCES news_posts(slug)
+);
+
 CREATE TABLE IF NOT EXISTS sport_home_visibility (
   sport_slug TEXT PRIMARY KEY,
   show_on_home INTEGER NOT NULL,
@@ -408,6 +417,14 @@ CREATE TABLE IF NOT EXISTS gallery_social (
   likes INTEGER NOT NULL DEFAULT 0,
   comments_json TEXT NOT NULL DEFAULT '[]',
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gallery_likes (
+  id TEXT PRIMARY KEY,
+  image_key TEXT NOT NULL,
+  actor_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(image_key, actor_key)
 );
 
 CREATE TABLE IF NOT EXISTS gallery_albums (
@@ -514,26 +531,39 @@ INDEX_SCHEMA = """
 CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status);
 CREATE INDEX IF NOT EXISTS idx_tournaments_sport ON tournaments(sport);
 CREATE INDEX IF NOT EXISTS idx_tournaments_location ON tournaments(location);
+CREATE INDEX IF NOT EXISTS idx_tournaments_status_date ON tournaments(status, date);
+CREATE INDEX IF NOT EXISTS idx_users_email_role ON users(email, role);
+CREATE INDEX IF NOT EXISTS idx_users_role_created ON users(role, created_at);
 CREATE INDEX IF NOT EXISTS idx_tournament_cities_slug ON tournament_cities(tournament_slug, sort_order);
+CREATE INDEX IF NOT EXISTS idx_tournament_cities_city ON tournament_cities(city, tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_registrations_user ON registrations(user_id);
 CREATE INDEX IF NOT EXISTS idx_registrations_email ON registrations(email);
 CREATE INDEX IF NOT EXISTS idx_registrations_city_status ON registrations(city, status);
+CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON registrations(created_at);
 CREATE INDEX IF NOT EXISTS idx_registrations_tournament_status ON registrations(tournament_slug, status);
 CREATE INDEX IF NOT EXISTS idx_registrations_tournament_team_name_lookup ON registrations(tournament_slug, lower(trim(team_name)));
 CREATE INDEX IF NOT EXISTS idx_registration_members_reg ON registration_members(registration_id);
 CREATE INDEX IF NOT EXISTS idx_registration_documents_reg ON registration_documents(registration_id);
 CREATE INDEX IF NOT EXISTS idx_payments_registration ON payments(registration_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status_created ON payments(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_payments_receipt ON payments(receipt_number);
+CREATE INDEX IF NOT EXISTS idx_news_likes_actor ON news_likes(actor_key, news_slug);
 CREATE INDEX IF NOT EXISTS idx_news_status_dates ON news_posts(status, published_at, created_at);
 CREATE INDEX IF NOT EXISTS idx_news_slug_status ON news_posts(slug, status);
 CREATE INDEX IF NOT EXISTS idx_news_sport_city ON news_posts(sport, city);
 CREATE INDEX IF NOT EXISTS idx_news_blocks_post_order ON news_blocks(post_slug, sort_order);
 CREATE INDEX IF NOT EXISTS idx_sport_home_visibility_sort ON sport_home_visibility(show_on_home, sort_order);
 CREATE INDEX IF NOT EXISTS idx_manager_city_user ON manager_city_assignments(manager_user_id, city);
+CREATE INDEX IF NOT EXISTS idx_manager_city_city ON manager_city_assignments(city, manager_user_id);
 CREATE INDEX IF NOT EXISTS idx_tournament_manager_user ON tournament_manager_assignments(manager_user_id, tournament_slug);
+CREATE INDEX IF NOT EXISTS idx_tournament_manager_slug ON tournament_manager_assignments(tournament_slug, manager_user_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_social_updated ON gallery_social(updated_at);
+CREATE INDEX IF NOT EXISTS idx_gallery_likes_actor ON gallery_likes(actor_key, image_key);
 CREATE INDEX IF NOT EXISTS idx_gallery_albums_month ON gallery_albums(month_label, sort_order);
 CREATE INDEX IF NOT EXISTS idx_live_matches_status ON live_matches(status);
 CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, id);
+CREATE INDEX IF NOT EXISTS idx_notification_events_tournament_created ON notification_events(tournament_slug, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_bracket_nodes_tournament ON bracket_nodes(tournament_slug, x, y);
 CREATE INDEX IF NOT EXISTS idx_bracket_connections_tournament ON bracket_connections(tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_bracket_round_schedules_tournament ON bracket_round_schedules(tournament_slug, round);

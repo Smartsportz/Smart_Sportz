@@ -10,7 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from app.api.deps import require_roles
 from app.core.responses import ok
 from app.core.security import hash_password
-from app.db.database import audit_rows, execute, execute_many, row, rows, sync_mirror
+from app.db.database import audit_rows, execute, execute_many, row, rows
 from app.schemas import (
     AdminTeamUpdatePayload,
     AdminUserCreatePayload,
@@ -29,7 +29,8 @@ from app.schemas import (
 )
 from app.services.audit import log
 from app.services.cache import cache_key
-from app.services.database_architecture import compare_primary_mirror, database_status, export_json_backups
+from app.services.database_architecture import compare_primary_mirror, database_status
+from app.services.job_queue import enqueue
 from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -1416,8 +1417,10 @@ def create_user(
             datetime.now(timezone.utc).isoformat(),
         ),
     )
+    detail = user_detail_payload(user_id)
+    detail["temporary_password"] = payload.password
     log(user["email"], "user_created", "user", user_id, f"User {payload.email} created")
-    return ok(user_detail_payload(user_id), "User created")
+    return ok(detail, "User created")
 
 
 @router.get("/users/{user_id}")
@@ -1553,11 +1556,13 @@ def create_manager(
         manager_id,
         f"Manager {payload.email} created"
     )
-    return ok(
-        manager_with_cities(row(
+    created_manager = manager_with_cities(row(
             "SELECT id, email, name, role, created_at FROM users WHERE id = ?",
             (manager_id,)
-        )),
+        ))
+    created_manager["temporary_password"] = payload.password
+    return ok(
+        created_manager,
         "Manager created"
     )
 
@@ -2048,19 +2053,19 @@ def database_compare(_: dict = Depends(require_roles("super_admin"))):
 
 @router.post("/database/mirror/sync")
 def database_mirror_sync(user: dict = Depends(require_roles("super_admin"))):
-    sync_mirror()
-    log(user["email"], "mirror_synced", "database", "db2", "DB-2 mirror synchronized from DB-1")
-    return ok(database_status(), "Mirror synchronized")
+    job = enqueue("database.mirror_sync")
+    log(user["email"], "mirror_sync_queued", "database", "db2", "DB-2 mirror sync queued")
+    return ok({"job": job, "database": database_status()}, "Mirror synchronization queued")
 
 
 @router.post("/database/backups/json")
 def database_json_backup(user: dict = Depends(require_roles("super_admin"))):
-    result = export_json_backups()
+    result = enqueue("database.json_backup")
     log(
         user["email"],
-        "json_backup_created",
+        "json_backup_queued",
         "database",
         "db1_db2",
-        "DB-1 and DB-2 JSON backups generated"
+        "DB-1 and DB-2 JSON backup queued"
     )
-    return ok(result, "JSON backups generated")
+    return ok(result, "JSON backup queued")
