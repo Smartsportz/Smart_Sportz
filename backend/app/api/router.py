@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from app.api.routes import admin, auth, content, live, management, payments, public, registrations, storage, user
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import audit_db_path, db_path, mirror_db_path, using_postgres
 from app.services.runtime_state import runtime_state
+from app.services.metrics import prometheus_text
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -33,6 +34,11 @@ def health():
         "database": database,
         "runtimeState": runtime_state.status(),
     })
+
+
+@api_router.get("/metrics", tags=["system"], include_in_schema=False)
+def metrics():
+    return Response(prometheus_text(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 api_router.include_router(auth.router)

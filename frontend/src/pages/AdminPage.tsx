@@ -176,6 +176,7 @@ type ManagerRow = {
   role: string;
   cities: string[];
   created_at?: string;
+  temporary_password?: string;
 };
 
 type AdminDashboardData = {
@@ -940,7 +941,10 @@ type AdminUserDetailData = {
   payments: Array<Record<string, any>>;
   documents: Array<Record<string, any>>;
   members: Array<Record<string, any>>;
+  temporary_password?: string;
 };
+
+const temporaryPasswordKey = (type: "user" | "manager", id: string) => `smart-sportz-temp-password:${type}:${id}`;
 
 function formatAdminMoney(value: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value / 100);
@@ -3197,7 +3201,7 @@ function AdminUsersPanel() {
   async function deleteUser() {
     if (!deleteCandidate) return;
     try {
-      await apiRequest(`/admin/users/${deleteCandidate.id}/delete`, { method: "POST" }, token);
+      await apiRequest(`/admin/users/${deleteCandidate.id}`, { method: "DELETE" }, token);
       setUsers((current) => current.filter((item) => item.id !== deleteCandidate.id));
       setMessage(`${deleteCandidate.name} deleted.`);
       setDeleteCandidate(null);
@@ -3248,6 +3252,7 @@ export function AdminUserCreatePage() {
     setError("");
     try {
       const created = await apiRequest<AdminUserDetailData>("/admin/users", { method: "POST", body: JSON.stringify(form) }, token);
+      sessionStorage.setItem(temporaryPasswordKey("user", created.user.id), created.temporary_password || form.password);
       navigate(`/admin/users/${created.user.id}`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not create user."); }
   }
@@ -3256,6 +3261,7 @@ export function AdminUserCreatePage() {
     <Page>
       <PortalShell title="Add User" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
         {error && <div className="form-alert">{error}</div>}
+        <div className="form-hint">Default password shown to the new user: {form.password}</div>
         <form className="panel form-grid" onSubmit={submit}>
           <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
           <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
@@ -3275,6 +3281,7 @@ export function AdminUserDetailPage() {
   const [data, setData] = useState<AdminUserDetailData | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -3285,6 +3292,8 @@ export function AdminUserDetailPage() {
       const payload = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, {}, token);
       setData(payload);
       setForm({ name: payload.user.name, email: payload.user.email, phone: payload.user.phone || "", password: "" });
+      const storedPassword = sessionStorage.getItem(temporaryPasswordKey("user", payload.user.id));
+      if (storedPassword) setTemporaryPassword(storedPassword);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load user."); }
   }
 
@@ -3297,7 +3306,7 @@ export function AdminUserDetailPage() {
     setError("");
     try {
       const payload = { name: form.name, email: form.email, phone: form.phone, ...(form.password ? { password: form.password } : {}) };
-      const updated = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, { method: "POST", body: JSON.stringify(payload) }, token);
+      const updated = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
       setData(updated);
       setForm({ name: updated.user.name, email: updated.user.email, phone: updated.user.phone || "", password: "" });
       setMessage("User updated.");
@@ -3306,8 +3315,13 @@ export function AdminUserDetailPage() {
 
   async function deleteUser() {
     if (!id) return;
-    await apiRequest(`/admin/users/${id}/delete`, { method: "POST" }, token);
+    await apiRequest(`/admin/users/${id}`, { method: "DELETE" }, token);
     navigate("/admin/users");
+  }
+
+  function closeTemporaryPassword() {
+    if (data?.user.id) sessionStorage.removeItem(temporaryPasswordKey("user", data.user.id));
+    setTemporaryPassword("");
   }
 
   return (
@@ -3315,6 +3329,19 @@ export function AdminUserDetailPage() {
       <PortalShell title={data?.user.name ?? "User Detail"} subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/users">All users</Link>}>
         {message && <div className="form-alert success-alert">{message}</div>}
         {error && <div className="form-alert">{error}</div>}
+        {temporaryPassword && (
+          <div className="modal-backdrop">
+            <section className="confirm-modal panel">
+              <h2>Temporary password</h2>
+              <p className="field-hint">Share this with {data?.user.email}. It is shown only after creation.</p>
+              <div className="temporary-password-box">{temporaryPassword}</div>
+              <div className="registration-actions compact-actions">
+                <button className="btn btn-primary" type="button" onClick={() => void navigator.clipboard?.writeText(temporaryPassword)}>Copy password</button>
+                <button className="btn btn-secondary" type="button" onClick={closeTemporaryPassword}>Close</button>
+              </div>
+            </section>
+          </div>
+        )}
         {!data ? <section className="panel user-empty-state"><h2>Loading user</h2></section> : (
           <>
             <form className="panel form-grid" onSubmit={saveUser}>
@@ -3356,7 +3383,7 @@ function ManagerManagementPanel() {
   async function deleteManager() {
     if (!deleteCandidate) return;
     try {
-      await apiRequest(`/admin/managers/${deleteCandidate.id}/delete`, { method: "POST" }, token);
+      await apiRequest(`/admin/managers/${deleteCandidate.id}`, { method: "DELETE" }, token);
       setManagers((current) => current.filter((item) => item.id !== deleteCandidate.id));
       setMessage(`${deleteCandidate.name} deleted.`);
       setDeleteCandidate(null);
@@ -3398,6 +3425,7 @@ export function AdminManagerCreatePage() {
     if (!form.name.trim() || !form.email.trim() || form.cities.length === 0) { setError("Fill required fields."); return; }
     try {
       const created = await apiRequest<ManagerRow>("/admin/managers", { method: "POST", body: JSON.stringify(form) }, token);
+      sessionStorage.setItem(temporaryPasswordKey("manager", created.id), created.temporary_password || form.password);
       navigate(`/admin/managers/${created.id}`);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to create manager."); }
   }
@@ -3405,10 +3433,13 @@ export function AdminManagerCreatePage() {
   return (
     <Page>
       <PortalShell title="Add Manager" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
+        {error && <div className="form-alert">{error}</div>}
+        <div className="form-hint">Default password shown to the new manager: {form.password}</div>
         <section className="panel tournament-create-panel">
           <form className="form-grid" onSubmit={createManager}>
             <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
             <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+            <label>Temporary password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></label>
             <label>Allocate place
               <select value={selectedPlace} onChange={(e) => { 
                 const v = e.target.value; 
@@ -3436,6 +3467,7 @@ export function AdminManagerDetailPage() {
   const [manager, setManager] = useState<(ManagerRow & { assigned_tournaments?: Array<Record<string, any>> }) | null>(null);
   const [places, setPlaces] = useState<string[]>([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", cities: [] as string[] });
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -3446,24 +3478,48 @@ export function AdminManagerDetailPage() {
       apiRequest<string[]>("/admin/places", {}, token),
     ]).then(([m, p]) => {
       setManager(m); setPlaces(p); setForm({ name: m.name, email: m.email, password: "", cities: m.cities });
+      const storedPassword = sessionStorage.getItem(temporaryPasswordKey("manager", m.id));
+      if (storedPassword) setTemporaryPassword(storedPassword);
     }).catch(() => setError("Load error"));
   }, [id, token]);
 
   async function saveManager(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      const updated = await apiRequest<ManagerRow>(`/admin/managers/${id}`, { method: "POST", body: JSON.stringify(form) }, token);
+      const updated = await apiRequest<ManagerRow>(`/admin/managers/${id}`, { method: "PATCH", body: JSON.stringify(form) }, token);
+      setManager(updated);
+      setForm({ name: updated.name, email: updated.email, password: "", cities: updated.cities });
       setMessage("Updated.");
     } catch (caught) { setError("Save error"); }
+  }
+
+  function closeTemporaryPassword() {
+    if (manager?.id) sessionStorage.removeItem(temporaryPasswordKey("manager", manager.id));
+    setTemporaryPassword("");
   }
 
   return (
     <Page>
       <PortalShell title={manager?.name ?? "Manager Detail"} subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/managers">All managers</Link>}>
         {message && <div className="form-alert success-alert">{message}</div>}
+        {error && <div className="form-alert">{error}</div>}
+        {temporaryPassword && (
+          <div className="modal-backdrop">
+            <section className="confirm-modal panel">
+              <h2>Temporary password</h2>
+              <p className="field-hint">Share this with {manager?.email}. It is shown only after creation.</p>
+              <div className="temporary-password-box">{temporaryPassword}</div>
+              <div className="registration-actions compact-actions">
+                <button className="btn btn-primary" type="button" onClick={() => void navigator.clipboard?.writeText(temporaryPassword)}>Copy password</button>
+                <button className="btn btn-secondary" type="button" onClick={closeTemporaryPassword}>Close</button>
+              </div>
+            </section>
+          </div>
+        )}
         <form className="panel form-grid" onSubmit={saveManager}>
           <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
           <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
+          <label>New password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></label>
           <button className="btn btn-primary" type="submit">Save Manager</button>
         </form>
       </PortalShell>

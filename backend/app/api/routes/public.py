@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
+from app.services.job_queue import enqueue
 from app.services.tournament_status import apply_registration_window_statuses, with_runtime_status
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -17,6 +19,7 @@ router = APIRouter(prefix="/public", tags=["public"])
 class GalleryLikePayload(BaseModel):
     image_key: str = Field(min_length=3, max_length=220)
     liked: bool
+    actor_key: str = Field(min_length=8, max_length=160)
 
 
 class GalleryCommentPayload(BaseModel):
@@ -40,14 +43,16 @@ def parse_comments(value: str | None) -> list[str]:
     return []
 
 
-def gallery_social_item(image_key: str) -> dict:
+def gallery_social_item(image_key: str, actor_key: str | None = None) -> dict:
     item = row("SELECT image_key, likes, comments_json FROM gallery_social WHERE image_key = ?", (image_key,))
+    liked = bool(actor_key and row("SELECT id FROM gallery_likes WHERE image_key = ? AND actor_key = ?", (image_key, actor_key)))
     if not item:
-        return {"image_key": image_key, "likes": 0, "comments": []}
+        return {"image_key": image_key, "likes": 0, "comments": [], "liked": liked}
     return {
         "image_key": item["image_key"],
         "likes": item["likes"],
         "comments": parse_comments(item["comments_json"]),
+        "liked": liked,
     }
 
 
@@ -217,12 +222,13 @@ def published_announcements():
 
 
 @router.get("/gallery/social")
-def gallery_social():
+def gallery_social(actor_key: str = ""):
     records = rows("SELECT image_key, likes, comments_json FROM gallery_social ORDER BY updated_at DESC")
     return ok({
         item["image_key"]: {
             "likes": item["likes"],
             "comments": parse_comments(item["comments_json"]),
+            "liked": bool(actor_key and row("SELECT id FROM gallery_likes WHERE image_key = ? AND actor_key = ?", (item["image_key"], actor_key))),
         }
         for item in records
     })
@@ -242,9 +248,18 @@ def gallery_albums():
 
 @router.post("/gallery/social/like")
 def gallery_social_like(payload: GalleryLikePayload):
-    current = gallery_social_item(payload.image_key)
-    likes = int(current["likes"]) + (1 if payload.liked else -1)
-    return ok(upsert_gallery_social(payload.image_key, likes, current["comments"]))
+    current = gallery_social_item(payload.image_key, payload.actor_key)
+    if payload.liked and not current["liked"]:
+        execute(
+            "INSERT INTO gallery_likes(id, image_key, actor_key, created_at) VALUES (?, ?, ?, ?)",
+            (f"gallery_like_{uuid4().hex[:12]}", payload.image_key, payload.actor_key, now_iso()),
+        )
+    if not payload.liked and current["liked"]:
+        execute("DELETE FROM gallery_likes WHERE image_key = ? AND actor_key = ?", (payload.image_key, payload.actor_key))
+    likes = int(row("SELECT COUNT(*) AS count FROM gallery_likes WHERE image_key = ?", (payload.image_key,))["count"])
+    updated = upsert_gallery_social(payload.image_key, likes, current["comments"])
+    enqueue("social.like_event", {"type": "gallery", "key": payload.image_key, "actor": payload.actor_key, "liked": payload.liked})
+    return ok({**updated, "liked": payload.liked})
 
 
 @router.post("/gallery/social/comment")

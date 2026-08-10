@@ -89,6 +89,22 @@ class RuntimeState:
                 self._redis = None
         self._fallback.pop(key, None)
 
+    def delete_prefix(self, prefix: str) -> int:
+        deleted = 0
+        if self._redis is not None:
+            try:
+                keys = list(self._redis.scan_iter(f"{prefix}*"))
+                if keys:
+                    deleted += int(self._redis.delete(*keys))
+                return deleted
+            except RedisError:
+                self._redis = None
+        self._purge_expired()
+        for key in [key for key in self._fallback if key.startswith(prefix)]:
+            self._fallback.pop(key, None)
+            deleted += 1
+        return deleted
+
     def mark_session(self, jti: str, payload: dict[str, Any], ttl_seconds: int) -> None:
         self.set_json(f"session:{jti}", payload, ttl_seconds)
 

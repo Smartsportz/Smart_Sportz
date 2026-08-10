@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
+from app.services.job_queue import enqueue
 from app.services.tournament_status import apply_registration_window_statuses
 
 router = APIRouter(tags=["content"])
@@ -17,6 +19,7 @@ router = APIRouter(tags=["content"])
 class NewsLikePayload(BaseModel):
     slug: str = Field(min_length=2, max_length=220)
     liked: bool = True
+    actor_key: str = Field(min_length=8, max_length=160)
 
 
 class NewsCommentPayload(BaseModel):
@@ -55,12 +58,13 @@ def attach_news_blocks(post: dict) -> dict:
 
 
 @router.get("/news/social")
-def news_social():
+def news_social(actor_key: str = ""):
     items = rows("SELECT news_slug, likes, comments_json FROM news_social")
     return ok({
         item["news_slug"]: {
             "likes": item["likes"],
             "comments": parse_comments(item["comments_json"]),
+            "liked": bool(actor_key and row("SELECT id FROM news_likes WHERE news_slug = ? AND actor_key = ?", (item["news_slug"], actor_key))),
         }
         for item in items
     })
@@ -70,8 +74,15 @@ def news_social():
 def news_like(payload: NewsLikePayload):
     if not row("SELECT slug FROM news_posts WHERE slug = ? AND status = 'published'", (payload.slug,)):
         raise HTTPException(status_code=404, detail="News post not found")
-    existing = row("SELECT likes FROM news_social WHERE news_slug = ?", (payload.slug,))
-    likes = max(0, int(existing["likes"]) + (1 if payload.liked else -1)) if existing else (1 if payload.liked else 0)
+    liked = bool(row("SELECT id FROM news_likes WHERE news_slug = ? AND actor_key = ?", (payload.slug, payload.actor_key)))
+    if payload.liked and not liked:
+        execute(
+            "INSERT INTO news_likes(id, news_slug, actor_key, created_at) VALUES (?, ?, ?, ?)",
+            (f"news_like_{uuid4().hex[:12]}", payload.slug, payload.actor_key, now_iso()),
+        )
+    if not payload.liked and liked:
+        execute("DELETE FROM news_likes WHERE news_slug = ? AND actor_key = ?", (payload.slug, payload.actor_key))
+    likes = int(row("SELECT COUNT(*) AS count FROM news_likes WHERE news_slug = ?", (payload.slug,))["count"])
     execute(
         """
         INSERT INTO news_social(news_slug, likes, comments_json, updated_at)
@@ -80,7 +91,8 @@ def news_like(payload: NewsLikePayload):
         """,
         (payload.slug, likes, "[]", now_iso()),
     )
-    return ok({"slug": payload.slug, "likes": likes})
+    enqueue("social.like_event", {"type": "news", "key": payload.slug, "actor": payload.actor_key, "liked": payload.liked})
+    return ok({"slug": payload.slug, "likes": likes, "liked": payload.liked})
 
 
 @router.post("/news/social/comment")

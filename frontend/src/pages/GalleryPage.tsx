@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest } from "../lib/api";
+import { socialActorKey } from "../lib/socialIdentity";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
 type GalleryAlbum = {
@@ -40,7 +41,7 @@ export function GalleryPage() {
     apiRequest<GalleryAlbum[]>("/public/gallery/albums")
       .then(setAlbums)
       .catch(() => setAlbums([]));
-    apiRequest<Record<string, { likes?: number; comments?: string[] }>>("/public/gallery/social")
+    apiRequest<Record<string, { liked?: boolean; likes?: number; comments?: string[] }>>(`/public/gallery/social?actor_key=${encodeURIComponent(socialActorKey())}`)
       .then(setSocial)
       .catch(() => undefined);
   }, []);
@@ -50,11 +51,16 @@ export function GalleryPage() {
     const current = social[key] ?? { likes: 0, comments: [], liked: false };
     const liked = !current.liked;
     setSocial((value) => ({ ...value, [key]: { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) } }));
-    const remote = await apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/like", {
-      method: "POST",
-      body: JSON.stringify({ image_key: key, liked }),
-    });
-    setSocial((value) => ({ ...value, [key]: { ...value[key], likes: remote.likes, comments: remote.comments } }));
+    try {
+      const remote = await apiRequest<{ image_key: string; liked: boolean; likes: number; comments: string[] }>("/public/gallery/social/like", {
+        method: "POST",
+        body: JSON.stringify({ image_key: key, liked, actor_key: socialActorKey() }),
+        silent: true,
+      });
+      setSocial((value) => ({ ...value, [key]: { ...value[key], liked: remote.liked, likes: remote.likes, comments: remote.comments } }));
+    } catch {
+      setSocial((value) => ({ ...value, [key]: current }));
+    }
   }
 
   async function shareAlbum(album: GalleryAlbum) {
@@ -123,7 +129,7 @@ export function GalleryAlbumPage() {
     apiRequest<GalleryAlbum[]>("/public/gallery/albums")
       .then(setAlbums)
       .catch(() => setAlbums([]));
-    apiRequest<Record<string, { likes?: number; comments?: string[] }>>("/public/gallery/social")
+    apiRequest<Record<string, { liked?: boolean; likes?: number; comments?: string[] }>>(`/public/gallery/social?actor_key=${encodeURIComponent(socialActorKey())}`)
       .then(setSocial)
       .catch(() => undefined);
   }, []);
@@ -136,6 +142,24 @@ export function GalleryAlbumPage() {
     });
     setSocial((value) => ({ ...value, [imageKey(album)]: { ...value[imageKey(album)], likes: remote.likes, comments: remote.comments } }));
     setComment("");
+  }
+
+  async function toggleLike() {
+    if (!album) return;
+    const key = imageKey(album);
+    const current = social[key] ?? { likes: 0, comments: [], liked: false };
+    const liked = !current.liked;
+    setSocial((value) => ({ ...value, [key]: { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) } }));
+    try {
+      const remote = await apiRequest<{ image_key: string; liked: boolean; likes: number; comments: string[] }>("/public/gallery/social/like", {
+        method: "POST",
+        body: JSON.stringify({ image_key: key, liked, actor_key: socialActorKey() }),
+        silent: true,
+      });
+      setSocial((value) => ({ ...value, [key]: { ...value[key], liked: remote.liked, likes: remote.likes, comments: remote.comments } }));
+    } catch {
+      setSocial((value) => ({ ...value, [key]: current }));
+    }
   }
 
   if (!album) {
@@ -165,7 +189,7 @@ export function GalleryAlbumPage() {
       </section>
       <section className="article-body panel">
         <div className="news-social-actions news-detail-actions">
-          <button type="button"><Heart size={15} />{state.likes ?? 0}</button>
+          <button type="button" className={state.liked ? "active" : ""} onClick={() => void toggleLike()}><Heart size={15} />{state.likes ?? 0}</button>
           <button type="button"><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
         </div>
         <div className="news-comments">

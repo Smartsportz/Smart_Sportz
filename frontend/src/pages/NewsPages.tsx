@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest } from "../lib/api";
+import { socialActorKey } from "../lib/socialIdentity";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
 
@@ -20,7 +21,7 @@ type NewsPost = {
   highlight?: boolean;
   blocks: NewsBlock[];
 };
-type NewsSocial = Record<string, { likes: number; comments: Array<{ text: string; createdAt?: string }> }>;
+type NewsSocial = Record<string, { liked?: boolean; likes: number; comments: Array<{ text: string; createdAt?: string }> }>;
 
 function normalizePost(item: any): NewsPost {
   return {
@@ -89,7 +90,7 @@ export function NewsPage() {
       .catch(() => {
         if (alive) setRemotePosts([]);
       });
-    apiRequest<NewsSocial>("/news/social")
+    apiRequest<NewsSocial>(`/news/social?actor_key=${encodeURIComponent(socialActorKey())}`)
       .then((items) => {
         if (alive) setSocial(items);
       })
@@ -100,11 +101,19 @@ export function NewsPage() {
   }, []);
 
   async function toggleLike(slug: string) {
-    const updated = await apiRequest<{ slug: string; likes: number }>("/news/social/like", {
-      method: "POST",
-      body: JSON.stringify({ slug, liked: true }),
-    });
-    setSocial((current) => ({ ...current, [slug]: { ...(current[slug] ?? { comments: [] }), likes: updated.likes } }));
+    const current = social[slug] ?? { likes: 0, comments: [], liked: false };
+    const liked = !current.liked;
+    setSocial((value) => ({ ...value, [slug]: { ...current, liked, likes: Math.max(0, current.likes + (liked ? 1 : -1)) } }));
+    try {
+      const updated = await apiRequest<{ slug: string; liked: boolean; likes: number }>("/news/social/like", {
+        method: "POST",
+        body: JSON.stringify({ slug, liked, actor_key: socialActorKey() }),
+        silent: true,
+      });
+      setSocial((value) => ({ ...value, [slug]: { ...(value[slug] ?? { comments: [] }), liked: updated.liked, likes: updated.likes } }));
+    } catch {
+      setSocial((value) => ({ ...value, [slug]: current }));
+    }
   }
 
   async function sharePost(post: NewsPost) {
@@ -165,7 +174,7 @@ export function NewsPage() {
                       </div>
                     </Link>
                     <div className="news-social-actions">
-                      <button type="button" onClick={() => void toggleLike(post.slug)}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
+                      <button type="button" className={social[post.slug]?.liked ? "active" : ""} onClick={() => void toggleLike(post.slug)}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
                       <Link to={`/news/${post.slug}#comments`}><MessageCircle size={15} />{social[post.slug]?.comments?.length ?? 0}</Link>
                       <button type="button" onClick={() => void sharePost(post)}><Share2 size={15} />Share</button>
                     </div>
@@ -204,7 +213,7 @@ export function NewsDetailPage() {
         if (alive) setRelated(items.map(normalizePost).filter((item) => item.slug !== slug).slice(0, 3));
       })
       .catch(() => undefined);
-    apiRequest<NewsSocial>("/news/social")
+    apiRequest<NewsSocial>(`/news/social?actor_key=${encodeURIComponent(socialActorKey())}`)
       .then((items) => {
         if (alive) setSocial(items);
       })
@@ -242,6 +251,23 @@ export function NewsDetailPage() {
     setComment("");
   }
 
+  async function toggleDetailLike() {
+    if (!post) return;
+    const current = social[post.slug] ?? { likes: 0, comments: [], liked: false };
+    const liked = !current.liked;
+    setSocial((value) => ({ ...value, [post.slug]: { ...current, liked, likes: Math.max(0, current.likes + (liked ? 1 : -1)) } }));
+    try {
+      const updated = await apiRequest<{ slug: string; liked: boolean; likes: number }>("/news/social/like", {
+        method: "POST",
+        body: JSON.stringify({ slug: post.slug, liked, actor_key: socialActorKey() }),
+        silent: true,
+      });
+      setSocial((value) => ({ ...value, [post.slug]: { ...(value[post.slug] ?? { comments: [] }), liked: updated.liked, likes: updated.likes } }));
+    } catch {
+      setSocial((value) => ({ ...value, [post.slug]: current }));
+    }
+  }
+
   return (
     <Page>
       {(!post || notFound) ? (
@@ -269,7 +295,7 @@ export function NewsDetailPage() {
       <section className="article-body panel">
         {post.blocks.map(renderBlock)}
         <div className="news-social-actions news-detail-actions">
-          <button type="button" onClick={() => void apiRequest<{ likes: number }>("/news/social/like", { method: "POST", body: JSON.stringify({ slug: post.slug, liked: true }) }).then((updated) => setSocial((current) => ({ ...current, [post.slug]: { ...(current[post.slug] ?? { comments: [] }), likes: updated.likes } })))}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
+          <button type="button" className={social[post.slug]?.liked ? "active" : ""} onClick={() => void toggleDetailLike()}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
           <button type="button" onClick={() => void shareNews()}><Share2 size={15} />Share</button>
         </div>
         <div className="news-comments" id="comments">

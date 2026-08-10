@@ -16,6 +16,12 @@ function resolveApiBaseUrl() {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+export function websocketUrl(path: string) {
+  const base = API_BASE_URL.startsWith("http")
+    ? API_BASE_URL.replace(/^http/, "ws")
+    : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${API_BASE_URL}`;
+  return `${base}${path}`;
+}
 const USER_KEY = "smart-sportz-user";
 const TOKEN_KEY = "smart-sportz-token";
 const REFRESH_KEY = "smart-sportz-refresh-token";
@@ -108,18 +114,21 @@ async function sendRequest(path: string, options: RequestInit, token?: string | 
   });
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string | null): Promise<T> {
-  beginGlobalLoading();
+type ApiRequestOptions = RequestInit & { silent?: boolean };
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}, token?: string | null): Promise<T> {
+  const { silent, ...requestOptions } = options;
+  if (!silent) beginGlobalLoading();
   try {
     const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
     const requestToken = token ?? storedToken;
-    let response = await sendRequest(path, options, requestToken);
+    let response = await sendRequest(path, requestOptions, requestToken);
     let payload = await parseEnvelope<T>(response);
     const shouldRefresh = response.status === 401 && requestToken && !path.startsWith("/auth/");
     if (shouldRefresh) {
       const refreshedToken = await refreshSession();
       if (refreshedToken) {
-        response = await sendRequest(path, options, refreshedToken);
+        response = await sendRequest(path, requestOptions, refreshedToken);
         payload = await parseEnvelope<T>(response);
       } else {
         throw new Error("Session expired. Please login again.");
@@ -130,7 +139,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     }
     return payload.data;
   } finally {
-    endGlobalLoading();
+    if (!silent) endGlobalLoading();
   }
 }
 

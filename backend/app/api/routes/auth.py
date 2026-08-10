@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.responses import ok
 from app.core.security import create_token, decode_token, hash_password, verify_password
 from app.db.database import execute, row
-from app.schemas import ForgotPasswordResetRequest, ForgotPasswordStartRequest, GoogleLoginRequest, LoginOtpVerifyRequest, LoginRequest, RefreshTokenRequest, SignupStartRequest, SignupVerifyRequest
+from app.schemas import ChangePasswordRequest, ForgotPasswordResetRequest, ForgotPasswordStartRequest, GoogleLoginRequest, LoginOtpVerifyRequest, LoginRequest, RefreshTokenRequest, SignupStartRequest, SignupVerifyRequest
 from app.services.audit import log
 from app.services.notifications import generate_otp, send_whatsapp_message
 from app.services.runtime_state import runtime_state
@@ -260,6 +260,22 @@ def forgot_password_reset(payload: ForgotPasswordResetRequest):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Google-only accounts do not use password reset")
     execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(payload.password), user["id"]))
     log(user["email"], "password_reset", "auth", user["id"], "Participant password reset by OTP")
+    return ok(message="Password changed successfully")
+
+
+@router.post("/change-password")
+def change_password(payload: ChangePasswordRequest, user: dict = Depends(current_user)):
+    account = row("SELECT * FROM users WHERE id = ?", (user["id"],))
+    if not account:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if account.get("google_login"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Google-only accounts do not use password login")
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New password and confirmation do not match")
+    if not verify_password(payload.current_password, account["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+    execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(payload.new_password), account["id"]))
+    log(account["email"], "password_changed", "auth", account["id"], "Signed-in user changed password")
     return ok(message="Password changed successfully")
 
 

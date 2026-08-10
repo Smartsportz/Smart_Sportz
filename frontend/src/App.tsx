@@ -1,55 +1,59 @@
 import { AnimatePresence } from "framer-motion";
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
+import type { ComponentType } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { Footer, PublicHeader } from "./components/UI";
 import { ScreenLoader } from "./loading/ScreenLoader";
 import { useLoading } from "./loading/LoadingContext";
-import {
-  AdminPage,
-  AdminCMSEditPage,
-  AdminManagerCreatePage,
-  AdminManagerDetailPage,
-  AdminRegistrationTeamDetailPage,
-  AdminTeamEditPage,
-  AdminTournamentEditorPage,
-  AdminTournamentPaymentsPage,
-  AdminTournamentTeamsPage,
-  AdminUserCreatePage,
-  AdminUserDetailPage,
-  CmsSectionPage,
-  ContentPage,
-  DiscoveryDetailPage,
-  GalleryAlbumPage,
-  GalleryPage,
-  HomePage,
-  LeaderboardsPage,
-  LiveHubPage,
-  LiveMatchPage,
-  LoginPage,
-  ManagementPage,
-  NewsDetailPage,
-  NewsPage,
-  RegistrationPaymentPage,
-  RegistrationPassPage,
-  RegistrationPage,
-  RegistrationReviewPage,
-  RegistrationRosterPage,
-  SettingsPage,
-  SportDetailPage,
-  SportsPage,
-  TeamDetailPage,
-  TeamsPage,
-  TournamentDetailPage,
-  TournamentsPage,
-  ManagementSectionPage,
-  UserSectionPage,
-  UtilityDetailPage,
-  UserDashboardPage,
-  RoleProgramsPage,
-  BracketWorkspacePage,
-  TournamentRoundsPage,
-} from "./pages";
+
+function lazyNamed(loader: () => Promise<Record<string, any>>, exportName: string) {
+  return lazy(() => loader().then((module) => ({ default: module[exportName] }))) as ComponentType<any>;
+}
+
+const AdminPage = lazyNamed(() => import("./pages/AdminPage"), "AdminPage");
+const AdminCMSEditPage = lazyNamed(() => import("./pages/AdminPage"), "AdminCMSEditPage");
+const AdminManagerCreatePage = lazyNamed(() => import("./pages/AdminPage"), "AdminManagerCreatePage");
+const AdminManagerDetailPage = lazyNamed(() => import("./pages/AdminPage"), "AdminManagerDetailPage");
+const AdminRegistrationTeamDetailPage = lazyNamed(() => import("./pages/AdminPage"), "AdminRegistrationTeamDetailPage");
+const AdminTeamEditPage = lazyNamed(() => import("./pages/AdminPage"), "AdminTeamEditPage");
+const AdminTournamentEditorPage = lazyNamed(() => import("./pages/AdminPage"), "AdminTournamentEditorPage");
+const AdminTournamentPaymentsPage = lazyNamed(() => import("./pages/AdminPage"), "AdminTournamentPaymentsPage");
+const AdminTournamentTeamsPage = lazyNamed(() => import("./pages/AdminPage"), "AdminTournamentTeamsPage");
+const AdminUserCreatePage = lazyNamed(() => import("./pages/AdminPage"), "AdminUserCreatePage");
+const AdminUserDetailPage = lazyNamed(() => import("./pages/AdminPage"), "AdminUserDetailPage");
+const CmsSectionPage = lazyNamed(() => import("./pages/CmsSectionPage"), "CmsSectionPage");
+const ContentPage = lazyNamed(() => import("./pages/ContentPage"), "ContentPage");
+const DiscoveryDetailPage = lazyNamed(() => import("./pages/DiscoveryDetailPage"), "DiscoveryDetailPage");
+const GalleryAlbumPage = lazyNamed(() => import("./pages/GalleryPage"), "GalleryAlbumPage");
+const GalleryPage = lazyNamed(() => import("./pages/GalleryPage"), "GalleryPage");
+const HomePage = lazyNamed(() => import("./pages/HomePage"), "HomePage");
+const LeaderboardsPage = lazyNamed(() => import("./pages/LeaderboardsPage"), "LeaderboardsPage");
+const LiveHubPage = lazyNamed(() => import("./pages/LiveHubPage"), "LiveHubPage");
+const LiveMatchPage = lazyNamed(() => import("./pages/LiveMatchPage"), "LiveMatchPage");
+const LoginPage = lazyNamed(() => import("./pages/LoginPage"), "LoginPage");
+const ManagementPage = lazyNamed(() => import("./pages/ManagementPage"), "ManagementPage");
+const ManagementSectionPage = lazyNamed(() => import("./pages/PortalSectionPage"), "ManagementSectionPage");
+const NewsDetailPage = lazyNamed(() => import("./pages/NewsPages"), "NewsDetailPage");
+const NewsPage = lazyNamed(() => import("./pages/NewsPages"), "NewsPage");
+const RegistrationPage = lazyNamed(() => import("./pages/RegistrationPage"), "RegistrationPage");
+const RegistrationPassPage = lazyNamed(() => import("./pages/RegistrationPage"), "RegistrationPassPage");
+const RegistrationPaymentPage = lazyNamed(() => import("./pages/RegistrationPage"), "RegistrationPaymentPage");
+const RegistrationReviewPage = lazyNamed(() => import("./pages/RegistrationPage"), "RegistrationReviewPage");
+const RegistrationRosterPage = lazyNamed(() => import("./pages/RegistrationPage"), "RegistrationRosterPage");
+const SettingsPage = lazyNamed(() => import("./pages/SettingsPage"), "SettingsPage");
+const SportDetailPage = lazyNamed(() => import("./pages/SportDetailPage"), "SportDetailPage");
+const SportsPage = lazyNamed(() => import("./pages/SportsPage"), "SportsPage");
+const TeamDetailPage = lazyNamed(() => import("./pages/TeamDetailPage"), "TeamDetailPage");
+const TeamsPage = lazyNamed(() => import("./pages/TeamsPage"), "TeamsPage");
+const TournamentDetailPage = lazyNamed(() => import("./pages/TournamentDetailPage"), "TournamentDetailPage");
+const TournamentRoundsPage = lazyNamed(() => import("./pages/BracketPages"), "TournamentRoundsPage");
+const TournamentsPage = lazyNamed(() => import("./pages/TournamentsPage"), "TournamentsPage");
+const UserDashboardPage = lazyNamed(() => import("./pages/UserDashboardPage"), "UserDashboardPage");
+const UserSectionPage = lazyNamed(() => import("./pages/PortalSectionPage"), "UserSectionPage");
+const UtilityDetailPage = lazyNamed(() => import("./pages/UtilityDetailPage"), "UtilityDetailPage");
+const RoleProgramsPage = lazyNamed(() => import("./pages/RoleProgramsPage"), "RoleProgramsPage");
+const BracketWorkspacePage = lazyNamed(() => import("./pages/BracketPages"), "BracketWorkspacePage");
 
 function ScrollToTop() {
   const { hash, pathname, search } = useLocation();
@@ -106,6 +110,7 @@ export default function App() {
       <ScreenLoader />
       {!isPortal && <PublicHeader />}
       <AnimatePresence mode="wait">
+        <Suspense fallback={null}>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />
           <Route path="/tournaments" element={<TournamentsPage />} />
@@ -207,6 +212,7 @@ export default function App() {
           <Route path="/settings" element={<ProtectedRoute roles={["super_admin", "management", "user"]}><SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </AnimatePresence>
       {!isPortal && <Footer />}
     </div>

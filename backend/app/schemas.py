@@ -40,6 +40,12 @@ class ForgotPasswordResetRequest(BaseModel):
     password: str = Field(min_length=6, max_length=80)
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=3, max_length=80)
+    new_password: str = Field(min_length=6, max_length=80)
+    confirm_password: str = Field(min_length=6, max_length=80)
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(min_length=10)
 

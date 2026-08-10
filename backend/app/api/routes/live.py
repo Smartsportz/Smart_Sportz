@@ -10,10 +10,9 @@ from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.schemas import LiveScoreUpdate
 from app.services.audit import log
+from app.services.events import event_hub
 
 router = APIRouter(prefix="/live", tags=["live"])
-
-connections: dict[str, set[WebSocket]] = {}
 
 
 def _json_field(match: dict, key: str, default):
@@ -59,14 +58,8 @@ def get_live_match(match_id: str):
 
 
 async def broadcast(match_id: str, payload: dict) -> None:
-    dead: list[WebSocket] = []
-    for socket in connections.get(match_id, set()):
-        try:
-            await socket.send_json(payload)
-        except Exception:
-            dead.append(socket)
-    for socket in dead:
-        connections.get(match_id, set()).discard(socket)
+    await event_hub.broadcast(f"live:match:{match_id}", payload)
+    await event_hub.broadcast("live:list", {"event": "live:list:update", "data": [_match_payload(item) for item in rows("SELECT * FROM live_matches ORDER BY CASE WHEN status LIKE '%Live%' THEN 0 ELSE 1 END, id")]})
 
 
 @router.post("/{match_id}/score")
@@ -85,16 +78,15 @@ async def update_score(match_id: str, payload: LiveScoreUpdate, user: dict = Dep
     )
     log(user["email"], "score_updated", "match", match_id, payload.commentary)
     updated = row("SELECT * FROM live_matches WHERE id = ?", (match_id,))
-    updated["timeline"] = rows("SELECT time, type, text, score, created_at FROM timeline_events WHERE match_id = ? ORDER BY id DESC", (match_id,))
-    await broadcast(match_id, {"event": "score:update", "data": updated})
-    return ok(updated, "Score updated")
+    updated_payload = _match_payload(updated, include_timeline=True)
+    await broadcast(match_id, {"event": "score:update", "data": updated_payload})
+    return ok(updated_payload, "Score updated")
 
 
 @router.websocket("/ws/{match_id}")
 async def live_socket(websocket: WebSocket, match_id: str):
-    await websocket.accept()
-    connections.setdefault(match_id, set()).add(websocket)
-    await websocket.send_json({"event": "connected", "matchId": match_id})
+    channel = f"live:match:{match_id}"
+    await event_hub.connect(channel, websocket)
     match = row("SELECT * FROM live_matches WHERE id = ?", (match_id,))
     if match:
         match["timeline"] = rows("SELECT time, type, text, score, created_at FROM timeline_events WHERE match_id = ? ORDER BY id DESC", (match_id,))
@@ -103,4 +95,16 @@ async def live_socket(websocket: WebSocket, match_id: str):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        connections.get(match_id, set()).discard(websocket)
+        event_hub.disconnect(channel, websocket)
+
+
+@router.websocket("/ws")
+async def live_list_socket(websocket: WebSocket):
+    channel = "live:list"
+    await event_hub.connect(channel, websocket)
+    await websocket.send_json({"event": "live:list:snapshot", "data": [_match_payload(item) for item in rows("SELECT * FROM live_matches ORDER BY CASE WHEN status LIKE '%Live%' THEN 0 ELSE 1 END, id")]})
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        event_hub.disconnect(channel, websocket)
