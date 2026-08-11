@@ -48,8 +48,8 @@ class Settings:
     postgres_primary_schema: str = os.getenv("POSTGRES_PRIMARY_SCHEMA", "primary_app")
     postgres_mirror_schema: str = os.getenv("POSTGRES_MIRROR_SCHEMA", "mirror_backup")
     postgres_audit_schema: str = os.getenv("POSTGRES_AUDIT_SCHEMA", "audit_event")
-    postgres_pool_min_size: int = int(os.getenv("POSTGRES_POOL_MIN_SIZE", "1"))
-    postgres_pool_max_size: int = int(os.getenv("POSTGRES_POOL_MAX_SIZE", "8"))
+    postgres_pool_min_size: int = int(os.getenv("POSTGRES_POOL_MIN_SIZE", "0"))
+    postgres_pool_max_size: int = int(os.getenv("POSTGRES_POOL_MAX_SIZE", "1"))
     postgres_pool_timeout_seconds: float = float(os.getenv("POSTGRES_POOL_TIMEOUT_SECONDS", "5"))
     read_from_mirror: bool = os.getenv("READ_FROM_MIRROR", "false").lower() in {"1", "true", "yes", "on"}
     auto_mirror_sync: bool = os.getenv("AUTO_MIRROR_SYNC", "false").lower() in {"1", "true", "yes", "on"}

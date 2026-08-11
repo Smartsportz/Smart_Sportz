@@ -17,11 +17,12 @@ export function ScreenLoader() {
           aria-live="polite"
           aria-label="Loading"
         >
-          <div className="logo-loader-card" aria-hidden="true">
-            <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="" />
-            <span />
+          <div className="screen-swap-loader" aria-hidden="true">
+            <div className="screen-logo-loader">
+              <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Smart Sportz" />
+            </div>
           </div>
-          <div className="screen-loader-label">Loading</div>
+          <span className="screen-loader-label">Loading Smart Sportz</span>
         </motion.div>
       )}
     </AnimatePresence>

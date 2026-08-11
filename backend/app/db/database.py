@@ -118,8 +118,8 @@ def _postgres_pool(url: str, schema: str):
             return pool
         pool = ConnectionPool(
             conninfo=url,
-            min_size=max(1, settings.postgres_pool_min_size),
-            max_size=max(settings.postgres_pool_min_size, settings.postgres_pool_max_size),
+            min_size=max(0, settings.postgres_pool_min_size),
+            max_size=max(1, settings.postgres_pool_max_size),
             timeout=settings.postgres_pool_timeout_seconds,
             kwargs={"row_factory": dict_row},
             configure=lambda conn: _configure_postgres_connection(conn, schema),
