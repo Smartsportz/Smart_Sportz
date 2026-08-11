@@ -1,10 +1,11 @@
-import { Activity, CircleDollarSign, FileText, Medal, Trophy } from "lucide-react";
+import { Activity, CircleDollarSign, Download, FileText, Medal, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
 import type React from "react";
 import { Link } from "react-router-dom";
 import { Page, PortalShell } from "../components/UI";
 import { userSidebar } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { downloadRegistrationPassPdf } from "../lib/downloads";
 import { useAuth } from "../auth/AuthContext";
 
 export type UserDashboardData = {
@@ -94,6 +95,7 @@ export function UserDashboardPage() {
   const [data, setData] = useState<UserDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -125,6 +127,7 @@ export function UserDashboardPage() {
     <Page>
       <PortalShell title={`Welcome back, ${profileName.split(" ")[0]}`} subtitle="Your tournament registrations, payment receipts, documents, and verification passes." sidebar={userSidebar}>
         {error && <div className="form-alert">{error}</div>}
+        {downloadError && <div className="form-alert">{downloadError}</div>}
         {loading ? (
           <section className="panel user-empty-state">
             <h2>Loading your records</h2>
@@ -158,7 +161,19 @@ export function UserDashboardPage() {
                       <p><b>Payment</b><span>{latestRegistration.payment_status}</span></p>
                       <p><b>Sport</b><span>{latestRegistration.sport}</span></p>
                     </div>
-                    <Link className="btn btn-primary" to={`/tournaments/${latestRegistration.tournament_slug}/registration-pass`}>View registration</Link>
+                    <div className="form-actions">
+                      <Link className="btn btn-primary" to={`/tournaments/${latestRegistration.tournament_slug}/registration-pass`}>View registration</Link>
+                      <button
+                        className="btn btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          setDownloadError("");
+                          downloadRegistrationPassPdf(latestRegistration.id, token).catch((caught) => setDownloadError(caught instanceof Error ? caught.message : "Unable to download registration PDF."));
+                        }}
+                      >
+                        <Download size={16} />Download PDF
+                      </button>
+                    </div>
                   </div>
                 </section>
                 <section className="panel">

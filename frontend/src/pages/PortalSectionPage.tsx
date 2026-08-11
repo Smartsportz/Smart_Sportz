@@ -1,12 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
+import { Download } from "lucide-react";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { managementSidebar, sidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
 import { apiRequest, uploadFile } from "../lib/api";
+import { downloadRegistrationPassPdf } from "../lib/downloads";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
 
@@ -149,6 +151,7 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
   const title = section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const [data, setData] = useState<UserDashboardData | null>(null);
   const [error, setError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
   
   // State to track which tournament's members are being viewed
   const [activeMemberRegId, setActiveMemberRegId] = useState<string | null>(null);
@@ -191,7 +194,19 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
       item.team_name,
       item.city,
       <span className={`status ${item.payment_status === "paid" ? "emerald" : "orange"}`}>{item.payment_status}</span>,
-      <Link className="inline-link" to={`/tournaments/${item.tournament_slug}/registration-pass`}>View</Link>,
+      <div className="table-action-row">
+        <Link className="inline-link" to={`/tournaments/${item.tournament_slug}/registration-pass`}>View</Link>
+        <button
+          className="inline-link inline-button"
+          type="button"
+          onClick={() => {
+            setDownloadError("");
+            downloadRegistrationPassPdf(item.id, token).catch((caught) => setDownloadError(caught instanceof Error ? caught.message : "Unable to download registration PDF."));
+          }}
+        >
+          <Download size={14} />PDF
+        </button>
+      </div>,
     ]),
     payments: payments.map((item) => [
       item.receipt_number,
@@ -238,6 +253,7 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
     <Page>
       <PortalShell title={title} subtitle="Participant portal detail page connected from the user dashboard and sidebar." sidebar={userSidebar} action={<Link className="btn btn-primary" to="/user/dashboard">Dashboard</Link>}>
         {error && <div className="form-alert">{error}</div>}
+        {downloadError && <div className="form-alert">{downloadError}</div>}
         {!data ? (
           <section className="panel user-empty-state"><h2>Loading {title}</h2><p>Fetching your records from the database.</p></section>
         ) : sectionRows.length === 0 && section !== "members" ? (

@@ -73,6 +73,55 @@ def upsert_gallery_social(image_key: str, likes: int, comments: list[str]) -> di
     return gallery_social_item(image_key)
 
 
+def gallery_album_records() -> list[dict]:
+    return get_or_set_json(
+        cache_key("public:gallery:albums"),
+        lambda: rows(
+            """
+            SELECT slug, title, sport, city, date_label, month_label, day_count, cover, summary
+            FROM gallery_albums
+            WHERE published = 1
+            ORDER BY sort_order, month_label DESC, title
+            """
+        ),
+    )
+
+
+def gallery_social_map(actor_key: str = "", image_keys: list[str] | None = None) -> dict:
+    params: tuple[str, ...] = ()
+    where_clause = ""
+    if image_keys:
+        placeholders = ",".join(["?"] * len(image_keys))
+        where_clause = f"WHERE image_key IN ({placeholders})"
+        params = tuple(image_keys)
+    records = rows(
+        f"SELECT image_key, likes, comments_json FROM gallery_social {where_clause} ORDER BY updated_at DESC",
+        params,
+    )
+    liked_keys: set[str] = set()
+    if actor_key:
+        if image_keys:
+            placeholders = ",".join(["?"] * len(image_keys))
+            liked_rows = rows(
+                f"SELECT image_key FROM gallery_likes WHERE actor_key = ? AND image_key IN ({placeholders})",
+                (actor_key, *image_keys),
+            )
+        else:
+            liked_rows = rows("SELECT image_key FROM gallery_likes WHERE actor_key = ?", (actor_key,))
+        liked_keys = {item["image_key"] for item in liked_rows}
+    social = {
+        item["image_key"]: {
+            "likes": item["likes"],
+            "comments": parse_comments(item["comments_json"]),
+            "liked": item["image_key"] in liked_keys,
+        }
+        for item in records
+    }
+    for image_key in image_keys or []:
+        social.setdefault(image_key, {"likes": 0, "comments": [], "liked": image_key in liked_keys})
+    return social
+
+
 def attach_cities(item: dict) -> dict:
     return attach_tournament_metadata([item])[0]
 
@@ -216,6 +265,54 @@ def home():
     return ok(get_or_set_json(cache_key("public:home"), build))
 
 
+@router.get("/home/notice")
+def home_notice():
+    return ok(get_or_set_json(
+        cache_key("public:home:notice"),
+        lambda: rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"),
+    ))
+
+
+@router.get("/home/discovery")
+def home_discovery():
+    return ok(get_or_set_json(
+        cache_key("public:home:discovery"),
+        lambda: rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"),
+    ))
+
+
+@router.get("/home/live-highlight")
+def home_live_highlight():
+    return ok(get_or_set_json(
+        cache_key("public:home:live-highlight"),
+        lambda: row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1"),
+    ))
+
+
+@router.get("/home/organizers")
+def home_organizers():
+    return ok(get_or_set_json(
+        cache_key("public:home:organizers"),
+        lambda: rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title"),
+    ))
+
+
+@router.get("/home/sponsors")
+def home_sponsors():
+    return ok(get_or_set_json(
+        cache_key("public:home:sponsors"),
+        lambda: rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"),
+    ))
+
+
+@router.get("/home/news")
+def home_news():
+    return ok(get_or_set_json(
+        cache_key("public:home:news"),
+        lambda: rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"),
+    ))
+
+
 @router.get("/announcements")
 def published_announcements():
     return ok(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC"))
@@ -223,27 +320,19 @@ def published_announcements():
 
 @router.get("/gallery/social")
 def gallery_social(actor_key: str = ""):
-    records = rows("SELECT image_key, likes, comments_json FROM gallery_social ORDER BY updated_at DESC")
-    return ok({
-        item["image_key"]: {
-            "likes": item["likes"],
-            "comments": parse_comments(item["comments_json"]),
-            "liked": bool(actor_key and row("SELECT id FROM gallery_likes WHERE image_key = ? AND actor_key = ?", (item["image_key"], actor_key))),
-        }
-        for item in records
-    })
+    return ok(gallery_social_map(actor_key))
 
 
 @router.get("/gallery/albums")
 def gallery_albums():
-    return ok(rows(
-        """
-        SELECT slug, title, sport, city, date_label, month_label, day_count, cover, summary
-        FROM gallery_albums
-        WHERE published = 1
-        ORDER BY sort_order, month_label DESC, title
-        """
-    ))
+    return ok(gallery_album_records())
+
+
+@router.get("/gallery/bootstrap")
+def gallery_bootstrap(actor_key: str = ""):
+    albums = gallery_album_records()
+    image_keys = [f"album:{item['slug']}" for item in albums]
+    return ok({"albums": albums, "social": gallery_social_map(actor_key, image_keys)})
 
 
 @router.post("/gallery/social/like")

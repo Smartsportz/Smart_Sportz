@@ -6,6 +6,7 @@ import secrets
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from app.api.deps import current_user
 from app.core.responses import ok
@@ -14,6 +15,7 @@ from app.schemas import LocalPaymentCreate, RegistrationCreate
 from app.services.audit import log
 from app.services.cache import cache_key
 from app.services.notifications import send_registration_payment_success
+from app.services.registration_pass_pdf import build_registration_pass_pdf
 from app.services.runtime_state import runtime_state
 from app.services.tournament_status import apply_registration_window_statuses, registration_is_open
 
@@ -58,6 +60,24 @@ def _invalidate_tournament_cache(tournament_slug: str) -> None:
     runtime_state.delete(cache_key("public:home"))
     runtime_state.delete(cache_key("public:tournaments"))
     runtime_state.delete(cache_key("public:tournament", tournament_slug))
+
+
+def _registration_pass_payload(registration_id: str, user: dict) -> dict:
+    item = row("SELECT * FROM registrations WHERE id = ?", (registration_id,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Registration not found")
+    _ensure_registration_access(item, user)
+    tournament = row("SELECT * FROM tournaments WHERE slug = ?", (item["tournament_slug"],))
+    payments = rows("SELECT * FROM payments WHERE registration_id = ? ORDER BY created_at DESC", (registration_id,))
+    members = rows("SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ? ORDER BY id", (registration_id,))
+    documents = rows("SELECT document_type, file_name, file_path, status, uploaded_at FROM registration_documents WHERE registration_id = ?", (registration_id,))
+    return {
+        "registration": item,
+        "tournament": tournament or {"slug": item["tournament_slug"], "name": item["tournament_slug"]},
+        "payments": payments,
+        "members": members,
+        "documents": documents,
+    }
 
 
 @router.get("/check-team-name")
@@ -218,10 +238,23 @@ def my_completed_registration_for_tournament(tournament_slug: str, user: dict = 
     if not item:
         raise HTTPException(status_code=404, detail="No completed registration found for this tournament")
     item["payments"] = rows("SELECT * FROM payments WHERE registration_id = ? ORDER BY created_at DESC", (item["id"],))
-    item["members"] = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (item["id"],))
+    item["members"] = rows("SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ?", (item["id"],))
     item["documents"] = rows("SELECT document_type, file_name, file_path, status, uploaded_at FROM registration_documents WHERE registration_id = ?", (item["id"],))
     item["prizes"] = _prizes_for_tournament(item["tournament_slug"])
     return ok(item)
+
+
+@router.get("/{registration_id}/pass.pdf")
+def registration_pass_pdf(registration_id: str, user: dict = Depends(current_user)):
+    payload = _registration_pass_payload(registration_id, user)
+    pdf = build_registration_pass_pdf(payload)
+    team_code = payload["registration"].get("team_code") or payload["registration"].get("confirmation_code") or registration_id
+    filename = f"smart-sportz-registration-pass-{team_code}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{registration_id}")
@@ -231,7 +264,7 @@ def registration_detail(registration_id: str, user: dict = Depends(current_user)
         raise HTTPException(status_code=404, detail="Registration not found")
     _ensure_registration_access(item, user)
     item["payments"] = rows("SELECT * FROM payments WHERE registration_id = ?", (registration_id,))
-    item["members"] = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (registration_id,))
+    item["members"] = rows("SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ?", (registration_id,))
     item["documents"] = rows("SELECT document_type, file_name, file_path, status, uploaded_at FROM registration_documents WHERE registration_id = ?", (registration_id,))
     item["prizes"] = _prizes_for_tournament(item["tournament_slug"])
     return ok(item)
@@ -280,7 +313,7 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate, user: dict 
             registration_id,
         ),
     )
-    members = rows("SELECT name, role, jersey, contact FROM registration_members WHERE registration_id = ?", (registration_id,))
+    members = rows("SELECT name, role, jersey, contact, age, jersey_size FROM registration_members WHERE registration_id = ?", (registration_id,))
     delivery_results = send_registration_payment_success(
         item["email"],
         item["phone"],

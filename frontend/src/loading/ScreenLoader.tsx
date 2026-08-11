@@ -1,30 +1,32 @@
-import { AnimatePresence, motion } from "framer-motion";
 import { useLoading } from "./LoadingContext";
 
 export function ScreenLoader() {
   const { loading } = useLoading();
 
+  if (!loading) return null;
+
   return (
-    <AnimatePresence>
-      {loading && (
-        <motion.div
-          className="screen-loader-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          role="status"
-          aria-live="polite"
-          aria-label="Loading"
-        >
-          <div className="screen-swap-loader">
-            <div className="screen-logo-loader">
-              <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="Smart Sportz" />
-            </div>
-          </div>
-          <span className="screen-loader-label">Loading Smart Sportz</span>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className="screen-loader-overlay" role="status" aria-live="polite" aria-label="Loading" aria-busy="true">
+      <div className="screen-skeleton-shell" aria-hidden="true">
+        <div className="screen-skeleton-header">
+          <span className="screen-skeleton-logo" />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="screen-skeleton-hero">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="screen-skeleton-grid">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      </div>
+      <span className="screen-loader-label">Loading content</span>
+    </div>
   );
 }

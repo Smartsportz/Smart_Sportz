@@ -97,6 +97,50 @@ services:
       redis:
         condition: service_healthy
 
+  celery-worker:
+    build:
+      context: ./backend
+    command: ["celery", "-A", "app.services.celery_app.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    environment:
+      APP_ENV: docker
+      APP_SECRET_KEY: change-this-docker-secret
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      POSTGRES_PRIMARY_SCHEMA: primary_app
+      POSTGRES_MIRROR_SCHEMA: mirror_backup
+      POSTGRES_AUDIT_SCHEMA: audit_event
+      REDIS_URL: redis://redis:6379/1
+      INIT_DB_ON_STARTUP: "false"
+    depends_on:
+      backend-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: ./backend
+    command: ["celery", "-A", "app.services.celery_app.celery_app", "beat", "--loglevel=INFO"]
+    environment:
+      APP_ENV: docker
+      APP_SECRET_KEY: change-this-docker-secret
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
+      POSTGRES_PRIMARY_SCHEMA: primary_app
+      POSTGRES_MIRROR_SCHEMA: mirror_backup
+      POSTGRES_AUDIT_SCHEMA: audit_event
+      REDIS_URL: redis://redis:6379/1
+      INIT_DB_ON_STARTUP: "false"
+    depends_on:
+      backend-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

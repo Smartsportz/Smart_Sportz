@@ -1,6 +1,6 @@
 import { beginGlobalLoading, endGlobalLoading } from "../loading/loadingBus";
 
-const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+const LOCAL_API_BASE_URL = "/api/v1";
 const PRODUCTION_API_BASE_URL = "https://smart-sportz-backend.onrender.com/api/v1";
 
 function resolveApiBaseUrl() {

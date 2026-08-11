@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import { BarChart3, CheckCircle2, MapPin, Radio, ShieldCheck, Trophy, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
 import { assets, leaderboardRecords, sports, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
@@ -142,6 +144,95 @@ function useAutoScroll(el: HTMLElement | null, isHovered: boolean, speed = 1, lo
   }, [el, isHovered, speed, loopItemCount]);
 }
 
+type ProgressiveQuery<T> = {
+  queryKey: readonly unknown[];
+  queryFn: () => Promise<T>;
+};
+
+function SectionSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="home-section-skeleton" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, index) => <span key={index} />)}
+    </div>
+  );
+}
+
+function ProgressiveSection<T>({
+  query,
+  prefetch = [],
+  skeletonRows = 3,
+  children,
+}: {
+  query: ProgressiveQuery<T>;
+  prefetch?: Array<ProgressiveQuery<unknown>>;
+  skeletonRows?: number;
+  children: (data: T) => React.ReactNode;
+}) {
+  const queryClient = useQueryClient();
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const result = useQuery({
+    queryKey: query.queryKey,
+    queryFn: query.queryFn,
+    enabled: shouldLoad,
+  });
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || shouldLoad) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setShouldLoad(true);
+        prefetch.forEach((item) => {
+          void queryClient.prefetchQuery({ queryKey: item.queryKey, queryFn: item.queryFn });
+        });
+        observer.disconnect();
+      },
+      { rootMargin: "720px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [prefetch, queryClient, shouldLoad]);
+
+  return (
+    <div ref={containerRef}>
+      {!shouldLoad || result.isLoading ? <SectionSkeleton rows={skeletonRows} /> : result.data ? children(result.data) : null}
+    </div>
+  );
+}
+
+const homeApi = {
+  notice: {
+    queryKey: ["home", "notice"] as const,
+    queryFn: () => apiRequest<Array<Record<string, any>>>("/public/home/notice", { silent: true }),
+  },
+  discovery: {
+    queryKey: ["home", "discovery"] as const,
+    queryFn: () => apiRequest<Array<Record<string, any>>>("/public/home/discovery", { silent: true }),
+  },
+  tournaments: {
+    queryKey: ["home", "tournaments"] as const,
+    queryFn: () => apiRequest<any[]>("/public/tournaments", { silent: true }),
+  },
+  liveHighlight: {
+    queryKey: ["home", "live-highlight"] as const,
+    queryFn: () => apiRequest<Record<string, any> | null>("/public/home/live-highlight", { silent: true }),
+  },
+  organizers: {
+    queryKey: ["home", "organizers"] as const,
+    queryFn: () => apiRequest<Array<Record<string, any>>>("/public/home/organizers", { silent: true }),
+  },
+  news: {
+    queryKey: ["home", "news"] as const,
+    queryFn: () => apiRequest<Array<Record<string, any>>>("/public/home/news", { silent: true }),
+  },
+  sponsors: {
+    queryKey: ["home", "sponsors"] as const,
+    queryFn: () => apiRequest<Array<Record<string, any>>>("/public/home/sponsors", { silent: true }),
+  },
+};
+
 export function HomePage() {
   useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
@@ -161,64 +252,9 @@ export function HomePage() {
   const [isDiscoveryHovered, setIsDiscoveryHovered] = useState(false);
   const [isSponsorHovered, setIsSponsorHovered] = useState(false);
   const [activeNotice, setActiveNotice] = useState<Record<string, any> | null>(null);
-  const [homeContent, setHomeContent] = useState<{
-    discoveryCards?: Array<Record<string, any>>;
-    liveHighlight?: Record<string, any> | null;
-    sponsorLogos?: Array<Record<string, any>>;
-    organizerCards?: Array<Record<string, any>>;
-    announcements?: Array<Record<string, any>>;
-    newsPosts?: Array<Record<string, any>>;
-  }>({});
-  const [publicTournaments, setPublicTournaments] = useState<any[]>([]);
-
-  const runtimeTournaments = publicTournaments.map((item) => withRuntimeTournamentStatus({
-    ...item,
-    registrationStart: item.registrationStart ?? item.registration_start,
-    registrationEnd: item.registrationEnd ?? item.registration_end,
-    tournamentDescription: item.tournamentDescription ?? item.tournament_description,
-  }));
-  const featuredGroups = [
-    {
-      key: "featured",
-      title: "Upcoming Tournament",
-      text: "Upcoming tournaments created by admin or manager.",
-      ref: upcomingTournamentsRef,
-      items: runtimeTournaments.filter((item) => item.status === "Upcoming").slice(0, 8),
-    },
-    {
-      key: "upcoming",
-      title: "Registration Open",
-      text: "Registration-open tournaments where teams can enter now.",
-      ref: registrationOpenRef,
-      items: runtimeTournaments.filter((item) => item.status === "Registration Open"),
-    },
-    {
-      key: "live",
-      title: "Live tournaments",
-      text: "Active tournaments with live match rooms and scoring updates.",
-      ref: liveTournamentsRef,
-      items: runtimeTournaments.filter((item) => item.status === "Live"),
-    },
-    {
-      key: "old",
-      title: "Old tournaments",
-      text: "Registration-closed and completed tournament records with rounds available.",
-      ref: oldTournamentsRef,
-      items: runtimeTournaments.filter((item) => item.status === "Completed" || item.status === "Registration Closed"),
-    },
-  ].filter((group) => group.items.length > 0);
-
-  const visibleFeaturedGroups = featuredGroups.filter((group) => ["featured", "upcoming"].includes(group.key));
-
-  const oldMatchNews = (homeContent.newsPosts ?? []).filter((item) => item.category === "Winner Teams").slice(0, 3);
-  const discoveryCards = homeContent.discoveryCards ?? [];
-  const discoveryQueue = discoveryCards;
-  const sponsorLogos = homeContent.sponsorLogos ?? [];
-  const sponsorQueue = sponsorLogos;
-
-  const organizerCards = homeContent.organizerCards ?? [];
-  const organizerQueue = organizerCards;
+  const [loadNotice, setLoadNotice] = useState(false);
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
+  const noticeQuery = useQuery({ ...homeApi.notice, enabled: loadNotice });
 
   const selectedLeaders = useMemo(
     () => leaderboardRecords.filter((record) => record.sport === leaderboardSport).sort((a, b) => a.rank - b.rank),
@@ -236,14 +272,19 @@ export function HomePage() {
   useAutoScroll(sponsorEl, isSponsorHovered, 0.8);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setLoadNotice(true), 900);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     if (new URLSearchParams(window.location.search).get("screenshot") === "1") return;
-    const notice = homeContent.announcements?.find((item) => item.published);
+    const notice = noticeQuery.data?.find((item) => item.published);
     if (!notice) return;
     const dismissedKey = `smart-sportz-notice-dismissed:${notice.id}`;
     if (sessionStorage.getItem(dismissedKey)) return;
     const timer = window.setTimeout(() => setActiveNotice(notice), 650);
     return () => window.clearTimeout(timer);
-  }, [homeContent.announcements]);
+  }, [noticeQuery.data]);
 
   function closeNotice() {
     if (activeNotice) {
@@ -251,22 +292,6 @@ export function HomePage() {
     }
     setActiveNotice(null);
   }
-
-  useEffect(() => {
-    apiRequest<{
-      discoveryCards: Array<Record<string, any>>;
-      liveHighlight: Record<string, any> | null;
-      sponsorLogos: Array<Record<string, any>>;
-      organizerCards: Array<Record<string, any>>;
-      announcements: Array<Record<string, any>>;
-      newsPosts: Array<Record<string, any>>;
-    }>("/public/home")
-      .then(setHomeContent)
-      .catch(() => setHomeContent({}));
-    apiRequest<any[]>("/public/tournaments")
-      .then(setPublicTournaments)
-      .catch(() => setPublicTournaments([]));
-  }, []);
 
   return (
     <Page className="home-reference-page">
@@ -353,7 +378,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {discoveryQueue.length > 0 && <section className="section">
+      <ProgressiveSection query={homeApi.discovery} prefetch={[homeApi.tournaments]} skeletonRows={4}>
+      {(discoveryQueue) => discoveryQueue.length > 0 ? <section className="section">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Explore Your Sport</p>
@@ -372,7 +398,7 @@ export function HomePage() {
           <div className="queue-track discovery-queue-track wheel-horizontal" ref={(node) => { discoveryQueueRef.current = node; setDiscoveryEl(node); }}>
           {discoveryQueue.map((card, index) => (
             <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
-              <img src={assetUrl(card.image || assets.cricket)} alt="" />
+              <img src={assetUrl(card.image || assets.cricket)} alt="" loading="lazy" />
               <div className="sport-home-card-body">
                 <span className="status emerald">{card.label}</span>
                 <h3>{card.title}</h3>
@@ -383,9 +409,49 @@ export function HomePage() {
           ))}
           </div>
         </div>
-      </section>}
+      </section> : null}
+      </ProgressiveSection>
 
-      {visibleFeaturedGroups.length > 0 && <section className="section">
+      <ProgressiveSection query={homeApi.tournaments} prefetch={[homeApi.liveHighlight]} skeletonRows={5}>
+      {(publicTournaments) => {
+        const runtimeTournaments = publicTournaments.map((item) => withRuntimeTournamentStatus({
+          ...item,
+          registrationStart: item.registrationStart ?? item.registration_start,
+          registrationEnd: item.registrationEnd ?? item.registration_end,
+          tournamentDescription: item.tournamentDescription ?? item.tournament_description,
+        }));
+        const featuredGroups = [
+          {
+            key: "featured",
+            title: "Upcoming Tournament",
+            text: "Upcoming tournaments created by admin or manager.",
+            ref: upcomingTournamentsRef,
+            items: runtimeTournaments.filter((item) => item.status === "Upcoming").slice(0, 8),
+          },
+          {
+            key: "upcoming",
+            title: "Registration Open",
+            text: "Registration-open tournaments where teams can enter now.",
+            ref: registrationOpenRef,
+            items: runtimeTournaments.filter((item) => item.status === "Registration Open"),
+          },
+          {
+            key: "live",
+            title: "Live tournaments",
+            text: "Active tournaments with live match rooms and scoring updates.",
+            ref: liveTournamentsRef,
+            items: runtimeTournaments.filter((item) => item.status === "Live"),
+          },
+          {
+            key: "old",
+            title: "Old tournaments",
+            text: "Registration-closed and completed tournament records with rounds available.",
+            ref: oldTournamentsRef,
+            items: runtimeTournaments.filter((item) => item.status === "Completed" || item.status === "Registration Closed"),
+          },
+        ].filter((group) => group.items.length > 0);
+        const visibleFeaturedGroups = featuredGroups.filter((group) => ["featured", "upcoming"].includes(group.key));
+        return visibleFeaturedGroups.length > 0 ? <section className="section">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Tournament Discovery</p>
@@ -410,7 +476,9 @@ export function HomePage() {
             </section>
           ))}
         </div>
-      </section>}
+      </section> : null;
+      }}
+      </ProgressiveSection>
 
       <section className="section lifecycle-section">
         <SectionTitle title="The Tournament Lifecycle" text="A connected flow from registration to certificates." />
@@ -424,32 +492,35 @@ export function HomePage() {
         </div>
       </section>
 
-      {homeContent.liveHighlight && <section className="section split live-analytics-section">
+      <ProgressiveSection query={homeApi.liveHighlight} prefetch={[homeApi.organizers]} skeletonRows={3}>
+      {(liveHighlight) => liveHighlight ? <section className="section split live-analytics-section">
         <motion.div className="live-video-card" {...fade}>
-          <img src={homeContent.liveHighlight.image} alt="Live analytics match" />
+          <img src={liveHighlight.image} alt="Live analytics match" loading="lazy" />
           <button type="button"><Radio size={24} /></button>
         </motion.div>
         <motion.div {...fade}>
-          <span className="live-dot">{homeContent.liveHighlight.stage_label || "Live Now"}</span>
-          <h2>{homeContent.liveHighlight.title}</h2>
+          <span className="live-dot">{liveHighlight.stage_label || "Live Now"}</span>
+          <h2>{liveHighlight.title}</h2>
           <div className="live-action-row">
             <div className="score-mini-card">
-              <span>{homeContent.liveHighlight.home_team}</span>
-              <strong>{homeContent.liveHighlight.home_score} - {homeContent.liveHighlight.away_score}</strong>
-              <span>{homeContent.liveHighlight.away_team}</span>
+              <span>{liveHighlight.home_team}</span>
+              <strong>{liveHighlight.home_score} - {liveHighlight.away_score}</strong>
+              <span>{liveHighlight.away_team}</span>
             </div>
-            <Link className="btn btn-primary live-center-btn" to={homeContent.liveHighlight?.link_path || "/live"}>Open Match Center</Link>
+            <Link className="btn btn-primary live-center-btn" to={liveHighlight?.link_path || "/live"}>Open Match Center</Link>
           </div>
-          <p className="live-highlight-copy">{homeContent.liveHighlight.description}</p>
+          <p className="live-highlight-copy">{liveHighlight.description}</p>
           <div className="feature-list">
-            {String(homeContent.liveHighlight.impact_notes || "").split(/\.|\|/).filter(Boolean).slice(0, 2).map((feature) => (
+            {String(liveHighlight.impact_notes || "").split(/\.|\|/).filter(Boolean).slice(0, 2).map((feature) => (
               <div className="feature-label" key={feature}><CheckCircle2 size={18} />{feature}</div>
             ))}
           </div>
         </motion.div>
-      </section>}
+      </section> : null}
+      </ProgressiveSection>
 
-      {organizerQueue.length > 0 && <section className="section">
+      <ProgressiveSection query={homeApi.organizers} prefetch={[homeApi.news]} skeletonRows={3}>
+      {(organizerQueue) => organizerQueue.length > 0 ? <section className="section">
         <div className="section-title row-title">
           <div>
             <h2>Empowering Tournament Organizers</h2>
@@ -474,9 +545,13 @@ export function HomePage() {
           ))}
         </div>
         </div>
-      </section>}
+      </section> : null}
+      </ProgressiveSection>
 
-      {oldMatchNews.length > 0 && <section className="section">
+      <ProgressiveSection query={homeApi.news} prefetch={[homeApi.sponsors]} skeletonRows={3}>
+      {(newsPosts) => {
+        const oldMatchNews = newsPosts.filter((item) => item.category === "Winner Teams").slice(0, 3);
+        return oldMatchNews.length > 0 ? <section className="section">
         <div className="section-title row-title">
           <div>
             <p className="eyebrow">Old Match News</p>
@@ -492,7 +567,7 @@ export function HomePage() {
           {oldMatchNews.map((post) => (
             <Link className="panel news-card home-news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
               <div className="news-card-media">
-                <img src={assetUrl(post.image)} alt="" />
+                <img src={assetUrl(post.image)} alt="" loading="lazy" />
               </div>
               <div className="news-card-copy">
                 <span className="status emerald">{post.category}</span>
@@ -503,7 +578,9 @@ export function HomePage() {
           ))}
         </div>
         </div>
-      </section>}
+      </section> : null;
+      }}
+      </ProgressiveSection>
 
       <section className="section split">
         <motion.div {...fade}>
@@ -537,7 +614,8 @@ export function HomePage() {
         </motion.div>
       </section>
 
-      {sponsorQueue.length > 0 && <section className="section sponsor-logo-section">
+      <ProgressiveSection query={homeApi.sponsors} skeletonRows={2}>
+      {(sponsorQueue) => sponsorQueue.length > 0 ? <section className="section sponsor-logo-section">
         <SectionTitle eyebrow="Partner Network" title="Sponsor Companies" text="Official platform, technology, experience, and archive partners connected to Smart Sportz." />
         <div className="queue-shell sponsor-logo-shell" onMouseEnter={() => setIsSponsorHovered(true)} onMouseLeave={() => setIsSponsorHovered(false)}>
           <div className="queue-controls left">
@@ -549,12 +627,13 @@ export function HomePage() {
           <div className="queue-track sponsor-logo-grid wheel-horizontal" ref={(node) => { sponsorQueueRef.current = node; setSponsorEl(node); }}>
           {sponsorQueue.map((sponsor, index) => (
             <a className="sponsor-logo-card" href={externalUrl(sponsor.link_url)} target="_blank" rel="noreferrer" key={`${sponsor.slug}-${index}`} aria-label={sponsor.name}>
-              <img src={assetUrl(sponsor.image)} alt="" />
+              <img src={assetUrl(sponsor.image)} alt="" loading="lazy" />
             </a>
           ))}
           </div>
         </div>
-      </section>}
+      </section> : null}
+      </ProgressiveSection>
     </Page>
   );
 }

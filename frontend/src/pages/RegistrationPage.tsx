@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { downloadRegistrationPassPdf } from "../lib/downloads";
 import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
 import { useAuth } from "../auth/AuthContext";
 import * as XLSX from "xlsx";
@@ -66,7 +67,7 @@ type BackendRegistration = {
   confirmation_code?: string;
   confirmation_qr_payload?: string;
   payments?: Array<{ id: string; receipt_number: string; amount: number; method: "card" | "upi"; status: "paid"; created_at: string }>;
-  members?: Array<{ name: string; role?: string; jersey?: string; contact?: string }>;
+  members?: Array<{ name: string; role?: string; jersey?: string; contact?: string; age?: number; jersey_size?: string }>;
   documents?: Array<{ document_type: string; file_name: string; file_path: string; status: SavedDocument["status"] }>;
   prizes?: Array<{ position: number; label: string; amount: number }>;
 };
@@ -1515,11 +1516,13 @@ export function RegistrationPaymentPage() {
 
 export function RegistrationReviewPage() {
   const { slug } = useParams();
+  const { token } = useAuth();
   const routeSlug = slug ?? tournaments[0].slug;
   const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
   const saved = useMemo(() => readSavedRegistration(routeSlug), [routeSlug]);
   const payment = useMemo(() => readSavedPayment(routeSlug), [routeSlug]);
   const [backendRegistration, setBackendRegistration] = useState<BackendRegistration | null>(null);
+  const [pdfStatus, setPdfStatus] = useState("");
 
   useEffect(() => {
     if (saved) {
@@ -1571,7 +1574,18 @@ export function RegistrationReviewPage() {
             <QRCodeSVG value={qrPayload} size={200} />
             <h2>{confirmationCode}</h2>
             <p>{saved.teamName}</p>
-            <button className="btn btn-secondary" onClick={() => window.print()}>Print Pass</button>
+            <button className="btn btn-secondary" onClick={() => window.print()}><Printer size={16} />Print Pass</button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => {
+                setPdfStatus("");
+                downloadRegistrationPassPdf(saved.registrationId, token).catch((error) => setPdfStatus(error instanceof Error ? error.message : "Unable to download registration PDF."));
+              }}
+            >
+              <Download size={16} />Download PDF
+            </button>
+            {pdfStatus && <p className="form-note">{pdfStatus}</p>}
           </section>
           <section className="panel review-summary">
             <div className="review-list">
@@ -1595,6 +1609,7 @@ export function RegistrationPassPage() {
   const tournament = withRuntimeTournamentStatus(tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug });
   const [completed, setCompleted] = useState(() => getCompletedRegistration(routeSlug));
   const [loading, setLoading] = useState(false);
+  const [pdfStatus, setPdfStatus] = useState("");
 
   useEffect(() => {
     if (!completed && token) {
@@ -1618,6 +1633,17 @@ export function RegistrationPassPage() {
               <QRCodeSVG value={completed.qrPayload} size={200} />
               <h2>{completed.confirmationCode}</h2>
               <p>{completed.teamName}</p>
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => {
+                  setPdfStatus("");
+                  downloadRegistrationPassPdf(completed.registrationId, token).catch((error) => setPdfStatus(error instanceof Error ? error.message : "Unable to download registration PDF."));
+                }}
+              >
+                <Download size={16} />Download PDF
+              </button>
+              {pdfStatus && <p className="form-note">{pdfStatus}</p>}
             </section>
             <section className="panel review-summary">
               <div className="review-list">
