@@ -7,6 +7,8 @@ type ProgressiveImageProps = {
   className?: string;
   loading?: "eager" | "lazy";
   fetchpriority?: "high" | "low" | "auto";
+  srcSet?: string;
+  sizes?: string;
 };
 
 export function ProgressiveImage({
@@ -15,6 +17,8 @@ export function ProgressiveImage({
   className = "",
   loading = "lazy",
   fetchpriority,
+  srcSet,
+  sizes,
 }: ProgressiveImageProps) {
   const resolved = src ? mediaUrl(src) : "";
   const [currentSrc, setCurrentSrc] = useState(resolved);
@@ -31,8 +35,11 @@ export function ProgressiveImage({
       {currentSrc && (
         <img
           src={currentSrc}
+          srcSet={srcSet}
+          sizes={sizes}
           alt={alt}
           loading={loading}
+          decoding="async"
           fetchpriority={fetchpriority}
           onLoad={() => setLoaded(true)}
           onError={() => {
