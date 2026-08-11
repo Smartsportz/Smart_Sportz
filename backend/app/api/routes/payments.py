@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from urllib.parse import quote_plus
 from uuid import uuid4
 
@@ -24,9 +24,9 @@ def create_local_payment_intent(payload: PaymentIntentCreate):
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
 
-    now = datetime.now(UTC).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     payment_id = f"rzp_local_{uuid4().hex[:14]}"
-    receipt_number = f"SS-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
+    receipt_number = f"SS-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
     qr_payload = None
     if payload.method == "upi":
         qr_values = {
@@ -70,7 +70,7 @@ def confirm_local_payment_intent(payment_id: str, payload: PaymentIntentConfirm)
     if not intent:
         raise HTTPException(status_code=404, detail="Payment intent not found")
 
-    now = datetime.now(UTC).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     execute(
         "UPDATE payment_intents SET status = ?, method = ?, updated_at = ? WHERE id = ?",
         (payload.status, payload.method, now, payment_id),
