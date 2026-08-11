@@ -211,6 +211,7 @@ class TournamentUpsertPayload(BaseModel):
     prizes: list[TournamentPrizePayload] = Field(default_factory=list, max_length=20)
     cities: list[str] = Field(default_factory=list, max_length=12)
     assigned_manager_ids: list[str] = Field(default_factory=list, max_length=20)
+    published: bool = True
     show_on_home: bool = True
     block_repeat_registration: bool = False
 

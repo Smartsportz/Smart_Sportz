@@ -288,7 +288,7 @@ def home():
                 "totalTeams": 156,
                 "liveMatches": 8,
             },
-            "featuredTournaments": attach_tournament_metadata(rows("SELECT * FROM tournaments LIMIT 3")),
+            "featuredTournaments": attach_tournament_metadata(rows("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND show_on_home = 1 ORDER BY name LIMIT 3")),
             "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches LIMIT 3"), "home-live-match", {"image"}, "live_matches", "id"),
             "discoveryCards": normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title LIMIT 8"), "home-discovery", {"image", "sponsor_image"}, "home_discovery_cards"),
             "liveHighlight": normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}, "live_highlights", "id") or None,
@@ -431,7 +431,7 @@ def gallery_social_comment(payload: GalleryCommentPayload):
 def tournaments():
     def build():
         apply_registration_window_statuses()
-        return normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments ORDER BY name")), "tournament", {"image", "poster", "rules_pdf"}, "tournaments")
+        return normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 ORDER BY name")), "tournament", {"image", "poster", "rules_pdf"}, "tournaments")
 
     return ok(get_or_set_json(cache_key("public:tournaments"), build))
 
@@ -440,7 +440,7 @@ def tournaments():
 def tournament_detail(slug: str):
     def build():
         apply_registration_window_statuses()
-        item = row("SELECT * FROM tournaments WHERE slug = ?", (slug,))
+        item = row("SELECT * FROM tournaments WHERE slug = ? AND COALESCE(published, 1) = 1", (slug,))
         if not item:
             raise HTTPException(status_code=404, detail="Tournament not found")
         return normalize_media_record(attach_cities(item), "tournament", {"image", "poster", "rules_pdf"}, "tournaments")
@@ -457,7 +457,7 @@ def tournament_jerseys(slug: str):
 def tournament_bracket(slug: str):
     def build():
         apply_registration_window_statuses()
-        item = row("SELECT * FROM tournaments WHERE slug = ?", (slug,))
+        item = row("SELECT * FROM tournaments WHERE slug = ? AND COALESCE(published, 1) = 1", (slug,))
         if not item:
             raise HTTPException(status_code=404, detail="Tournament not found")
         return {
@@ -500,7 +500,7 @@ def home_discovery_detail(slug: str):
             sport = row("SELECT * FROM sports WHERE slug = ?", (slug,))
             if not sport:
                 raise HTTPException(status_code=404, detail="Discovery card not found")
-            tournament = row("SELECT * FROM tournaments WHERE lower(sport) = lower(?) ORDER BY show_on_home DESC, created_at DESC LIMIT 1", (sport["name"],))
+            tournament = row("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND lower(sport) = lower(?) ORDER BY show_on_home DESC, created_at DESC LIMIT 1", (sport["name"],))
             card = {
                 "slug": sport["slug"],
                 "label": f"{sport['name']} Program",

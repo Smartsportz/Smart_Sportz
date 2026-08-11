@@ -44,13 +44,18 @@ img { max-width: 100%; display: block; }
   z-index: 99999;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 14px;
   padding: 28px max(18px, calc((100vw - 1280px) / 2)) 32px;
-  background: rgba(234, 244, 228, .82);
-  backdrop-filter: blur(8px);
+  background: rgba(234, 244, 228, .72);
+  backdrop-filter: blur(10px);
   pointer-events: all;
 }
+.logo-loader-card { display: grid; place-items: center; gap: 14px; padding: 22px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 24px; background: rgba(255, 255, 255, .88); box-shadow: var(--shadow); }
+.logo-loader-card img { width: 74px; height: 74px; object-fit: contain; animation: logoLoaderRotate .9s linear infinite; filter: drop-shadow(0 12px 18px rgba(11, 136, 82, .2)); }
+.logo-loader-card span { width: 86px; height: 4px; border-radius: 999px; background: linear-gradient(90deg, transparent, var(--primary), transparent); background-size: 220% 100%; animation: skeletonSweep 1.1s ease-in-out infinite; }
+@keyframes logoLoaderRotate { to { transform: rotate(360deg); } }
 .screen-skeleton-shell { width: min(100%, 1280px); margin: 0 auto; display: grid; gap: 18px; }
 .screen-skeleton-header,
 .screen-skeleton-hero,

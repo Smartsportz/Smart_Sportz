@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
   rules_pdf TEXT NOT NULL DEFAULT '',
   rules_text TEXT NOT NULL DEFAULT '',
   fee_breakdown_json TEXT NOT NULL DEFAULT '[]',
+  published INTEGER NOT NULL DEFAULT 1,
   show_on_home INTEGER NOT NULL DEFAULT 1,
   block_repeat_registration INTEGER NOT NULL DEFAULT 0
 );
@@ -659,6 +660,7 @@ def _apply_operational_schema(path=None) -> None:
             "rules_pdf": "TEXT NOT NULL DEFAULT ''",
             "rules_text": "TEXT NOT NULL DEFAULT ''",
             "fee_breakdown_json": "TEXT NOT NULL DEFAULT '[]'",
+            "published": "INTEGER NOT NULL DEFAULT 1",
             "show_on_home": "INTEGER NOT NULL DEFAULT 1",
             "block_repeat_registration": "INTEGER NOT NULL DEFAULT 0",
         }

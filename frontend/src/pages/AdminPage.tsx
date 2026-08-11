@@ -214,6 +214,7 @@ type AdminTournamentForm = {
   tournamentDescription: string;
   rulesPdf: string;
   rulesText: string;
+  published: boolean;
   showOnHome: boolean;
   blockRepeatRegistration: boolean;
   feeBreakdown: Array<{ label: string; value: number }>;
@@ -246,6 +247,7 @@ const emptyAdminTournamentForm: AdminTournamentForm = {
   tournamentDescription: "",
   rulesPdf: "",
   rulesText: "",
+  published: true,
   showOnHome: false,
   blockRepeatRegistration: false,
   feeBreakdown: [{ label: "Entry Fee", value: 5000 }],
@@ -324,6 +326,7 @@ function adminFormFromTournament(item?: Record<string, any>): AdminTournamentFor
     tournamentDescription: item.tournament_description ?? "",
     rulesPdf: item.rules_pdf ?? "",
     rulesText: item.rules_text ?? "",
+    published: Boolean(item.published ?? true),
     showOnHome: Boolean(item.show_on_home),
     blockRepeatRegistration: Boolean(item.block_repeat_registration),
     feeBreakdown,
@@ -554,6 +557,7 @@ function AdminTournamentsDbPanel() {
       fee_breakdown: form.feeBreakdown.filter((line) => line.label.trim()),
       prizes: form.prizes,
       cities,
+      published: form.published,
       show_on_home: form.showOnHome,
       assigned_manager_ids: form.assignedManagerIds,
       block_repeat_registration: form.blockRepeatRegistration,
@@ -696,7 +700,7 @@ function AdminTournamentsDbPanel() {
   }
 
   const groups = {
-    "Upcoming Tournament": records.filter((item) => item.status === "Featured" || item.show_on_home === true),
+    "Upcoming Tournament": records.filter((item) => item.status === "Featured" || Boolean(item.show_on_home)),
     Upcoming: records.filter((item) => item.status === "Upcoming"),
     "Registration Open": records.filter((item) => item.status === "Registration Open"),
     Live: records.filter((item) => item.status === "Live"),
@@ -833,7 +837,10 @@ function AdminTournamentsDbPanel() {
               }} /></label>
               <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} placeholder="Rules shown in the registration acceptance step." /></label>
             </div>
-            <label className="visibility-row"><span><b>Add new upcoming tournament</b><small>Show this tournament in the Upcoming Tournament row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
+            <div className="admin-flow-checks">
+              <label className="visibility-row"><span><b>Display on tournament page</b><small>Show this tournament on the public tournament page.</small></span><input type="checkbox" checked={form.published} onChange={(event) => patchForm({ published: event.target.checked })} /></label>
+              <label className="visibility-row"><span><b>Display on home page</b><small>Show this tournament in the home upcoming tournament containers.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
+            </div>
             <div className="registration-actions compact-actions">
               <button className="btn btn-primary" type="button" onClick={saveTournament}>Save</button>
               <button className="btn btn-secondary" type="button" onClick={() => setShowForm(false)}>Close</button>
@@ -1829,6 +1836,12 @@ export function AdminTournamentEditorPage() {
     return () => { alive = false; };
   }, [slug, token]);
 
+  useEffect(() => {
+    if (featuredQuickStart) {
+      setForm((current) => ({ ...current, published: true, showOnHome: true }));
+    }
+  }, [featuredQuickStart]);
+
   function patchForm(patch: Partial<AdminTournamentForm>) {
     setForm((current) => ({ ...current, ...patch }));
   }
@@ -1890,6 +1903,7 @@ export function AdminTournamentEditorPage() {
       fee_breakdown: form.feeBreakdown.filter((line) => line.label.trim()),
       prizes: form.prizes,
       cities,
+      published: form.published,
       show_on_home: form.showOnHome,
       assigned_manager_ids: form.assignedManagerIds,
       block_repeat_registration: form.blockRepeatRegistration,
@@ -1942,6 +1956,10 @@ export function AdminTournamentEditorPage() {
                     </label>
                   )}
                   <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short upcoming tournament description" /></label>
+                </div>
+                <div className="admin-flow-checks">
+                  <label className="visibility-row"><span><b>Display on tournament page</b><small>Show this tournament on the public tournament page.</small></span><input type="checkbox" checked={form.published} onChange={(event) => patchForm({ published: event.target.checked })} /></label>
+                  <label className="visibility-row"><span><b>Display on home page</b><small>Show this tournament in the home upcoming tournament containers.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
                 </div>
                 <div className="registration-actions compact-actions">
                   <button className="btn btn-primary" type="button" onClick={saveTournament}>Save upcoming tournament</button>
@@ -2002,7 +2020,8 @@ export function AdminTournamentEditorPage() {
                   <label>Tournament rules text<textarea value={form.rulesText} onChange={(event) => patchForm({ rulesText: event.target.value })} /></label>
                 </div>
                 <div className="admin-flow-checks">
-                  <label className="visibility-row"><span><b>Add new upcoming tournament</b><small>Show in upcoming tournament row.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
+                  <label className="visibility-row"><span><b>Display on tournament page</b><small>Show this tournament on the public tournament page.</small></span><input type="checkbox" checked={form.published} onChange={(event) => patchForm({ published: event.target.checked })} /></label>
+                  <label className="visibility-row"><span><b>Display on home page</b><small>Show this tournament in the home upcoming tournament containers.</small></span><input type="checkbox" checked={form.showOnHome} onChange={(event) => patchForm({ showOnHome: event.target.checked })} /></label>
                   <label className="visibility-row"><span><b>Block repeat registration</b><small>On means same user cannot register this tournament again.</small></span><input type="checkbox" checked={form.blockRepeatRegistration} onChange={(event) => patchForm({ blockRepeatRegistration: event.target.checked })} /></label>
                 </div>
                 <div className="registration-actions compact-actions">

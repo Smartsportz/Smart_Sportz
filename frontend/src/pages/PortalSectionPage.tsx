@@ -73,6 +73,7 @@ type TournamentFormState = {
   tournamentDescription: string;
   rulesPdf: string;
   rulesText: string;
+  published: boolean;
   showOnHome: boolean;
   feeBreakdown: MoneyLine[];
   prizes: PrizeLine[];
@@ -100,6 +101,7 @@ const emptyTournamentForm: TournamentFormState = {
   tournamentDescription: "",
   rulesPdf: "",
   rulesText: "",
+  published: true,
   showOnHome: true,
   feeBreakdown: [{ label: "Entry Fee", value: 5000 }],
   prizes: [
@@ -141,6 +143,7 @@ function formFromTournament(item?: Record<string, any>): TournamentFormState {
     tournamentDescription: item.tournament_description ?? item.tournamentDescription ?? "",
     rulesPdf: item.rules_pdf ?? item.rulesPdf ?? "",
     rulesText: item.rules_text ?? item.rulesText ?? "",
+    published: Boolean(item.published ?? true),
     showOnHome: Boolean(item.show_on_home ?? item.showOnHome ?? true),
     feeBreakdown,
     prizes,
@@ -451,6 +454,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       fee_breakdown: tournamentForm.feeBreakdown.filter((line) => line.label.trim()),
       prizes: tournamentForm.prizes,
       cities: selectedCities,
+      published: tournamentForm.published,
       show_on_home: tournamentForm.showOnHome,
     };
     try {
@@ -500,7 +504,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     };
     assignedTournaments.forEach((entry) => {
       const status = String(entry.status ?? "");
-      if (status === "Featured" || entry.show_on_home === true) groups.Featured.push(entry);
+      if (status === "Featured" || Boolean(entry.show_on_home)) groups.Featured.push(entry);
       else if (status === "Upcoming") groups.Upcoming.push(entry);
       else if (status === "Registration Open") groups["Registration Open"].push(entry);
       else if (status === "Live") groups.Live.push(entry);
@@ -701,6 +705,10 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                     <label>Image<input value={tournamentForm.image} onChange={(event) => patchTournamentForm({ image: event.target.value })} placeholder="/assets/poster.jpeg" /></label>
                     <label>Description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} placeholder="Short description for the featured card" /></label>
                   </div>
+                  <div className="admin-flow-checks">
+                    <label className="visibility-row"><span><b>Display on tournament page</b><small>Show this tournament on the public tournament page.</small></span><input type="checkbox" checked={tournamentForm.published} onChange={(event) => patchTournamentForm({ published: event.target.checked })} /></label>
+                    <label className="visibility-row"><span><b>Display on home page</b><small>Show this tournament in the home upcoming tournament containers.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
+                  </div>
                   <div className="registration-actions compact-actions">
                     <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save featured tournament</button>
                     <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>
@@ -770,7 +778,10 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                     <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerMessage(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
                     <label>Rules acceptance text<textarea value={tournamentForm.rulesText} onChange={(event) => patchTournamentForm({ rulesText: event.target.value })} /></label>
                   </div>
-                  <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
+                  <div className="admin-flow-checks">
+                    <label className="visibility-row"><span><b>Display on tournament page</b><small>Show this tournament on the public tournament page.</small></span><input type="checkbox" checked={tournamentForm.published} onChange={(event) => patchTournamentForm({ published: event.target.checked })} /></label>
+                    <label className="visibility-row"><span><b>Display on home page</b><small>Show this tournament in the home upcoming tournament containers.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>
+                  </div>
                   <div className="registration-actions compact-actions">
                     <button className="btn btn-primary" type="button" onClick={saveTournamentForm}>Save</button>
                     <button className="btn btn-secondary" type="button" onClick={() => setShowTournamentForm(false)}>Close</button>

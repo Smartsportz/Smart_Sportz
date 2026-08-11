@@ -208,6 +208,39 @@ async function sendRequest(path: string, options: RequestInit, token?: string | 
   });
 }
 
+async function optimizeImageForUpload(file: File) {
+  if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+  const imageUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = imageUrl;
+    });
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: true });
+    if (!context) return file;
+    context.drawImage(image, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
+    return new File([blob], `${baseName}.webp`, { type: "image/webp", lastModified: Date.now() });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 type ApiRequestOptions = RequestInit & { silent?: boolean; toast?: boolean; successToast?: string | boolean };
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}, token?: string | null): Promise<T> {
@@ -250,7 +283,8 @@ export async function uploadFile(file: File, token?: string | null, options: { s
     const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
     const requestToken = token ?? storedToken;
     const formData = new FormData();
-    formData.append("file", file);
+    const upload = await optimizeImageForUpload(file);
+    formData.append("file", upload);
     const response = await fetchWithTimeout(`${API_BASE_URL}/storage/upload`, {
       method: "POST",
       headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : undefined,
@@ -264,7 +298,7 @@ export async function uploadFile(file: File, token?: string | null, options: { s
     if (options.successToast) {
       showToast("success", "Upload Complete", options.successToast === true ? "File uploaded successfully." : options.successToast);
     }
-    return { ...payload.data, url };
+    return { ...payload.data, originalName: payload.data.originalName || upload.name, url };
   } catch (caught) {
     const error = errorFromCaught(caught);
     notify(error, options.toast !== false);

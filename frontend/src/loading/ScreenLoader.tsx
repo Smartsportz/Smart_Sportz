@@ -17,24 +17,9 @@ export function ScreenLoader() {
           aria-live="polite"
           aria-label="Loading"
         >
-          <div className="screen-skeleton-shell" aria-hidden="true">
-            <div className="screen-skeleton-header">
-              <span className="screen-skeleton-logo" />
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="screen-skeleton-hero">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="screen-skeleton-grid">
-              <span />
-              <span />
-              <span />
-            </div>
+          <div className="logo-loader-card" aria-hidden="true">
+            <img src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="" />
+            <span />
           </div>
           <div className="screen-loader-label">Loading</div>
         </motion.div>

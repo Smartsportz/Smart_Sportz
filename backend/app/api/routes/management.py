@@ -249,9 +249,9 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
     computed_accent = accent_for_status(computed_status, payload.accent)
     execute(
         """INSERT INTO tournaments(slug, name, sport, status, location, date, registration_start, registration_end, teams, capacity, team_size,
-          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, rules_pdf, rules_text, fee_breakdown_json, show_on_home,
+          min_team_size, max_team_size, min_age, max_age, prize, image, poster, accent, address, sport_description, tournament_description, rules_pdf, rules_text, fee_breakdown_json, published, show_on_home,
           block_repeat_registration)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             tournament_slug,
             payload.name,
@@ -278,6 +278,7 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
             payload.rules_pdf,
             payload.rules_text,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
+            int(payload.published),
             int(payload.show_on_home),
             int(payload.block_repeat_registration),
         ),
@@ -305,7 +306,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
     execute(
         """UPDATE tournaments SET name = ?, sport = ?, status = ?, location = ?, date = ?, registration_start = ?, registration_end = ?,
           teams = ?, capacity = ?, team_size = ?, min_team_size = ?, max_team_size = ?, min_age = ?, max_age = ?, prize = ?, image = ?, poster = ?, accent = ?, address = ?,
-          sport_description = ?, tournament_description = ?, rules_pdf = ?, rules_text = ?, fee_breakdown_json = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
+          sport_description = ?, tournament_description = ?, rules_pdf = ?, rules_text = ?, fee_breakdown_json = ?, published = ?, show_on_home = ?, block_repeat_registration = ? WHERE slug = ?""",
         (
             payload.name,
             sport_name,
@@ -331,6 +332,7 @@ def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, us
             payload.rules_pdf,
             payload.rules_text,
             json.dumps([item.model_dump() for item in payload.fee_breakdown], separators=(",", ":")),
+            int(payload.published),
             int(payload.show_on_home),
             int(payload.block_repeat_registration),
             tournament_slug,
