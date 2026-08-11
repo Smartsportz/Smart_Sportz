@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import uvicorn
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,4 +42,12 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    reload_enabled = os.getenv("FASTAPI_RELOAD", "true").lower() in {"1", "true", "yes", "on"}
+    workers = max(1, int(os.getenv("WEB_CONCURRENCY", "1")))
+    uvicorn.run(
+        "app.main:app",
+        host=os.getenv("FASTAPI_HOST", "127.0.0.1"),
+        port=int(os.getenv("FASTAPI_PORT", "8000")),
+        reload=reload_enabled,
+        workers=1 if reload_enabled else workers,
+    )

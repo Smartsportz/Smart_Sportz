@@ -1,5 +1,6 @@
 import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest } from "../lib/api";
@@ -19,6 +20,10 @@ type GalleryAlbum = {
 };
 
 type GallerySocialState = Record<string, { liked?: boolean; likes?: number; comments?: string[] }>;
+type GalleryBootstrap = {
+  albums: GalleryAlbum[];
+  social: GallerySocialState;
+};
 
 function imageKey(album: GalleryAlbum) {
   return `album:${album.slug}`;
@@ -31,35 +36,63 @@ function assetUrl(path?: string) {
   return path;
 }
 
+function galleryBootstrapQuery(actorKey: string) {
+  return {
+    queryKey: ["gallery", "bootstrap", actorKey] as const,
+    queryFn: () => apiRequest<GalleryBootstrap>(`/public/gallery/bootstrap?actor_key=${encodeURIComponent(actorKey)}`, { silent: true }),
+  };
+}
+
+function GallerySkeleton() {
+  return (
+    <div className="home-section-skeleton gallery-page-skeleton" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
 export function GalleryPage() {
   useWheelHorizontal(".gallery-feed-grid");
-  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
+  const actorKey = useMemo(() => socialActorKey(), []);
+  const queryClient = useQueryClient();
+  const bootstrapQuery = useMemo(() => galleryBootstrapQuery(actorKey), [actorKey]);
+  const { data: bootstrap, isLoading } = useQuery(bootstrapQuery);
+  const albums = bootstrap?.albums ?? [];
   const [social, setSocial] = useState<GallerySocialState>({});
   const galleryScroller = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    apiRequest<GalleryAlbum[]>("/public/gallery/albums")
-      .then(setAlbums)
-      .catch(() => setAlbums([]));
-    apiRequest<Record<string, { liked?: boolean; likes?: number; comments?: string[] }>>(`/public/gallery/social?actor_key=${encodeURIComponent(socialActorKey())}`)
-      .then(setSocial)
-      .catch(() => undefined);
-  }, []);
+    setSocial(bootstrap?.social ?? {});
+  }, [bootstrap?.social]);
+
+  function updateSocialCache(key: string, next: GallerySocialState[string]) {
+    queryClient.setQueryData<GalleryBootstrap>(bootstrapQuery.queryKey, (current) => {
+      if (!current) return current;
+      return { ...current, social: { ...current.social, [key]: next } };
+    });
+  }
 
   async function toggleLike(album: GalleryAlbum) {
     const key = imageKey(album);
     const current = social[key] ?? { likes: 0, comments: [], liked: false };
     const liked = !current.liked;
-    setSocial((value) => ({ ...value, [key]: { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) } }));
+    const optimistic = { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) };
+    setSocial((value) => ({ ...value, [key]: optimistic }));
+    updateSocialCache(key, optimistic);
     try {
       const remote = await apiRequest<{ image_key: string; liked: boolean; likes: number; comments: string[] }>("/public/gallery/social/like", {
         method: "POST",
-        body: JSON.stringify({ image_key: key, liked, actor_key: socialActorKey() }),
+        body: JSON.stringify({ image_key: key, liked, actor_key: actorKey }),
         silent: true,
       });
-      setSocial((value) => ({ ...value, [key]: { ...value[key], liked: remote.liked, likes: remote.likes, comments: remote.comments } }));
+      const next = { ...optimistic, liked: remote.liked, likes: remote.likes, comments: remote.comments };
+      setSocial((value) => ({ ...value, [key]: next }));
+      updateSocialCache(key, next);
     } catch {
       setSocial((value) => ({ ...value, [key]: current }));
+      updateSocialCache(key, current);
     }
   }
 
@@ -80,7 +113,9 @@ export function GalleryPage() {
     <Page className="gallery-page">
       <section className="gallery-section gallery-section-first">
         <div className="gallery-simple-title"><h1>Gallery</h1></div>
-        {albums.length ? (
+        {isLoading ? (
+          <GallerySkeleton />
+        ) : albums.length ? (
           <>
           <div className="content-scroll-controls">
             <button type="button" onClick={() => moveGallery(-1)} aria-label="Previous gallery albums">&lt;</button>
@@ -120,27 +155,37 @@ export function GalleryPage() {
 
 export function GalleryAlbumPage() {
   const { slug } = useParams();
-  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
+  const actorKey = useMemo(() => socialActorKey(), []);
+  const queryClient = useQueryClient();
+  const bootstrapQuery = useMemo(() => galleryBootstrapQuery(actorKey), [actorKey]);
+  const { data: bootstrap, isLoading } = useQuery(bootstrapQuery);
+  const albums = bootstrap?.albums ?? [];
   const [comment, setComment] = useState("");
   const [social, setSocial] = useState<GallerySocialState>({});
   const album = useMemo(() => albums.find((item) => item.slug === slug), [albums, slug]);
 
   useEffect(() => {
-    apiRequest<GalleryAlbum[]>("/public/gallery/albums")
-      .then(setAlbums)
-      .catch(() => setAlbums([]));
-    apiRequest<Record<string, { liked?: boolean; likes?: number; comments?: string[] }>>(`/public/gallery/social?actor_key=${encodeURIComponent(socialActorKey())}`)
-      .then(setSocial)
-      .catch(() => undefined);
-  }, []);
+    setSocial(bootstrap?.social ?? {});
+  }, [bootstrap?.social]);
+
+  function updateSocialCache(key: string, next: GallerySocialState[string]) {
+    queryClient.setQueryData<GalleryBootstrap>(bootstrapQuery.queryKey, (current) => {
+      if (!current) return current;
+      return { ...current, social: { ...current.social, [key]: next } };
+    });
+  }
 
   async function addComment() {
     if (!album || !comment.trim()) return;
     const remote = await apiRequest<{ image_key: string; likes: number; comments: string[] }>("/public/gallery/social/comment", {
       method: "POST",
       body: JSON.stringify({ image_key: imageKey(album), comment }),
+      silent: true,
     });
-    setSocial((value) => ({ ...value, [imageKey(album)]: { ...value[imageKey(album)], likes: remote.likes, comments: remote.comments } }));
+    const key = imageKey(album);
+    const next = { ...(social[key] ?? {}), likes: remote.likes, comments: remote.comments };
+    setSocial((value) => ({ ...value, [key]: next }));
+    updateSocialCache(key, next);
     setComment("");
   }
 
@@ -149,17 +194,30 @@ export function GalleryAlbumPage() {
     const key = imageKey(album);
     const current = social[key] ?? { likes: 0, comments: [], liked: false };
     const liked = !current.liked;
-    setSocial((value) => ({ ...value, [key]: { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) } }));
+    const optimistic = { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) };
+    setSocial((value) => ({ ...value, [key]: optimistic }));
+    updateSocialCache(key, optimistic);
     try {
       const remote = await apiRequest<{ image_key: string; liked: boolean; likes: number; comments: string[] }>("/public/gallery/social/like", {
         method: "POST",
-        body: JSON.stringify({ image_key: key, liked, actor_key: socialActorKey() }),
+        body: JSON.stringify({ image_key: key, liked, actor_key: actorKey }),
         silent: true,
       });
-      setSocial((value) => ({ ...value, [key]: { ...value[key], liked: remote.liked, likes: remote.likes, comments: remote.comments } }));
+      const next = { ...optimistic, liked: remote.liked, likes: remote.likes, comments: remote.comments };
+      setSocial((value) => ({ ...value, [key]: next }));
+      updateSocialCache(key, next);
     } catch {
       setSocial((value) => ({ ...value, [key]: current }));
+      updateSocialCache(key, current);
     }
+  }
+
+  if (isLoading) {
+    return (
+      <Page className="gallery-page gallery-detail-page">
+        <GallerySkeleton />
+      </Page>
+    );
   }
 
   if (!album) {

@@ -68,6 +68,7 @@ def clear_public_cache(*slugs: str) -> None:
     keys = [
         cache_key("public:home"),
         cache_key("public:tournaments"),
+        cache_key("public:gallery:albums"),
         cache_key("content:news"),
     ]
     keys.extend(cache_key("public:tournament", slug) for slug in slugs if slug)

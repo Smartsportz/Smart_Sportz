@@ -23,7 +23,7 @@ export function Page({ children, className = "" }: { children: React.ReactNode; 
 function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <Link to="/" className={`brand ${compact ? "compact" : ""}`}>
-      <img className="brand-mark" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in logo" />
+      <img className="brand-mark" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in logo" loading="eager" fetchPriority="high" />
       <span>SmartSportz.in</span>
     </Link>
   );
@@ -274,7 +274,7 @@ export function TournamentCard({ item }: { item: any }) {
   return (
     <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
-      <img src={tournament.image} alt={`${tournament.name} visual`} />
+      <img src={tournament.image} alt={`${tournament.name} visual`} loading="lazy" />
       <div className="card-body">
         <span className={`status ${tournament.accent}`}>{tournament.status}</span>
         <h3>{tournament.name}</h3>
@@ -295,7 +295,7 @@ export function TournamentCard({ item }: { item: any }) {
 export function LiveMatchCard({ match }: { match: any }) {
   return (
     <Link className="live-card click-card" to={`/live/${match.id}`}>
-      <div className="live-media"><img src={match.image} alt="" /><span className="live-dot">Live</span></div>
+      <div className="live-media"><img src={match.image} alt="" loading="lazy" /><span className="live-dot">Live</span></div>
       <div>
         <p className="eyebrow">{match.tournament}</p>
         <h3>{match.home} vs {match.away}</h3>

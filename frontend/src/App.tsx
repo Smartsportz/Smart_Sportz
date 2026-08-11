@@ -55,6 +55,19 @@ const UtilityDetailPage = lazyNamed(() => import("./pages/UtilityDetailPage"), "
 const RoleProgramsPage = lazyNamed(() => import("./pages/RoleProgramsPage"), "RoleProgramsPage");
 const BracketWorkspacePage = lazyNamed(() => import("./pages/BracketPages"), "BracketWorkspacePage");
 
+function RouteSkeleton() {
+  return (
+    <main className="route-skeleton" aria-busy="true" aria-label="Loading page">
+      <div className="route-skeleton-hero" />
+      <div className="route-skeleton-row">
+        <span />
+        <span />
+        <span />
+      </div>
+    </main>
+  );
+}
+
 function ScrollToTop() {
   const { hash, pathname, search } = useLocation();
   const { showFor } = useLoading();
@@ -110,7 +123,7 @@ export default function App() {
       <ScreenLoader />
       {!isPortal && <PublicHeader />}
       <AnimatePresence mode="wait">
-        <Suspense fallback={null}>
+        <Suspense fallback={<RouteSkeleton />}>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomePage />} />
           <Route path="/tournaments" element={<TournamentsPage />} />
