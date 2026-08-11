@@ -7,10 +7,7 @@ type ProgressiveImageProps = {
   className?: string;
   loading?: "eager" | "lazy";
   fetchpriority?: "high" | "low" | "auto";
-  fallback?: string;
 };
-
-const DEFAULT_FALLBACK = "/assets/cricket-stadium.png";
 
 export function ProgressiveImage({
   src,
@@ -18,10 +15,8 @@ export function ProgressiveImage({
   className = "",
   loading = "lazy",
   fetchpriority,
-  fallback = DEFAULT_FALLBACK,
 }: ProgressiveImageProps) {
-  const resolved = mediaUrl(src || fallback);
-  const fallbackResolved = mediaUrl(fallback);
+  const resolved = src ? mediaUrl(src) : "";
   const [currentSrc, setCurrentSrc] = useState(resolved);
   const [loaded, setLoaded] = useState(false);
 
@@ -33,20 +28,19 @@ export function ProgressiveImage({
   return (
     <span className={`progressive-image ${loaded ? "is-loaded" : ""} ${className}`}>
       {!loaded && <span className="progressive-image-skeleton" aria-hidden="true" />}
-      <img
-        src={currentSrc}
-        alt={alt}
-        loading={loading}
-        fetchpriority={fetchpriority}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          if (currentSrc !== fallbackResolved) {
-            setCurrentSrc(fallbackResolved);
-            return;
-          }
-          setLoaded(true);
-        }}
-      />
+      {currentSrc && (
+        <img
+          src={currentSrc}
+          alt={alt}
+          loading={loading}
+          fetchpriority={fetchpriority}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            setCurrentSrc("");
+            setLoaded(false);
+          }}
+        />
+      )}
     </span>
   );
 }

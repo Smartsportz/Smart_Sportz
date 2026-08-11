@@ -313,11 +313,15 @@ export function BracketWorkspacePage() {
                 <input value={match.round} onChange={(event) => updateMatch(index, { round: event.target.value })} placeholder="Round 1" />
                 <select value={match.team_1} onChange={(event) => updateMatch(index, { team_1: event.target.value })}>
                   <option value="">Select team</option>
-                  {teams.map((team) => <option key={`team1-${team.id ?? team.name}`} value={team.name}>{team.name}</option>)}
+                  {teams
+                    .filter((team) => team.name !== match.team_2)
+                    .map((team) => <option key={`team1-${team.id ?? team.name}`} value={team.name}>{team.name}</option>)}
                 </select>
                 <select value={match.team_2} onChange={(event) => updateMatch(index, { team_2: event.target.value })}>
                   <option value="">Select team</option>
-                  {teams.map((team) => <option key={`team2-${team.id ?? team.name}`} value={team.name}>{team.name}</option>)}
+                  {teams
+                    .filter((team) => team.name !== match.team_1)
+                    .map((team) => <option key={`team2-${team.id ?? team.name}`} value={team.name}>{team.name}</option>)}
                 </select>
                 <input type="datetime-local" value={match.starts_at} onChange={(event) => updateMatch(index, { starts_at: event.target.value })} />
                 <input type="datetime-local" value={match.ends_at} onChange={(event) => updateMatch(index, { ends_at: event.target.value })} />
