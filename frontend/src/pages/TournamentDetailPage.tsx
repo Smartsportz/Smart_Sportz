@@ -1,10 +1,12 @@
 import { Download } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { DataTable, Page } from "../components/UI";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { archiveForTournament, individualScores, liveMatches, withRuntimeTournamentStatus } from "../data/platform";
 import { InfoPanel, Metric } from "./shared";
 import { apiRequest } from "../lib/api";
+import { SectionSkeleton } from "../lib/progressive";
 
 async function downloadRulesPdf(tournament: Record<string, any>) {
   const rulesPdf = String(tournament.rulesPdf ?? tournament.rules_pdf ?? "").trim();
@@ -41,22 +43,14 @@ async function downloadRulesPdf(tournament: Record<string, any>) {
 
 export function TournamentDetailPage() {
   const params = useParams();
-  const [remoteItem, setRemoteItem] = useState<any | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const tournamentQuery = useQuery({
+    queryKey: ["public", "tournament", params.slug],
+    queryFn: () => apiRequest<any>(`/public/tournaments/${params.slug}`, { silent: true }),
+    enabled: Boolean(params.slug),
+  });
   const [selectedArchiveMatchId, setSelectedArchiveMatchId] = useState("");
 
-  useEffect(() => {
-    if (!params.slug) return;
-    setNotFound(false);
-    apiRequest<any>(`/public/tournaments/${params.slug}`)
-      .then((item) => setRemoteItem(item))
-      .catch(() => {
-        setRemoteItem(null);
-        setNotFound(true);
-      });
-  }, [params.slug]);
-
-  if (notFound) {
+  if (tournamentQuery.isError) {
     return (
       <Page>
         <section className="panel user-empty-state">
@@ -68,10 +62,11 @@ export function TournamentDetailPage() {
     );
   }
 
-  if (!remoteItem) {
-    return <Page><section className="panel user-empty-state"><h2>Loading tournament</h2><p>Fetching tournament details from the database.</p></section></Page>;
+  if (tournamentQuery.isLoading || !tournamentQuery.data) {
+    return <Page><SectionSkeleton rows={3} /></Page>;
   }
 
+  const remoteItem = tournamentQuery.data;
   const item = withRuntimeTournamentStatus({
     ...remoteItem,
     registrationStart: remoteItem.registrationStart ?? remoteItem.registration_start,
@@ -124,7 +119,7 @@ export function TournamentDetailPage() {
   return (
     <Page>
       <section className="detail-hero">
-        <img src={item.image} alt="" />
+        <img src={item.image} alt="" loading="eager" fetchpriority="high" />
         <div>
           <span className={`status ${item.accent}`}>{item.status}</span>
           <h1>{item.name}</h1>
@@ -142,7 +137,7 @@ export function TournamentDetailPage() {
           <div className="detail-grid">
             <section className="panel video-panel">
               <span className="live-dot">Live video</span>
-              <img src={item.image} alt="" />
+              <img src={item.image} alt="" loading="lazy" />
             </section>
             <section className="panel">
               <h2>Live match intelligence</h2>
@@ -232,6 +227,7 @@ export function TournamentDetailPage() {
                   <iframe
                     title={`${selectedArchiveMatch.title} recorded video`}
                     src={selectedArchiveMatch.videoUrl}
+                    loading="lazy"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                   />

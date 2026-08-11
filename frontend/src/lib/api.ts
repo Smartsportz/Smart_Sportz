@@ -1,4 +1,5 @@
 import { beginGlobalLoading, endGlobalLoading } from "../loading/loadingBus";
+import { showToast, type ToastType } from "./toast";
 
 const LOCAL_API_BASE_URL = "/api/v1";
 const PRODUCTION_API_BASE_URL = "https://smart-sportz-backend.onrender.com/api/v1";
@@ -16,6 +17,7 @@ function resolveApiBaseUrl() {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 45000);
 export function websocketUrl(path: string) {
   const base = API_BASE_URL.startsWith("http")
     ? API_BASE_URL.replace(/^http/, "ws")
@@ -35,6 +37,27 @@ export type ApiEnvelope<T> = {
   error?: { code: string; details?: unknown };
   detail?: unknown;
 };
+
+type FriendlyError = {
+  title: string;
+  message: string;
+  type: ToastType;
+  status?: number;
+};
+
+export class ApiError extends Error {
+  title: string;
+  type: ToastType;
+  status?: number;
+
+  constructor(error: FriendlyError) {
+    super(error.message);
+    this.name = "ApiError";
+    this.title = error.title;
+    this.type = error.type;
+    this.status = error.status;
+  }
+}
 
 function errorMessageFromPayload(payload: ApiEnvelope<unknown>) {
   if (payload.message) return payload.message;
@@ -61,8 +84,55 @@ function errorMessageFromPayload(payload: ApiEnvelope<unknown>) {
   return "Request failed";
 }
 
+function friendlyError(status: number, payload?: ApiEnvelope<unknown>): FriendlyError {
+  if (status === 400 || status === 422) {
+    return { status, type: "warning", title: "Validation Error", message: errorMessageFromPayload(payload ?? {} as ApiEnvelope<unknown>) || "Please check the form and try again." };
+  }
+  if (status === 401) {
+    return { status, type: "error", title: "Session Expired", message: "Your session has expired. Please sign in again." };
+  }
+  if (status === 403) {
+    return { status, type: "error", title: "Permission Denied", message: "You do not have permission to perform this action." };
+  }
+  if (status === 404) {
+    return { status, type: "warning", title: "Not Found", message: "The requested resource could not be found." };
+  }
+  if (status === 408 || status === 504) {
+    return { status, type: "warning", title: "Request Timeout", message: "The request took too long. Please try again." };
+  }
+  if (status === 409) {
+    return { status, type: "warning", title: "Action Needed", message: errorMessageFromPayload(payload ?? {} as ApiEnvelope<unknown>) || "This action could not be completed." };
+  }
+  if (status >= 500) {
+    return { status, type: "error", title: "Server Error", message: "Server error. Please try again later." };
+  }
+  return { status, type: "error", title: "Request Failed", message: "Something went wrong. Please try again." };
+}
+
+function errorFromCaught(caught: unknown): FriendlyError {
+  if (caught instanceof ApiError) {
+    return { status: caught.status, type: caught.type, title: caught.title, message: caught.message };
+  }
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return { type: "error", title: "Network Error", message: "Unable to connect to the server. Check your internet connection." };
+  }
+  if (caught instanceof DOMException && caught.name === "AbortError") {
+    return { type: "warning", title: "Request Timeout", message: "The request took too long. Please try again." };
+  }
+  return { type: "error", title: "Network Error", message: "Unable to connect to the server. Check your internet connection." };
+}
+
+function notify(error: FriendlyError, enabled = true) {
+  if (!enabled) return;
+  showToast(error.type, error.title, error.message);
+}
+
 async function parseEnvelope<T>(response: Response) {
-  return (await response.json()) as ApiEnvelope<T>;
+  try {
+    return (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    return { success: false, message: "", data: null as T } as ApiEnvelope<T>;
+  }
 }
 
 async function refreshSession() {
@@ -103,8 +173,21 @@ function clearStoredSession() {
   window.dispatchEvent(new CustomEvent(SESSION_REFRESHED_EVENT, { detail: null }));
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}) {
+  if (init.signal || API_TIMEOUT_MS <= 0) {
+    return fetch(input, init);
+  }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function sendRequest(path: string, options: RequestInit, token?: string | null) {
-  return fetch(`${API_BASE_URL}${path}`, {
+  return fetchWithTimeout(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -114,10 +197,10 @@ async function sendRequest(path: string, options: RequestInit, token?: string | 
   });
 }
 
-type ApiRequestOptions = RequestInit & { silent?: boolean };
+type ApiRequestOptions = RequestInit & { silent?: boolean; toast?: boolean; successToast?: string | boolean };
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}, token?: string | null): Promise<T> {
-  const { silent, ...requestOptions } = options;
+  const { silent, toast = true, successToast = false, ...requestOptions } = options;
   if (!silent) beginGlobalLoading();
   try {
     const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
@@ -131,36 +214,50 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         response = await sendRequest(path, requestOptions, refreshedToken);
         payload = await parseEnvelope<T>(response);
       } else {
-        throw new Error("Session expired. Please login again.");
+        throw new ApiError(friendlyError(401, payload as ApiEnvelope<unknown>));
       }
     }
     if (!response.ok || !payload.success) {
-      throw new Error(errorMessageFromPayload(payload as ApiEnvelope<unknown>));
+      throw new ApiError(friendlyError(response.status, payload as ApiEnvelope<unknown>));
+    }
+    if (successToast) {
+      showToast("success", "Success", successToast === true ? payload.message || "Action completed successfully." : successToast);
     }
     return payload.data;
+  } catch (caught) {
+    const error = errorFromCaught(caught);
+    notify(error, toast);
+    throw new ApiError(error);
   } finally {
     if (!silent) endGlobalLoading();
   }
 }
 
-export async function uploadFile(file: File, token?: string | null, options: { silent?: boolean } = {}): Promise<{ filename: string; originalName?: string; size: number; url: string }> {
+export async function uploadFile(file: File, token?: string | null, options: { silent?: boolean; toast?: boolean; successToast?: string | boolean } = {}): Promise<{ filename: string; originalName?: string; size: number; url: string }> {
   if (!options.silent) beginGlobalLoading();
   try {
     const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
     const requestToken = token ?? storedToken;
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch(`${API_BASE_URL}/storage/upload`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/storage/upload`, {
       method: "POST",
       headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : undefined,
       body: formData,
     });
     const payload = await parseEnvelope<{ filename: string; originalName?: string; size: number; url: string }>(response);
     if (!response.ok || !payload.success) {
-      throw new Error(errorMessageFromPayload(payload as ApiEnvelope<unknown>));
+      throw new ApiError(friendlyError(response.status, payload as ApiEnvelope<unknown>));
     }
     const url = /^https?:\/\//i.test(payload.data.url) ? payload.data.url : `${API_BASE_URL}${payload.data.url.replace(/^\/api\/v1/, "")}`;
+    if (options.successToast) {
+      showToast("success", "Upload Complete", options.successToast === true ? "File uploaded successfully." : options.successToast);
+    }
     return { ...payload.data, url };
+  } catch (caught) {
+    const error = errorFromCaught(caught);
+    notify(error, options.toast !== false);
+    throw new ApiError(error);
   } finally {
     if (!options.silent) endGlobalLoading();
   }

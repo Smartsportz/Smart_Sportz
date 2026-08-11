@@ -7,10 +7,12 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.job_queue import enqueue
+from app.services.media import materialize_data_url, normalize_media_record, normalize_media_records
 from app.services.tournament_status import apply_registration_window_statuses
 
 router = APIRouter(tags=["content"])
@@ -49,7 +51,7 @@ def attach_news_blocks(post: dict) -> dict:
     post["blocks"] = [
         {
             "type": block["block_type"],
-            "content": json.loads(block["content_json"]).get("text", ""),
+            "content": materialize_data_url(json.loads(block["content_json"]).get("text", ""), f"news-block-{post['slug']}"),
             "sortOrder": block["sort_order"],
         }
         for block in blocks
@@ -57,17 +59,48 @@ def attach_news_blocks(post: dict) -> dict:
     return post
 
 
-@router.get("/news/social")
-def news_social(actor_key: str = ""):
-    items = rows("SELECT news_slug, likes, comments_json FROM news_social")
-    return ok({
+def news_social_map(actor_key: str = "", slugs: list[str] | None = None) -> dict:
+    params: tuple[str, ...] = ()
+    where_clause = ""
+    if slugs:
+        placeholders = ",".join(["?"] * len(slugs))
+        where_clause = f"WHERE news_slug IN ({placeholders})"
+        params = tuple(slugs)
+    items = rows(f"SELECT news_slug, likes, comments_json FROM news_social {where_clause}", params)
+    liked_slugs: set[str] = set()
+    if actor_key:
+        if slugs:
+            placeholders = ",".join(["?"] * len(slugs))
+            liked_rows = rows(
+                f"SELECT news_slug FROM news_likes WHERE actor_key = ? AND news_slug IN ({placeholders})",
+                (actor_key, *slugs),
+            )
+        else:
+            liked_rows = rows("SELECT news_slug FROM news_likes WHERE actor_key = ?", (actor_key,))
+        liked_slugs = {item["news_slug"] for item in liked_rows}
+    social = {
         item["news_slug"]: {
             "likes": item["likes"],
             "comments": parse_comments(item["comments_json"]),
-            "liked": bool(actor_key and row("SELECT id FROM news_likes WHERE news_slug = ? AND actor_key = ?", (item["news_slug"], actor_key))),
+            "liked": item["news_slug"] in liked_slugs,
         }
         for item in items
-    })
+    }
+    for slug in slugs or []:
+        social.setdefault(slug, {"likes": 0, "comments": [], "liked": slug in liked_slugs})
+    return social
+
+
+def published_news_posts() -> list[dict]:
+    return get_or_set_json(cache_key("content:news"), lambda: [
+        attach_news_blocks(item)
+        for item in normalize_media_records(rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC"), "news", {"image"})
+    ], ttl_seconds=max(settings.public_cache_ttl_seconds, 300))
+
+
+@router.get("/news/social")
+def news_social(actor_key: str = ""):
+    return ok(news_social_map(actor_key))
 
 
 @router.post("/news/social/like")
@@ -114,11 +147,19 @@ def news_comment(payload: NewsCommentPayload):
 
 
 @router.get("/news")
-def news():
-    return ok(get_or_set_json(cache_key("content:news"), lambda: [
-        attach_news_blocks(item)
-        for item in rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC")
-    ]))
+def news(limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
+    posts = published_news_posts()
+    total = len(posts)
+    return ok(posts[offset:offset + limit], meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+
+
+@router.get("/news/bootstrap")
+def news_bootstrap(actor_key: str = "", limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
+    posts = published_news_posts()
+    total = len(posts)
+    page = posts[offset:offset + limit]
+    slugs = [item["slug"] for item in page]
+    return ok({"posts": page, "social": news_social_map(actor_key, slugs)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/news/{slug}")
@@ -127,14 +168,14 @@ def news_detail(slug: str):
         post = row("SELECT * FROM news_posts WHERE slug = ? AND status = 'published'", (slug,))
         if not post:
             raise HTTPException(status_code=404, detail="News post not found")
-        related = rows(
+        related = normalize_media_records(rows(
             """SELECT slug, title, image, category, short_description
                FROM news_posts
                WHERE status = 'published' AND slug != ? AND (sport = ? OR city = ?)
                ORDER BY published_at DESC LIMIT 3""",
             (slug, post["sport"], post["city"]),
-        )
-        post = attach_news_blocks(post)
+        ), "news-related", {"image"})
+        post = attach_news_blocks(normalize_media_record(post, "news-detail", {"image"}))
         post["related"] = related
         return post
 

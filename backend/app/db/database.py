@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from collections.abc import Iterable
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -16,6 +17,11 @@ try:
 except Exception:  # pragma: no cover - SQLite local dev does not require psycopg.
     psycopg = None
     dict_row = None
+
+try:
+    from psycopg_pool import ConnectionPool
+except Exception:  # pragma: no cover - direct psycopg remains usable without pooling.
+    ConnectionPool = None
 
 
 OPERATIONAL_TABLE_ORDER = [
@@ -48,6 +54,9 @@ OPERATIONAL_TABLE_ORDER = [
     "gallery_social",
     "audit_logs",
 ]
+
+_pool_lock = threading.Lock()
+_postgres_pools: dict[tuple[str, str], Any] = {}
 
 
 def ensure_storage() -> None:
@@ -89,6 +98,51 @@ def _translate_sql(sql: str) -> str:
     return translated
 
 
+def _configure_postgres_connection(conn: Any, schema: str) -> None:
+    conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+    conn.execute(f'SET search_path TO "{schema}", public')
+    conn.commit()
+
+
+def _postgres_pool(url: str, schema: str):
+    if ConnectionPool is None:
+        return None
+    key = (url, schema)
+    pool = _postgres_pools.get(key)
+    if pool is not None:
+        return pool
+    with _pool_lock:
+        pool = _postgres_pools.get(key)
+        if pool is not None:
+            return pool
+        pool = ConnectionPool(
+            conninfo=url,
+            min_size=max(1, settings.postgres_pool_min_size),
+            max_size=max(settings.postgres_pool_min_size, settings.postgres_pool_max_size),
+            timeout=settings.postgres_pool_timeout_seconds,
+            kwargs={"row_factory": dict_row},
+            configure=lambda conn: _configure_postgres_connection(conn, schema),
+            open=True,
+        )
+        _postgres_pools[key] = pool
+        return pool
+
+
+class PooledPostgresConnection:
+    def __init__(self, pool: Any) -> None:
+        self._ctx = pool.connection()
+        self._conn = self._ctx.__enter__()
+
+    def __enter__(self):
+        return self._conn
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._ctx.__exit__(exc_type, exc, tb)
+
+    def __getattr__(self, name: str):
+        return getattr(self._conn, name)
+
+
 def _auto_mirror_sync_enabled() -> bool:
     return settings.auto_mirror_sync
 
@@ -102,9 +156,11 @@ def connect(path: Path | None = None):
         if not url:
             raise RuntimeError("DATABASE_URL is required when DATABASE_BACKEND=postgres")
         schema = _schema_for_path(path)
+        pool = _postgres_pool(url, schema)
+        if pool is not None:
+            return PooledPostgresConnection(pool)
         conn = psycopg.connect(url, row_factory=dict_row)
-        conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
-        conn.execute(f'SET search_path TO "{schema}", public')
+        _configure_postgres_connection(conn, schema)
         return conn
 
     conn = sqlite3.connect(path or settings.database_path)
@@ -131,6 +187,9 @@ def connect_audit():
 
 
 def rows(sql: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
+    if settings.read_from_mirror and _is_read_query(sql):
+        with connect_mirror() as conn:
+            return [dict(item) for item in conn.execute(_translate_sql(sql), tuple(params)).fetchall()]
     try:
         with connect() as conn:
             return [dict(item) for item in conn.execute(_translate_sql(sql), tuple(params)).fetchall()]
@@ -142,6 +201,10 @@ def rows(sql: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
 
 
 def row(sql: str, params: Iterable[Any] = ()) -> dict[str, Any] | None:
+    if settings.read_from_mirror and _is_read_query(sql):
+        with connect_mirror() as conn:
+            result = conn.execute(_translate_sql(sql), tuple(params)).fetchone()
+            return dict(result) if result else None
     try:
         with connect() as conn:
             result = conn.execute(_translate_sql(sql), tuple(params)).fetchone()
@@ -198,6 +261,18 @@ def mirror_db_path() -> Path:
 def audit_db_path() -> Path:
     ensure_storage()
     return settings.audit_database_path
+
+
+def connection_pool_status() -> dict[str, Any]:
+    return {
+        "backend": settings.database_backend,
+        "poolingAvailable": ConnectionPool is not None,
+        "activePools": len(_postgres_pools),
+        "minSize": settings.postgres_pool_min_size,
+        "maxSize": settings.postgres_pool_max_size,
+        "timeoutSeconds": settings.postgres_pool_timeout_seconds,
+        "readFromMirror": settings.read_from_mirror,
+    }
 
 
 def table_names(path: Path | None = None) -> list[str]:

@@ -1,8 +1,10 @@
 import { Activity, Clock, MapPin, Radio, ShieldCheck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Page } from "../components/UI";
 import { apiRequest, websocketUrl } from "../lib/api";
+import { ProgressiveSection } from "../lib/progressive";
 import { liveMatches, timeline } from "../data/platform";
 
 type LivePerson = {
@@ -102,21 +104,18 @@ function assetUrl(path: string) {
 export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string }) {
   const [matches, setMatches] = useState<LiveMatchDetail[]>(fallbackDetails);
   const [selectedId, setSelectedId] = useState(initialMatchId ?? fallbackDetails[0].id);
+  const liveQuery = useQuery({
+    queryKey: ["live", "matches"],
+    queryFn: () => apiRequest<LiveMatchDetail[]>("/live", { silent: true }),
+  });
   const selected = useMemo(() => matches.find((match) => match.id === selectedId) ?? matches[0], [matches, selectedId]);
 
   useEffect(() => {
-    let active = true;
-    apiRequest<LiveMatchDetail[]>("/live")
-      .then((items) => {
-        if (!active || !items.length) return;
-        setMatches(items);
-        setSelectedId((current) => items.some((item) => item.id === current) ? current : items[0].id);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
+    const items = liveQuery.data;
+    if (!items?.length) return;
+    setMatches(items);
+    setSelectedId((current) => items.some((item) => item.id === current) ? current : items[0].id);
+  }, [liveQuery.data]);
 
   useEffect(() => {
     const socket = new WebSocket(websocketUrl("/live/ws"));
@@ -173,15 +172,20 @@ export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string })
       </section>
 
       <section className="live-stage-grid">
-        <div className="live-video-shell">
-          <iframe
-            title={`${selected.tournament} live video`}
-            src={embedUrl(selected.youtubeUrl)}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-          <div className="live-video-badge"><Radio size={16} /> Manager YouTube Live</div>
-        </div>
+        <ProgressiveSection query={{ queryKey: ["live", "video", selected.id] as const, queryFn: async () => selected }} skeletonRows={1} className="live-video-progressive">
+          {(match) => (
+            <div className="live-video-shell">
+              <iframe
+                title={`${match.tournament} live video`}
+                src={embedUrl(match.youtubeUrl)}
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+              <div className="live-video-badge"><Radio size={16} /> Manager YouTube Live</div>
+            </div>
+          )}
+        </ProgressiveSection>
         <aside className="live-score-panel">
           <span className="live-dot">Live</span>
           <div className="live-score-row">
@@ -201,38 +205,42 @@ export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string })
         </aside>
       </section>
 
-      <section className="live-dashboard-grid">
-        <article className="live-panel live-lineup-panel">
-          <div className="live-panel-heading"><Users size={18} /><h2>Live Players</h2></div>
-          <div className="live-team-columns">
-            {[selected.home, selected.away].map((team) => (
-              <div key={team}>
-                <h3>{team}</h3>
-                {teamPlayers(selected.currentPlayers, team).map((player) => (
-                  <div className="live-player-row" key={`${team}-${player.name}`}>
-                    <span>{player.role}</span>
-                    <strong>{player.name}</strong>
-                    <em>{player.score}</em>
+      <ProgressiveSection query={{ queryKey: ["live", "players", selected.id] as const, queryFn: async () => selected }} skeletonRows={2}>
+        {(match) => (
+          <section className="live-dashboard-grid">
+            <article className="live-panel live-lineup-panel">
+              <div className="live-panel-heading"><Users size={18} /><h2>Live Players</h2></div>
+              <div className="live-team-columns">
+                {[match.home, match.away].map((team) => (
+                  <div key={team}>
+                    <h3>{team}</h3>
+                    {teamPlayers(match.currentPlayers, team).map((player) => (
+                      <div className="live-player-row" key={`${team}-${player.name}`}>
+                        <span>{player.role}</span>
+                        <strong>{player.name}</strong>
+                        <em>{player.score}</em>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
-        </article>
+            </article>
 
-        <article className="live-panel">
-          <div className="live-panel-heading"><ShieldCheck size={18} /><h2>Substitutes</h2></div>
-          <div className="live-sub-list">
-            {(selected.substitutes ?? []).map((player) => (
-              <div key={`${player.team}-${player.name}`}>
-                <span>{player.team}</span>
-                <strong>{player.name}</strong>
-                <p>{player.role}</p>
+            <article className="live-panel">
+              <div className="live-panel-heading"><ShieldCheck size={18} /><h2>Substitutes</h2></div>
+              <div className="live-sub-list">
+                {(match.substitutes ?? []).map((player) => (
+                  <div key={`${player.team}-${player.name}`}>
+                    <span>{player.team}</span>
+                    <strong>{player.name}</strong>
+                    <p>{player.role}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </article>
-      </section>
+            </article>
+          </section>
+        )}
+      </ProgressiveSection>
 
       <section className="live-dashboard-grid wide-left">
         <article className="live-panel">
@@ -269,21 +277,25 @@ export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string })
         </article>
       </section>
 
-      <section className="live-panel live-comparison-panel">
-        <div className="live-panel-heading"><Activity size={18} /><h2>Team Control</h2></div>
-        <div className="live-comparison-grid">
-          <div>
-            <h3>{selected.home}</h3>
-            <strong>{homeStats.possession ?? 50}%</strong>
-            <p>{homeStats.shots ?? "Active attempts"} - {homeStats.accuracy ?? "High accuracy"}</p>
-          </div>
-          <div>
-            <h3>{selected.away}</h3>
-            <strong>{awayStats.possession ?? 50}%</strong>
-            <p>{awayStats.shots ?? "Active attempts"} - {awayStats.accuracy ?? "High accuracy"}</p>
-          </div>
-        </div>
-      </section>
+      <ProgressiveSection query={{ queryKey: ["live", "comparison", selected.id] as const, queryFn: async () => selected }} skeletonRows={2}>
+        {() => (
+          <section className="live-panel live-comparison-panel">
+            <div className="live-panel-heading"><Activity size={18} /><h2>Team Control</h2></div>
+            <div className="live-comparison-grid">
+              <div>
+                <h3>{selected.home}</h3>
+                <strong>{homeStats.possession ?? 50}%</strong>
+                <p>{homeStats.shots ?? "Active attempts"} - {homeStats.accuracy ?? "High accuracy"}</p>
+              </div>
+              <div>
+                <h3>{selected.away}</h3>
+                <strong>{awayStats.possession ?? 50}%</strong>
+                <p>{awayStats.shots ?? "Active attempts"} - {awayStats.accuracy ?? "High accuracy"}</p>
+              </div>
+            </div>
+          </section>
+        )}
+      </ProgressiveSection>
     </Page>
   );
 }

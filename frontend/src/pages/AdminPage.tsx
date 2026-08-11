@@ -2,12 +2,14 @@ import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search } from
 import { useEffect, useState, useMemo } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { logRows, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
 import { apiRequest, uploadFile } from "../lib/api";
+import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 
@@ -330,38 +332,32 @@ function adminFormFromTournament(item?: Record<string, any>): AdminTournamentFor
 
 function AdminDashboardDbPanel() {
   const { token } = useAuth();
-  const [data, setData] = useState<AdminDashboardData | null>(null);
-  const [tournamentRows, setTournamentRows] = useState<Array<Record<string, any>>>([]);
-  const [logs, setLogs] = useState<Array<Record<string, any>>>([]);
-  const [error, setError] = useState("");
+  const dashboardQuery = useQuery({
+    queryKey: ["admin", "dashboard", token],
+    queryFn: () => apiRequest<AdminDashboardData>("/admin/dashboard", { silent: true }, token),
+    enabled: Boolean(token),
+    staleTime: 60_000,
+  });
 
-  useEffect(() => {
-    let alive = true;
-    setError("");
-    Promise.all([
-      apiRequest<AdminDashboardData>("/admin/dashboard", {}, token),
-      apiRequest<Array<Record<string, any>>>("/admin/tournaments", {}, token),
-      apiRequest<Array<Record<string, any>>>("/admin/logs", {}, token),
-    ])
-      .then(([dashboard, tournamentsList, logList]) => {
-        if (!alive) return;
-        setData(dashboard);
-        setTournamentRows(tournamentsList);
-        setLogs(logList);
-      })
-      .catch((caught) => {
-        if (alive) setError(caught instanceof Error ? caught.message : "Could not load admin dashboard data.");
-      });
-    return () => {
-      alive = false;
-    };
-  }, [token]);
+  if (dashboardQuery.isError) return <div className="form-alert">{dashboardQuery.error instanceof Error ? dashboardQuery.error.message : "Could not load admin dashboard data."}</div>;
 
-  if (error) return <div className="form-alert">{error}</div>;
+  if (dashboardQuery.isLoading || !dashboardQuery.data) return <section className="panel"><SectionSkeleton rows={3} /></section>;
 
-  if (!data) return <section className="panel user-empty-state"><h2>Loading admin dashboard</h2><p>Fetching live database records.</p></section>;
-
-  const openRegistrationRows = tournamentRows.filter((item) => item.status === "Registration Open");
+  const data = dashboardQuery.data;
+  const tournamentsQuery = {
+    queryKey: ["admin", "tournaments", token] as const,
+    queryFn: () => apiRequest<Array<Record<string, any>>>("/admin/tournaments", { silent: true }, token),
+  };
+  const dashboardListsQuery = {
+    queryKey: ["admin", "dashboard", "lists", token] as const,
+    queryFn: async () => {
+      const [tournamentRows, logs] = await Promise.all([
+        apiRequest<Array<Record<string, any>>>("/admin/tournaments", { silent: true }, token),
+        apiRequest<Array<Record<string, any>>>("/admin/logs", { silent: true }, token),
+      ]);
+      return { tournamentRows, logs };
+    },
+  };
 
   return (
     <>
@@ -371,42 +367,53 @@ function AdminDashboardDbPanel() {
         <Metric label="Registrations" value={String(data.registrations)} />
         <Metric label="Live Matches" value={String(data.liveMatches)} />
       </div>
-      <section className="panel">
-        <div className="section-head-inline">
-          <h2>Open registration slots</h2>
-          <span>{openRegistrationRows.length} open</span>
-        </div>
-        {openRegistrationRows.length ? (
-          <DataTable
-            columns={["Tournament", "Filled slots", "Registration closes"]}
-            rows={openRegistrationRows.map((item) => [
-              item.name,
-              slotSummary(item),
-              formatDateInput(item.registration_end) || "-",
-            ])}
-          />
-        ) : <p className="empty-line">No open registration tournaments.</p>}
-      </section>
-      <div className="dashboard-two">
-        <section className="panel">
-          <h2>Database tournaments</h2>
-          {tournamentRows.slice(0, 5).map((item) => (
-            <a className="row-item readonly-row" href={`/Smart_Sportz/tournaments/${item.slug}`} key={item.slug}>
-              <span>{item.name}</span>
-              <b>{item.status}</b>
-            </a>
-          ))}
-        </section>
-        <section className="panel">
-          <h2>Audit logs</h2>
-          {logs.slice(0, 5).map((log, index) => (
-            <div className="row-item readonly-row" key={log.id ?? index}>
-              <span>{log.action ?? log.event_type ?? "Audit event"}</span>
-              <small>{log.created_at ?? "Recorded"}</small>
+      <ProgressiveSection query={tournamentsQuery} prefetch={[dashboardListsQuery]} skeletonRows={1}>
+        {(tournamentRows) => {
+          const openRegistrationRows = tournamentRows.filter((item) => item.status === "Registration Open");
+          return (
+          <section className="panel">
+            <div className="section-head-inline">
+              <h2>Open registration slots</h2>
+              <span>{openRegistrationRows.length} open</span>
             </div>
-          ))}
-        </section>
-      </div>
+            {openRegistrationRows.length ? (
+              <DataTable
+                columns={["Tournament", "Filled slots", "Registration closes"]}
+                rows={openRegistrationRows.map((item) => [
+                  item.name,
+                  slotSummary(item),
+                  formatDateInput(item.registration_end) || "-",
+                ])}
+              />
+            ) : <p className="empty-line">No open registration tournaments.</p>}
+          </section>
+          );
+        }}
+      </ProgressiveSection>
+      <ProgressiveSection query={dashboardListsQuery} skeletonRows={2}>
+        {({ tournamentRows, logs }) => (
+          <div className="dashboard-two">
+            <section className="panel">
+              <h2>Database tournaments</h2>
+              {tournamentRows.slice(0, 5).map((item) => (
+                <a className="row-item readonly-row" href={`/Smart_Sportz/tournaments/${item.slug}`} key={item.slug}>
+                  <span>{item.name}</span>
+                  <b>{item.status}</b>
+                </a>
+              ))}
+            </section>
+            <section className="panel">
+              <h2>Audit logs</h2>
+              {logs.slice(0, 5).map((log, index) => (
+                <div className="row-item readonly-row" key={log.id ?? index}>
+                  <span>{log.action ?? log.event_type ?? "Audit event"}</span>
+                  <small>{log.created_at ?? "Recorded"}</small>
+                </div>
+              ))}
+            </section>
+          </div>
+        )}
+      </ProgressiveSection>
     </>
   );
 }
@@ -983,7 +990,7 @@ function AdminRegistrationsPanel() {
   }, [token]);
 
   if (loading) {
-    return <section className="panel user-empty-state"><h2>Loading registrations</h2><p>Fetching registration records from the admin database route.</p></section>;
+    return <section className="panel"><SectionSkeleton rows={3} /></section>;
   }
 
   return (
@@ -1097,9 +1104,7 @@ export function AdminCMSEditPage() {
     return (
       <Page>
         <PortalShell title="Edit CMS Item" subtitle="" sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/cms">Back to CMS</Link>}>
-          <section className="panel user-empty-state">
-            <h2>Loading...</h2>
-          </section>
+          <section className="panel"><SectionSkeleton rows={3} /></section>
         </PortalShell>
       </Page>
     );
@@ -1597,9 +1602,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
       </div>
       
       {loading ? (
-        <div className="user-empty-state">
-          <h2>Loading announcements...</h2>
-        </div>
+        <div className="panel"><SectionSkeleton rows={3} /></div>
       ) : items.length === 0 ? (
         <div className="user-empty-state">
           <h2>No announcements yet</h2>
@@ -2204,9 +2207,7 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
         </section>
 
         {loading ? (
-          <div className="panel user-empty-state">
-            <h2>Loading news...</h2>
-          </div>
+          <div className="panel"><SectionSkeleton rows={3} /></div>
         ) : newsList.length === 0 ? (
           <div className="panel user-empty-state">
             <h2>No news articles</h2>
@@ -2881,7 +2882,7 @@ export function AdminTournamentTeamsPage() {
     <Page>
       <PortalShell title={data?.tournament.name ?? "Tournament Teams"} subtitle="Registered teams for the selected tournament." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/teams">All team tournaments</Link>}>
         {error && <div className="form-alert">{error}</div>}
-        {!data ? <section className="panel user-empty-state"><h2>Loading teams</h2><p>Fetching tournament registrations.</p></section> : (
+        {!data ? <section className="panel"><SectionSkeleton rows={3} /></section> : (
           <>
             <div className="mini-grid">
               <Metric label="Registered Teams" value={String(data.teams.length)} />
@@ -2929,7 +2930,7 @@ export function AdminRegistrationTeamDetailPage() {
     <Page>
       <PortalShell title={registration?.team_name ?? "Team Detail"} subtitle="Team registration, player list, payment, and document records." sidebar={sidebar} action={<Link className="btn btn-secondary" to={registration ? `/admin/teams/tournament/${registration.tournament_slug}` : "/admin/teams"}>Back</Link>}>
         {error && <div className="form-alert">{error}</div>}
-        {!data || !registration ? <section className="panel user-empty-state"><h2>Loading team</h2><p>Fetching team details.</p></section> : (
+        {!data || !registration ? <section className="panel"><SectionSkeleton rows={3} /></section> : (
           <>
             <section className="panel review-summary">
               <span className={`status ${registration.payment_status === "paid" ? "emerald" : "orange"}`}>{registration.payment_status}</span>
@@ -3123,7 +3124,7 @@ export function AdminTournamentPaymentsPage() {
     <Page>
       <PortalShell title={data?.tournament.name ?? "Tournament Payments"} subtitle="Payment totals and team payment records." sidebar={sidebar} action={<Link className="btn btn-secondary" to="/admin/payments">All tournaments</Link>}>
         {error && <div className="form-alert">{error}</div>}
-        {!data ? <section className="panel user-empty-state"><h2>Loading payments</h2><p>Fetching records.</p></section> : (
+        {!data ? <section className="panel"><SectionSkeleton rows={3} /></section> : (
           <>
             <div className="mini-grid admin-payment-metrics">
               <Metric label="Total Paid" value={formatAdminMoney(data.summary.total ?? 0)} />
@@ -3342,7 +3343,7 @@ export function AdminUserDetailPage() {
             </section>
           </div>
         )}
-        {!data ? <section className="panel user-empty-state"><h2>Loading user</h2></section> : (
+        {!data ? <section className="panel"><SectionSkeleton rows={3} /></section> : (
           <>
             <form className="panel form-grid" onSubmit={saveUser}>
               <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>

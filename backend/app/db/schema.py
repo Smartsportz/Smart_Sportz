@@ -538,6 +538,8 @@ CREATE INDEX IF NOT EXISTS idx_tournament_cities_slug ON tournament_cities(tourn
 CREATE INDEX IF NOT EXISTS idx_tournament_cities_city ON tournament_cities(city, tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_registrations_user ON registrations(user_id);
 CREATE INDEX IF NOT EXISTS idx_registrations_email ON registrations(email);
+CREATE INDEX IF NOT EXISTS idx_registrations_status ON registrations(status);
+CREATE INDEX IF NOT EXISTS idx_registrations_tournament_slug ON registrations(tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_registrations_city_status ON registrations(city, status);
 CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON registrations(created_at);
 CREATE INDEX IF NOT EXISTS idx_registrations_tournament_status ON registrations(tournament_slug, status);
@@ -548,6 +550,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_registration ON payments(registration_id
 CREATE INDEX IF NOT EXISTS idx_payments_status_created ON payments(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_payments_receipt ON payments(receipt_number);
 CREATE INDEX IF NOT EXISTS idx_news_likes_actor ON news_likes(actor_key, news_slug);
+CREATE INDEX IF NOT EXISTS idx_news_likes_slug_actor ON news_likes(news_slug, actor_key);
+CREATE INDEX IF NOT EXISTS idx_news_posts_published ON news_posts(status, published_at);
 CREATE INDEX IF NOT EXISTS idx_news_status_dates ON news_posts(status, published_at, created_at);
 CREATE INDEX IF NOT EXISTS idx_news_slug_status ON news_posts(slug, status);
 CREATE INDEX IF NOT EXISTS idx_news_sport_city ON news_posts(sport, city);
@@ -558,7 +562,10 @@ CREATE INDEX IF NOT EXISTS idx_manager_city_city ON manager_city_assignments(cit
 CREATE INDEX IF NOT EXISTS idx_tournament_manager_user ON tournament_manager_assignments(manager_user_id, tournament_slug);
 CREATE INDEX IF NOT EXISTS idx_tournament_manager_slug ON tournament_manager_assignments(tournament_slug, manager_user_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_social_updated ON gallery_social(updated_at);
+CREATE INDEX IF NOT EXISTS idx_gallery_social_image_key ON gallery_social(image_key);
 CREATE INDEX IF NOT EXISTS idx_gallery_likes_actor ON gallery_likes(actor_key, image_key);
+CREATE INDEX IF NOT EXISTS idx_gallery_likes_image_actor ON gallery_likes(image_key, actor_key);
+CREATE INDEX IF NOT EXISTS idx_gallery_albums_published ON gallery_albums(published, sort_order);
 CREATE INDEX IF NOT EXISTS idx_gallery_albums_month ON gallery_albums(month_label, sort_order);
 CREATE INDEX IF NOT EXISTS idx_live_matches_status ON live_matches(status);
 CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, id);

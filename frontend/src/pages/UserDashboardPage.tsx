@@ -1,11 +1,13 @@
 import { Activity, CircleDollarSign, Download, FileText, Medal, Trophy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type React from "react";
 import { Link } from "react-router-dom";
 import { Page, PortalShell } from "../components/UI";
 import { userSidebar } from "../data/platform";
 import { apiRequest } from "../lib/api";
 import { downloadRegistrationPassPdf } from "../lib/downloads";
+import { SectionSkeleton } from "../lib/progressive";
 import { useAuth } from "../auth/AuthContext";
 
 export type UserDashboardData = {
@@ -92,32 +94,15 @@ function EmptyState({ title, text, to, action }: { title: string; text: string; 
 
 export function UserDashboardPage() {
   const { token, user } = useAuth();
-  const [data, setData] = useState<UserDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [downloadError, setDownloadError] = useState("");
+  const dashboardQuery = useQuery({
+    queryKey: ["user", "dashboard", user?.id],
+    queryFn: () => apiRequest<UserDashboardData>("/user/dashboard", { silent: true }, token),
+    enabled: Boolean(token),
+  });
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setError("");
-    apiRequest<UserDashboardData>("/user/dashboard", {}, token)
-      .then((payload) => {
-        if (alive) setData(payload);
-      })
-      .catch((caught) => {
-        if (alive) setError(caught instanceof Error ? caught.message : "Could not load your dashboard data.");
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [token]);
-
-  const dashboard = data ?? emptyDashboard;
-  const profileName = data?.profile.name || user?.name || "Participant";
+  const dashboard = dashboardQuery.data ?? emptyDashboard;
+  const profileName = dashboardQuery.data?.profile.name || user?.name || "Participant";
   const paidAmount = dashboard.payments
     .filter((payment) => payment.status === "paid")
     .reduce((sum, payment) => sum + payment.amount, 0);
@@ -126,13 +111,10 @@ export function UserDashboardPage() {
   return (
     <Page>
       <PortalShell title={`Welcome back, ${profileName.split(" ")[0]}`} subtitle="Your tournament registrations, payment receipts, documents, and verification passes." sidebar={userSidebar}>
-        {error && <div className="form-alert">{error}</div>}
+        {dashboardQuery.isError && <div className="form-alert">Could not load your dashboard data.</div>}
         {downloadError && <div className="form-alert">{downloadError}</div>}
-        {loading ? (
-          <section className="panel user-empty-state">
-            <h2>Loading your records</h2>
-            <p>Fetching your participant data from the backend database.</p>
-          </section>
+        {dashboardQuery.isLoading ? (
+          <SectionSkeleton rows={4} />
         ) : (
           <>
             <div className="user-metrics-grid">

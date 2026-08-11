@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import require_roles
 from app.core.config import settings
@@ -14,6 +14,7 @@ from app.db.database import execute, execute_many, row, rows
 from app.schemas import BracketSavePayload, GalleryAlbumPayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
+from app.services.media import normalize_media_record, normalize_media_records
 from app.services.notifications import match_reminder_message, send_match_selection_whatsapp, send_whatsapp_message
 from app.services.runtime_state import runtime_state
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
@@ -183,9 +184,9 @@ def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
         registration_filter = "" if user["role"] == "super_admin" else (f" AND city IN ({','.join(['?'] * len(cities))})" if cities else " AND 1 = 0")
         return {
             "assignedCities": cities,
-            "assignedTournaments": rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", tuple(tournament_params)),
-            "pendingRegistrations": rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval', 'waiting'){registration_filter}", cities),
-            "liveMatches": rows("SELECT * FROM live_matches"),
+            "assignedTournaments": normalize_media_records(rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", tuple(tournament_params)), "management-tournament", {"image", "poster", "rules_pdf"}),
+            "pendingRegistrations": normalize_media_records(rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval', 'waiting'){registration_filter}", cities), "management-registration", {"team_logo", "selected_jersey_image"}),
+            "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches"), "management-live", {"image"}),
         }
 
     return ok(build())
@@ -210,7 +211,7 @@ def tournaments(user: dict = Depends(require_roles("super_admin", "management"))
             records = rows(f"SELECT * FROM tournaments WHERE {' OR '.join(filters)} ORDER BY name", tuple(params)) if filters else []
         order = {"Upcoming": 0, "Registration Open": 1, "Live": 2, "Registration Closed": 3, "Completed": 4}
         details = [_tournament_detail(item["slug"]) for item in records]
-        return sorted([item for item in details if item], key=lambda item: (order.get(item["status"], 9), item["name"]))
+        return normalize_media_records(sorted([item for item in details if item], key=lambda item: (order.get(item["status"], 9), item["name"])), "management-tournament", {"image", "poster", "rules_pdf"})
 
     return ok(get_or_set_json(cache_key("management:tournaments", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
 
@@ -355,24 +356,31 @@ def delete_tournament(tournament_slug: str, user: dict = Depends(require_roles("
 
 
 @router.get("/news")
-def manager_news(user: dict = Depends(require_roles("super_admin", "management"))):
+def manager_news(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: dict = Depends(require_roles("super_admin", "management")),
+):
     def build():
         cities = manager_cities(user)
         if user["role"] != "super_admin" and not cities:
-            return {"assignedCities": [], "posts": [], "sports": []}
+            return {"assignedCities": [], "posts": [], "sports": [], "total": 0}
         params = [] if user["role"] == "super_admin" else cities
         where = "" if user["role"] == "super_admin" else f"WHERE city IN ({','.join(['?'] * len(cities))})"
+        total = int(row(f"SELECT COUNT(*) AS count FROM news_posts {where}", tuple(params))["count"] or 0)
         return {
             "assignedCities": cities,
-            "posts": rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC", params),
+            "posts": normalize_media_records(rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC LIMIT ? OFFSET ?", tuple([*params, limit, offset])), "management-news", {"image"}),
             "sports": rows(
                 """SELECT s.slug, s.name, s.color, COALESCE(v.show_on_home, 0) AS show_on_home, COALESCE(v.sort_order, 99) AS sort_order
                    FROM sports s LEFT JOIN sport_home_visibility v ON v.sport_slug = s.slug
                    ORDER BY COALESCE(v.sort_order, 99), s.name"""
             ),
+            "total": total,
         }
 
-    return ok(get_or_set_json(cache_key("management:news", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
+    payload = get_or_set_json(cache_key("management:news", user["id"], user["role"], limit, offset), build, max(settings.dashboard_cache_ttl_seconds, 120))
+    return ok(payload, meta={"total": payload.get("total", len(payload.get("posts", []))), "limit": limit, "offset": offset, "hasMore": offset + limit < payload.get("total", 0)})
 
 
 @router.post("/news")
@@ -402,7 +410,7 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
         execute_many(statements)
     log(user["email"], "news_created", "news", slug, f"News post created for {payload.city}")
     clear_public_cache(slug)
-    return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post created")
+    return ok(normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "management-news", {"image"}), "News post created")
 
 
 @router.patch("/news/{slug}")
@@ -432,18 +440,26 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
         execute_many(statements)
     log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
     clear_public_cache(slug)
-    return ok(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)), "News post updated")
+    return ok(normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "management-news", {"image"}), "News post updated")
 
 
 @router.get("/gallery")
-def gallery_albums(user: dict = Depends(require_roles("super_admin", "management"))):
+def gallery_albums(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: dict = Depends(require_roles("super_admin", "management")),
+):
     cities = manager_cities(user)
     if user["role"] != "super_admin" and not cities:
-        return ok([])
+        return ok([], meta={"total": 0, "limit": limit, "offset": offset, "hasMore": False})
     if user["role"] == "super_admin":
-        return ok(rows("SELECT * FROM gallery_albums ORDER BY sort_order, title"))
+        total = int(row("SELECT COUNT(*) AS count FROM gallery_albums")["count"] or 0)
+        items = rows("SELECT * FROM gallery_albums ORDER BY sort_order, title LIMIT ? OFFSET ?", (limit, offset))
+        return ok(normalize_media_records(items, "management-gallery", {"cover"}), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
     placeholders = ",".join(["?"] * len(cities))
-    return ok(rows(f"SELECT * FROM gallery_albums WHERE city IN ({placeholders}) ORDER BY sort_order, title", cities))
+    total = int(row(f"SELECT COUNT(*) AS count FROM gallery_albums WHERE city IN ({placeholders})", tuple(cities))["count"] or 0)
+    items = rows(f"SELECT * FROM gallery_albums WHERE city IN ({placeholders}) ORDER BY sort_order, title LIMIT ? OFFSET ?", tuple([*cities, limit, offset]))
+    return ok(normalize_media_records(items, "management-gallery", {"cover"}), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.post("/gallery")
@@ -465,7 +481,7 @@ def create_gallery_album(payload: GalleryAlbumPayload, user: dict = Depends(requ
     )
     log(user["email"], "gallery_created", "gallery", slug, f"Gallery album created: {payload.title}")
     clear_public_cache()
-    return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery created")
+    return ok(normalize_media_record(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)) or {}, "management-gallery", {"cover"}), "Gallery created")
 
 
 @router.patch("/gallery/{slug}")
@@ -487,7 +503,7 @@ def update_gallery_album(slug: str, payload: GalleryAlbumPayload, user: dict = D
     )
     log(user["email"], "gallery_updated", "gallery", slug, f"Gallery album updated: {payload.title}")
     clear_public_cache()
-    return ok(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)), "Gallery updated")
+    return ok(normalize_media_record(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)) or {}, "management-gallery", {"cover"}), "Gallery updated")
 
 
 @router.delete("/gallery/{slug}")

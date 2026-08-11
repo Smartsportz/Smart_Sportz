@@ -56,16 +56,7 @@ const RoleProgramsPage = lazyNamed(() => import("./pages/RoleProgramsPage"), "Ro
 const BracketWorkspacePage = lazyNamed(() => import("./pages/BracketPages"), "BracketWorkspacePage");
 
 function RouteSkeleton() {
-  return (
-    <main className="route-skeleton" aria-busy="true" aria-label="Loading page">
-      <div className="route-skeleton-hero" />
-      <div className="route-skeleton-row">
-        <span />
-        <span />
-        <span />
-      </div>
-    </main>
-  );
+  return null;
 }
 
 function ScrollToTop() {

@@ -23,7 +23,7 @@ export function Page({ children, className = "" }: { children: React.ReactNode; 
 function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <Link to="/" className={`brand ${compact ? "compact" : ""}`}>
-      <img className="brand-mark" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in logo" loading="eager" fetchPriority="high" />
+      <img className="brand-mark" src={`${import.meta.env.BASE_URL}assets/logo.png`} alt="SmartSportz.in logo" loading="eager" fetchpriority="high" />
       <span>SmartSportz.in</span>
     </Link>
   );

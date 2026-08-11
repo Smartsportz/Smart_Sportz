@@ -1,27 +1,27 @@
 import { Filter, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Page, TournamentCard } from "../components/UI";
 import { withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 import { PageHero } from "./shared";
 
 export function TournamentsPage() {
   useWheelHorizontal();
-  const [tournamentRows, setTournamentRows] = useState<any[]>([]);
+  const tournamentsQuery = useQuery({
+    queryKey: ["public", "tournaments"],
+    queryFn: () => apiRequest<any[]>("/public/tournaments", { silent: true }),
+  });
+  const tournamentRows = tournamentsQuery.data ?? [];
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedPlaces, setSelectedPlaces] = useState<string[]>([]);
   const [featuredOnly, setFeaturedOnly] = useState(false);
-
-  useEffect(() => {
-    apiRequest<any[]>("/public/tournaments")
-      .then(setTournamentRows)
-      .catch(() => setTournamentRows([]));
-  }, []);
 
   const runtimeTournaments = useMemo(() => tournamentRows.map((item) => withRuntimeTournamentStatus({
     ...item,
@@ -147,20 +147,30 @@ export function TournamentsPage() {
         </section>
       )}
       <div className="tournament-section-stack">
-        {sections.length ? sections.map((section) => (
-          <section className="featured-status-row" key={section.key}>
-            <div className="featured-status-head">
-              <div>
-                <h3>{section.title}</h3>
-                <p>{section.text}</p>
-              </div>
-            </div>
-            <div className="carousel-shell">
-              <div className="card-grid carousel-row wheel-horizontal featured-carousel featured-status-carousel">
-                {section.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
-              </div>
-            </div>
-          </section>
+        {tournamentsQuery.isLoading ? (
+          <SectionSkeleton rows={4} />
+        ) : sections.length ? sections.map((section) => (
+          <ProgressiveSection
+            key={section.key}
+            query={{ queryKey: ["tournament-section", section.key, search, selectedSports, selectedStatuses, selectedPlaces, featuredOnly] as const, queryFn: async () => section.items }}
+            skeletonRows={Math.min(Math.max(section.items.length, 2), 4)}
+          >
+            {() => (
+              <section className="featured-status-row">
+                <div className="featured-status-head">
+                  <div>
+                    <h3>{section.title}</h3>
+                    <p>{section.text}</p>
+                  </div>
+                </div>
+                <div className="carousel-shell">
+                  <div className="card-grid carousel-row wheel-horizontal featured-carousel featured-status-carousel">
+                    {section.items.map((item) => <TournamentCard key={item.slug} item={item} />)}
+                  </div>
+                </div>
+              </section>
+            )}
+          </ProgressiveSection>
         )) : <section className="panel user-empty-state"><h2>No tournaments found</h2><p>Try another sport, place, status, or search term.</p></section>}
       </div>
     </Page>

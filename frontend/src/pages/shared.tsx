@@ -56,7 +56,7 @@ export function TeamCard({ team }: { team: any }) {
   return (
     <Link to={`/teams/${team.slug}`} className="click-card">
       <article className="team-card">
-        <img src={team.image} alt="" />
+        <img src={team.image} alt="" loading="lazy" />
         <span>{team.rank}</span>
         <h3>{team.name}</h3>
         <p>{team.sport} - {team.players} players</p>
@@ -156,7 +156,7 @@ export function ListPanel({ title, items, to = "/admin/dashboard" }: { title: st
 export function AthleteProfile() {
   return (
     <section className="profile-panel">
-      <img src={assets.cricket} alt="" />
+      <img src={assets.cricket} alt="" loading="lazy" />
       <div>
         <span className="status emerald">Active</span>
         <h2>Arjun R. Sharma</h2>

@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { managementSidebar, sidebar } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { SectionSkeleton } from "../lib/progressive";
 
 type TeamSeed = { id?: string; name: string; seed?: number };
 type GroupMatch = {
@@ -136,6 +137,7 @@ export function BracketWorkspacePage() {
   const [records, setRecords] = useState<Array<Record<string, any>>>([]);
   const [teams, setTeams] = useState<TeamSeed[]>([]);
   const [matches, setMatches] = useState<GroupMatch[]>([]);
+  const [bracketLoading, setBracketLoading] = useState(Boolean(slug));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const selectedTournament = useMemo(
@@ -160,6 +162,7 @@ export function BracketWorkspacePage() {
   useEffect(() => {
     if (!slug) return;
     let active = true;
+    setBracketLoading(true);
     setError("");
     apiRequest<{ acceptedTeams: TeamSeed[]; matches: GroupMatch[] }>(`/management/group-brackets/${slug}`, {}, token)
       .then((payload) => {
@@ -169,6 +172,9 @@ export function BracketWorkspacePage() {
       })
       .catch((caught) => {
         if (active) setError(caught instanceof Error ? caught.message : "Could not load group bracket.");
+      })
+      .finally(() => {
+        if (active) setBracketLoading(false);
       });
     return () => {
       active = false;
@@ -302,7 +308,7 @@ export function BracketWorkspacePage() {
               <span>Status</span>
               <span>Action</span>
             </div>
-            {matches.map((match, index) => (
+            {bracketLoading ? <SectionSkeleton rows={2} /> : matches.map((match, index) => (
               <div className="group-bracket-row" key={match.id ?? index}>
                 <input value={match.round} onChange={(event) => updateMatch(index, { round: event.target.value })} placeholder="Round 1" />
                 <select value={match.team_1} onChange={(event) => updateMatch(index, { team_1: event.target.value })}>

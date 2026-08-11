@@ -31,6 +31,7 @@ from app.services.audit import log
 from app.services.cache import cache_key
 from app.services.database_architecture import compare_primary_mirror, database_status
 from app.services.job_queue import enqueue
+from app.services.media import normalize_media_record, normalize_media_records
 from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -785,11 +786,13 @@ def admin_news(
     sport: str | None = Query(None),
     status: str | None = Query(None),
     tournament_slug: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     user: dict = Depends(require_roles("super_admin", "management"))
 ):
     """Get all news articles with optional filters."""
     try:
-        query = "SELECT * FROM news_posts WHERE 1=1"
+        query = "FROM news_posts WHERE 1=1"
         params = []
 
         if category:
@@ -816,10 +819,14 @@ def admin_news(
                 query += f" AND city IN ({placeholders})"
                 params.extend(cities)
             else:
-                return ok([])
+                return ok([], meta={"total": 0, "limit": limit, "offset": offset, "hasMore": False})
 
-        query += " ORDER BY created_at DESC"
-        news_posts = rows(query, tuple(params))
+        total = int(row(f"SELECT COUNT(*) AS count {query}", tuple(params))["count"] or 0)
+        news_posts = normalize_media_records(
+            rows(f"SELECT * {query} ORDER BY created_at DESC LIMIT ? OFFSET ?", tuple([*params, limit, offset])),
+            "admin-news",
+            {"image"},
+        )
 
         # Get blocks for each news post
         for post in news_posts:
@@ -828,7 +835,7 @@ def admin_news(
                 (post["slug"],)
             )
 
-        return ok(news_posts)
+        return ok(news_posts, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -911,7 +918,7 @@ def create_news(
         )
 
         # Return created news with blocks
-        result = row("SELECT * FROM news_posts WHERE slug = ?", (slug,))
+        result = normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "admin-news", {"image"})
         result["blocks"] = rows(
             "SELECT * FROM news_blocks WHERE post_slug = ? ORDER BY sort_order",
             (slug,)
@@ -954,7 +961,7 @@ def get_news_by_id(
             author = row("SELECT name FROM users WHERE id = ?", (news["author_id"],))
             news["author_name"] = author["name"] if author else None
 
-        return ok(news)
+        return ok(normalize_media_record(news, "admin-news", {"image"}))
     except HTTPException:
         raise
     except Exception as e:
@@ -1051,7 +1058,7 @@ def update_news(
         )
 
         # Return updated news with blocks
-        result = row("SELECT * FROM news_posts WHERE slug = ?", (slug,))
+        result = normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "admin-news", {"image"})
         result["blocks"] = rows(
             "SELECT * FROM news_blocks WHERE post_slug = ? ORDER BY sort_order",
             (slug,)
@@ -1311,8 +1318,14 @@ def admin_cancel_payment(
 
 
 @router.get("/registrations")
-def admin_registrations(_: dict = Depends(require_roles("super_admin", "management"))):
-    return ok(rows("SELECT * FROM registrations ORDER BY created_at DESC"))
+def admin_registrations(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: dict = Depends(require_roles("super_admin", "management")),
+):
+    total = int(row("SELECT COUNT(*) AS count FROM registrations")["count"] or 0)
+    items = rows("SELECT * FROM registrations ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
+    return ok(normalize_media_records(items, "admin-registration", {"team_logo", "selected_jersey_image"}), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 def user_with_counts(user: dict) -> dict:
@@ -1342,7 +1355,7 @@ def user_detail_payload(user_id: str, role: str = "user") -> dict:
     )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    registrations = rows(
+    registrations = normalize_media_records(rows(
         """
         SELECT r.*, t.name AS tournament_name, t.sport, t.location, t.date, t.image
         FROM registrations r
@@ -1351,7 +1364,7 @@ def user_detail_payload(user_id: str, role: str = "user") -> dict:
         ORDER BY r.created_at DESC
         """,
         (user_id,),
-    )
+    ), "admin-user-registration", {"team_logo", "selected_jersey_image", "image"})
     registration_ids = [item["id"] for item in registrations]
     payments: list[dict] = []
     documents: list[dict] = []
@@ -1380,13 +1393,19 @@ def user_detail_payload(user_id: str, role: str = "user") -> dict:
 
 
 @router.get("/users")
-def admin_users(_: dict = Depends(require_roles("super_admin"))):
+def admin_users(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: dict = Depends(require_roles("super_admin")),
+):
+    total = int(row("SELECT COUNT(*) AS count FROM users WHERE role = 'user'")["count"] or 0)
     return ok([
         user_with_counts(item)
         for item in rows(
-            "SELECT id, email, name, role, phone, email_verified, phone_verified, created_at FROM users WHERE role = 'user' ORDER BY created_at DESC"
+            "SELECT id, email, name, role, phone, email_verified, phone_verified, created_at FROM users WHERE role = 'user' ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         )
-    ])
+    ], meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.post("/users")
@@ -1506,11 +1525,16 @@ def manager_with_cities(manager: dict) -> dict:
 
 
 @router.get("/managers")
-def managers(_: dict = Depends(require_roles("super_admin"))):
+def managers(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: dict = Depends(require_roles("super_admin")),
+):
+    total = int(row("SELECT COUNT(*) AS count FROM users WHERE role = 'management'")["count"] or 0)
     return ok([
         manager_with_cities(item)
-        for item in rows("SELECT id, email, name, role, created_at FROM users WHERE role = 'management' ORDER BY name")
-    ])
+        for item in rows("SELECT id, email, name, role, created_at FROM users WHERE role = 'management' ORDER BY name LIMIT ? OFFSET ?", (limit, offset))
+    ], meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/places")

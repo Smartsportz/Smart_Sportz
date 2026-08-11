@@ -6,6 +6,7 @@ import { useAuth, type OtpChallenge } from "../auth/AuthContext";
 import { Page } from "../components/UI";
 import { assets } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { showToast } from "../lib/toast";
 
 type IconProps = {
   size?: number;
@@ -92,6 +93,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
     googleCallbackRef.current = async (response) => {
       if (!response.credential) {
         setError("Google did not return a login credential.");
+        showToast("warning", "Google Login", "Google did not return a login credential.");
         return;
       }
       setLoading(true);
@@ -154,6 +156,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
             method: "POST",
             body: JSON.stringify({ challenge_id: challenge.challengeId, code: otp, password: newPassword }),
           });
+          showToast("success", "Password Reset", "Your password was reset successfully.");
           setChallenge(null);
           setOtp("");
           setNewPassword("");
@@ -166,6 +169,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
         });
         setChallenge(resetChallenge);
         setOtp("");
+        showToast("success", "OTP Sent", "Password reset OTP is ready.");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Password reset failed");
       } finally {

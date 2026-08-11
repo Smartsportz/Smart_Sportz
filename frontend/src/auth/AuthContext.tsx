@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { apiRequest } from "../lib/api";
+import { showToast } from "../lib/toast";
 
 export type Role = "super_admin" | "management" | "user";
 
@@ -118,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(REFRESH_KEY, loginData.refreshToken);
       setUser(loginData.user);
       setToken(loginData.accessToken);
+      showToast("success", "Signed In", "Welcome back to Smart Sportz.");
       return loginData.user;
     },
     async loginWithGoogle(credential: string) {
@@ -130,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(REFRESH_KEY, data.refreshToken);
       setUser(data.user);
       setToken(data.accessToken);
+      showToast("success", "Signed In", "Google login completed successfully.");
       return data.user;
     },
     async verifyLoginOtp(challengeId: string, code: string) {
@@ -142,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(REFRESH_KEY, data.refreshToken);
       setUser(data.user);
       setToken(data.accessToken);
+      showToast("success", "Signed In", "OTP verified successfully.");
       return data.user;
     },
     async startSignup(payload: SignupPayload) {
@@ -160,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(REFRESH_KEY, data.refreshToken);
       setUser(data.user);
       setToken(data.accessToken);
+      showToast("success", "Account Created", "Your participant account is ready.");
       return data.user;
     },
     logout() {
@@ -168,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(REFRESH_KEY);
       setUser(null);
       setToken(null);
+      showToast("success", "Signed Out", "You have been signed out.");
     },
     canAccessRole(roles: Role[]) {
       return Boolean(user && roles.includes(user.role));

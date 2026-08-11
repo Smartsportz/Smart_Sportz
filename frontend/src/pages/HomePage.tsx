@@ -233,6 +233,23 @@ const homeApi = {
   },
 };
 
+const noticeStorageKey = "smart-sportz-tournament-notices";
+
+function readLocalNotices() {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(noticeStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function noticeIdentity(item: Record<string, any> | null) {
+  if (!item) return "";
+  return String(item.id ?? item.slug ?? item.title ?? "");
+}
+
 export function HomePage() {
   useWheelHorizontal();
   const [leaderboardSport, setLeaderboardSport] = useState("Cricket");
@@ -252,9 +269,10 @@ export function HomePage() {
   const [isDiscoveryHovered, setIsDiscoveryHovered] = useState(false);
   const [isSponsorHovered, setIsSponsorHovered] = useState(false);
   const [activeNotice, setActiveNotice] = useState<Record<string, any> | null>(null);
-  const [loadNotice, setLoadNotice] = useState(false);
+  const [closedNoticeKey, setClosedNoticeKey] = useState("");
+  const [localNotices, setLocalNotices] = useState<Array<Record<string, any>>>(() => readLocalNotices());
   const lifecycle = ["Register Team", "Secure Payment", "Fixture Draw", "Venue Check In", "Live Scoring", "Real-time Stats", "Finals & Awards", "Media Gallery", "Certificates"];
-  const noticeQuery = useQuery({ ...homeApi.notice, enabled: loadNotice });
+  const noticeQuery = useQuery(homeApi.notice);
 
   const selectedLeaders = useMemo(
     () => leaderboardRecords.filter((record) => record.sport === leaderboardSport).sort((a, b) => a.rank - b.rank),
@@ -271,25 +289,37 @@ export function HomePage() {
   useAutoScroll(discoveryEl, isDiscoveryHovered, 1.2);
   useAutoScroll(sponsorEl, isSponsorHovered, 0.8);
 
+  const notices = useMemo(() => {
+    const seen = new Set<string>();
+    return [...localNotices, ...(noticeQuery.data ?? [])].filter((item) => {
+      const key = noticeIdentity(item) || JSON.stringify(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return item.published !== false;
+    });
+  }, [localNotices, noticeQuery.data]);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setLoadNotice(true), 900);
-    return () => window.clearTimeout(timer);
+    const syncLocalNotices = () => setLocalNotices(readLocalNotices());
+    window.addEventListener("storage", syncLocalNotices);
+    window.addEventListener("focus", syncLocalNotices);
+    return () => {
+      window.removeEventListener("storage", syncLocalNotices);
+      window.removeEventListener("focus", syncLocalNotices);
+    };
   }, []);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("screenshot") === "1") return;
-    const notice = noticeQuery.data?.find((item) => item.published);
+    const notice = notices[0];
     if (!notice) return;
-    const dismissedKey = `smart-sportz-notice-dismissed:${notice.id}`;
-    if (sessionStorage.getItem(dismissedKey)) return;
+    if (noticeIdentity(notice) === closedNoticeKey) return;
     const timer = window.setTimeout(() => setActiveNotice(notice), 650);
     return () => window.clearTimeout(timer);
-  }, [noticeQuery.data]);
+  }, [closedNoticeKey, notices]);
 
   function closeNotice() {
-    if (activeNotice) {
-      sessionStorage.setItem(`smart-sportz-notice-dismissed:${activeNotice.id}`, "1");
-    }
+    setClosedNoticeKey(noticeIdentity(activeNotice));
     setActiveNotice(null);
   }
 

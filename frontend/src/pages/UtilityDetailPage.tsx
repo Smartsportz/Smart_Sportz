@@ -5,6 +5,7 @@ import { InfoPanel, PageHero } from "./shared";
 import { useEffect, useMemo, useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { apiRequest } from "../lib/api";
+import { SectionSkeleton } from "../lib/progressive";
 
 const utilityDetails = {
   payment: {
@@ -128,7 +129,7 @@ function PaymentReceiptPage() {
       <PageHero title="Payment Receipt" text="Official Smart Sportz local payment receipt for tournament registration." />
       {error && <div className="error-banner">{error}</div>}
       {!receipt && !error ? (
-        <section className="panel"><h2>Loading receipt...</h2></section>
+        <section className="panel"><SectionSkeleton rows={2} /></section>
       ) : receipt ? (
         <section className="receipt-card panel">
           <div className="receipt-header">

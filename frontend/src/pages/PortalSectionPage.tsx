@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Download } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { managementSidebar, sidebar, sportHomeVisibility, sports, tournaments, userSidebar, withRuntimeTournamentStatus } from "../data/platform";
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
@@ -9,6 +10,7 @@ import { RichTextToolbarPreview } from "./NewsPages";
 import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
 import { apiRequest, uploadFile } from "../lib/api";
 import { downloadRegistrationPassPdf } from "../lib/downloads";
+import { SectionSkeleton } from "../lib/progressive";
 import { useAuth } from "../auth/AuthContext";
 import type { UserDashboardData } from "./UserDashboardPage";
 
@@ -149,33 +151,22 @@ function formFromTournament(item?: Record<string, any>): TournamentFormState {
 export function UserSectionPage({ section }: { section: keyof typeof userContent }) {
   const { token } = useAuth();
   const title = section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  const [data, setData] = useState<UserDashboardData | null>(null);
-  const [error, setError] = useState("");
   const [downloadError, setDownloadError] = useState("");
   
   // State to track which tournament's members are being viewed
   const [activeMemberRegId, setActiveMemberRegId] = useState<string | null>(null);
+  const userQuery = useQuery({
+    queryKey: ["user", "portal-section", token],
+    queryFn: () => apiRequest<UserDashboardData>("/user/dashboard", { silent: true }, token),
+    enabled: Boolean(token),
+  });
+  const data = userQuery.data ?? null;
 
   useEffect(() => {
-    let alive = true;
-    setError("");
-    apiRequest<UserDashboardData>("/user/dashboard", {}, token)
-      .then((payload) => {
-        if (alive) {
-          setData(payload);
-          // Default to first registration if available for members section
-          if (payload.registrations.length > 0 && !activeMemberRegId) {
-            setActiveMemberRegId(payload.registrations[0].id);
-          }
-        }
-      })
-      .catch((caught) => {
-        if (alive) setError(caught instanceof Error ? caught.message : "Could not load user data.");
-      });
-    return () => {
-      alive = false;
-    };
-  }, [token]);
+    if (data?.registrations.length && !activeMemberRegId) {
+      setActiveMemberRegId(data.registrations[0].id);
+    }
+  }, [activeMemberRegId, data?.registrations]);
 
   const registrations = data?.registrations ?? [];
   const payments = data?.payments ?? [];
@@ -252,10 +243,10 @@ export function UserSectionPage({ section }: { section: keyof typeof userContent
   return (
     <Page>
       <PortalShell title={title} subtitle="Participant portal detail page connected from the user dashboard and sidebar." sidebar={userSidebar} action={<Link className="btn btn-primary" to="/user/dashboard">Dashboard</Link>}>
-        {error && <div className="form-alert">{error}</div>}
+        {userQuery.isError && <div className="form-alert">Could not load user data.</div>}
         {downloadError && <div className="form-alert">{downloadError}</div>}
         {!data ? (
-          <section className="panel user-empty-state"><h2>Loading {title}</h2><p>Fetching your records from the database.</p></section>
+          <SectionSkeleton rows={4} />
         ) : sectionRows.length === 0 && section !== "members" ? (
           <section className="panel user-empty-state"><h2>No {title.toLowerCase()} records</h2><p>This page will populate after your tournament registration data is saved in the database.</p><Link className="btn btn-primary" to="/tournaments">Open tournaments</Link></section>
         ) : (
@@ -303,8 +294,6 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
   const [managerDashboard, setManagerDashboard] = useState<ManagerDashboardData | null>(null);
   const [managerNews, setManagerNews] = useState<ManagerNewsData | null>(null);
   const [sectionRecords, setSectionRecords] = useState<Array<Record<string, any>>>([]);
-  const [managerError, setManagerError] = useState("");
-  const [managerLoading, setManagerLoading] = useState(true);
   const activeTournamentOptions = tournaments.filter((item) => item.status !== "Completed");
   const [windowTournamentSlug, setWindowTournamentSlug] = useState(activeTournamentOptions[0]?.slug ?? "");
   const selectedWindowTournament = activeTournamentOptions.find((item) => item.slug === windowTournamentSlug) ?? activeTournamentOptions[0];
@@ -322,40 +311,40 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     setRegistrationEnd(selectedWindowTournament?.registrationEnd ?? "");
   }, [selectedWindowTournament?.slug]);
 
+  const dashboardQuery = useQuery({
+    queryKey: ["management", "section-dashboard", token],
+    queryFn: () => apiRequest<ManagerDashboardData>("/management/dashboard", { silent: true }, token),
+    enabled: Boolean(token),
+    staleTime: 60_000,
+  });
+  const newsQuery = useQuery({
+    queryKey: ["management", "section-news", token],
+    queryFn: () => apiRequest<ManagerNewsData>("/management/news", { silent: true }, token),
+    enabled: Boolean(token) && section === "news",
+    staleTime: 60_000,
+  });
+  const recordsQuery = useQuery({
+    queryKey: ["management", "section-records", section, token],
+    queryFn: () => apiRequest<Array<Record<string, any>>>(`/management/${section}`, { silent: true }, token),
+    enabled: Boolean(token) && ["tournaments", "matches", "players", "reports"].includes(section),
+    staleTime: 60_000,
+  });
+  const managerLoading = dashboardQuery.isLoading || newsQuery.isLoading || recordsQuery.isLoading;
+  const managerError = dashboardQuery.isError || newsQuery.isError || recordsQuery.isError
+    ? "Could not load management records."
+    : "";
+
   useEffect(() => {
-    let alive = true;
-    setManagerLoading(true);
-    setManagerError("");
+    if (dashboardQuery.data) setManagerDashboard(dashboardQuery.data);
+  }, [dashboardQuery.data]);
 
-    const load = async () => {
-      const dashboard = await apiRequest<ManagerDashboardData>("/management/dashboard", {}, token);
-      if (!alive) return;
-      setManagerDashboard(dashboard);
+  useEffect(() => {
+    if (newsQuery.data) setManagerNews(newsQuery.data);
+  }, [newsQuery.data]);
 
-      if (section === "news") {
-        const news = await apiRequest<ManagerNewsData>("/management/news", {}, token);
-        if (alive) setManagerNews(news);
-        return;
-      }
-
-      if (["tournaments", "matches", "players", "reports"].includes(section)) {
-        const records = await apiRequest<Array<Record<string, any>>>(`/management/${section}`, {}, token);
-        if (alive) setSectionRecords(records);
-      }
-    };
-
-    load()
-      .catch((caught) => {
-        if (alive) setManagerError(caught instanceof Error ? caught.message : "Could not load management records.");
-      })
-      .finally(() => {
-        if (alive) setManagerLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [section, token]);
+  useEffect(() => {
+    if (recordsQuery.data) setSectionRecords(recordsQuery.data);
+  }, [recordsQuery.data]);
 
   async function updateRegistrationStatus(id: string, action: "approve" | "reject") {
     setManagerMessage("");
@@ -526,7 +515,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
   const prizeTotal = tournamentForm.prizes.reduce((total, line) => total + Number(line.amount || 0), 0);
 
   const primaryContent = managerLoading ? (
-    <section className="panel user-empty-state"><h2>Loading {title}</h2><p>Fetching manager records from the backend database.</p></section>
+    <section className="panel"><SectionSkeleton rows={section === "tournaments" ? 3 : 2} /></section>
   ) : section === "matches" ? (
     liveMatches.length === 0 ? (
       <section className="panel user-empty-state"><h2>No live matches</h2><p>Assigned live match records will appear here after fixtures are started.</p></section>
@@ -749,7 +738,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                         <option value="__custom__">Custom text path</option>
                       </select>
                     </label>
-                    <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ image: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
+                    <label>Tournament image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ image: upload.url })).catch((caught) => setManagerMessage(caught instanceof Error ? caught.message : "Unable to upload tournament image.")); }} /></label>
                   </div>
                   <label>Full address<textarea value={tournamentForm.address} onChange={(event) => patchTournamentForm({ address: event.target.value })} placeholder="Ground name, street, city, state" /></label>
                   <div className="manager-form-split">
@@ -778,7 +767,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                   <div className="form-grid">
                     <label>Sport registration description<textarea value={tournamentForm.sportDescription} onChange={(event) => patchTournamentForm({ sportDescription: event.target.value })} /></label>
                     <label>Tournament rules description<textarea value={tournamentForm.tournamentDescription} onChange={(event) => patchTournamentForm({ tournamentDescription: event.target.value })} /></label>
-                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerError(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
+                    <label>Rules PDF<input type="file" accept="application/pdf,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchTournamentForm({ rulesPdf: upload.url })).catch((caught) => setManagerMessage(caught instanceof Error ? caught.message : "Unable to upload rules PDF.")); }} /></label>
                     <label>Rules acceptance text<textarea value={tournamentForm.rulesText} onChange={(event) => patchTournamentForm({ rulesText: event.target.value })} /></label>
                   </div>
                   <label className="visibility-row"><span><b>Add featured tournament</b><small>Show this tournament in the Featured tournaments row on public tournament pages.</small></span><input type="checkbox" checked={tournamentForm.showOnHome} onChange={(event) => patchTournamentForm({ showOnHome: event.target.checked })} /></label>

@@ -4,13 +4,15 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.job_queue import enqueue
+from app.services.media import normalize_media_record, normalize_media_records
 from app.services.tournament_status import apply_registration_window_statuses, with_runtime_status
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -76,14 +78,15 @@ def upsert_gallery_social(image_key: str, likes: int, comments: list[str]) -> di
 def gallery_album_records() -> list[dict]:
     return get_or_set_json(
         cache_key("public:gallery:albums"),
-        lambda: rows(
+        lambda: normalize_media_records(rows(
             """
             SELECT slug, title, sport, city, date_label, month_label, day_count, cover, summary
             FROM gallery_albums
             WHERE published = 1
             ORDER BY sort_order, month_label DESC, title
             """
-        ),
+        ), "gallery", {"cover"}),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     )
 
 
@@ -253,13 +256,13 @@ def home():
                 "liveMatches": 8,
             },
             "featuredTournaments": attach_tournament_metadata(rows("SELECT * FROM tournaments LIMIT 3")),
-            "liveMatches": rows("SELECT * FROM live_matches LIMIT 3"),
-            "discoveryCards": rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"),
-            "liveHighlight": row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1"),
-            "sponsorLogos": rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"),
+            "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches LIMIT 3"), "home-live-match", {"image"}),
+            "discoveryCards": normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"), "home-discovery", {"image", "sponsor_image"}),
+            "liveHighlight": normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}) or None,
+            "sponsorLogos": normalize_media_records(rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"), "sponsor", {"image"}),
             "organizerCards": rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title"),
-            "announcements": rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"),
-            "newsPosts": rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"),
+            "announcements": normalize_media_records(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"), "announcement", {"image"}),
+            "newsPosts": normalize_media_records(rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"), "home-news", {"image"}),
         }
 
     return ok(get_or_set_json(cache_key("public:home"), build))
@@ -269,7 +272,7 @@ def home():
 def home_notice():
     return ok(get_or_set_json(
         cache_key("public:home:notice"),
-        lambda: rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"),
+        lambda: normalize_media_records(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"), "announcement", {"image"}),
     ))
 
 
@@ -277,7 +280,7 @@ def home_notice():
 def home_discovery():
     return ok(get_or_set_json(
         cache_key("public:home:discovery"),
-        lambda: rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"),
+        lambda: normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"), "home-discovery", {"image", "sponsor_image"}),
     ))
 
 
@@ -285,7 +288,7 @@ def home_discovery():
 def home_live_highlight():
     return ok(get_or_set_json(
         cache_key("public:home:live-highlight"),
-        lambda: row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1"),
+        lambda: normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}) or None,
     ))
 
 
@@ -301,7 +304,7 @@ def home_organizers():
 def home_sponsors():
     return ok(get_or_set_json(
         cache_key("public:home:sponsors"),
-        lambda: rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"),
+        lambda: normalize_media_records(rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"), "sponsor", {"image"}),
     ))
 
 
@@ -309,7 +312,8 @@ def home_sponsors():
 def home_news():
     return ok(get_or_set_json(
         cache_key("public:home:news"),
-        lambda: rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"),
+        lambda: normalize_media_records(rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"), "home-news", {"image"}),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     ))
 
 
@@ -324,15 +328,19 @@ def gallery_social(actor_key: str = ""):
 
 
 @router.get("/gallery/albums")
-def gallery_albums():
-    return ok(gallery_album_records())
+def gallery_albums(limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
+    albums = gallery_album_records()
+    total = len(albums)
+    return ok(albums[offset:offset + limit], meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/gallery/bootstrap")
-def gallery_bootstrap(actor_key: str = ""):
+def gallery_bootstrap(actor_key: str = "", limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
     albums = gallery_album_records()
-    image_keys = [f"album:{item['slug']}" for item in albums]
-    return ok({"albums": albums, "social": gallery_social_map(actor_key, image_keys)})
+    total = len(albums)
+    page = albums[offset:offset + limit]
+    image_keys = [f"album:{item['slug']}" for item in page]
+    return ok({"albums": page, "social": gallery_social_map(actor_key, image_keys)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.post("/gallery/social/like")
@@ -362,7 +370,7 @@ def gallery_social_comment(payload: GalleryCommentPayload):
 def tournaments():
     def build():
         apply_registration_window_statuses()
-        return attach_tournament_metadata(rows("SELECT * FROM tournaments ORDER BY name"))
+        return normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments ORDER BY name")), "tournament", {"image", "poster", "rules_pdf"})
 
     return ok(get_or_set_json(cache_key("public:tournaments"), build))
 
@@ -374,7 +382,7 @@ def tournament_detail(slug: str):
         item = row("SELECT * FROM tournaments WHERE slug = ?", (slug,))
         if not item:
             raise HTTPException(status_code=404, detail="Tournament not found")
-        return attach_cities(item)
+        return normalize_media_record(attach_cities(item), "tournament", {"image", "poster", "rules_pdf"})
 
     return ok(get_or_set_json(cache_key("public:tournament", slug), build))
 

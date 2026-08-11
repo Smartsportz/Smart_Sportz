@@ -4,6 +4,7 @@ import { Page, PortalShell } from "../components/UI";
 import { sidebar } from "../data/platform";
 import { useAuth } from "../auth/AuthContext";
 import { apiRequest } from "../lib/api";
+import { SectionSkeleton } from "../lib/progressive";
 
 type CmsRecord = {
   slug: string;
@@ -67,7 +68,7 @@ export function CmsSectionPage() {
         {message && <div className="form-alert success-alert">{message}</div>}
         {error && <div className="form-alert">{error}</div>}
         {!record ? (
-          <section className="panel user-empty-state"><h2>Loading CMS</h2><p>Fetching CMS content from the backend database.</p></section>
+          <section className="panel"><SectionSkeleton rows={3} /></section>
         ) : (
           <div className="dashboard-two">
             <section className="panel tournament-create-panel">

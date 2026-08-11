@@ -1,5 +1,13 @@
 /// <reference types="vite/client" />
 
+import type { ImgHTMLAttributes } from "react";
+
+declare module "react" {
+  interface ImgHTMLAttributes<T> {
+    fetchpriority?: "high" | "low" | "auto";
+  }
+}
+
 declare module "lucide-react" {
   import type { ComponentType, SVGProps } from "react";
 

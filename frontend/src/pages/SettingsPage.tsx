@@ -1,13 +1,16 @@
 import { ShieldCheck, Sun } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { Page } from "../components/UI";
+import { Page, PortalShell } from "../components/UI";
+import { managementSidebar, sidebar, userSidebar } from "../data/platform";
 import { apiRequest } from "../lib/api";
-import { PageHero } from "./shared";
+import { showToast } from "../lib/toast";
 
 export function SettingsPage() {
   const { token, user } = useAuth();
+  const location = useLocation();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,6 +24,7 @@ export function SettingsPage() {
     setError("");
     if (!currentPassword) {
       setError("Enter your current password first.");
+      showToast("warning", "Current Password Required", "Enter your current password first.");
       return;
     }
     setChangeOpen(true);
@@ -32,6 +36,7 @@ export function SettingsPage() {
     setError("");
     if (newPassword !== confirmPassword) {
       setError("New password and confirm password must match.");
+      showToast("warning", "Password Mismatch", "New password and confirm password must match.");
       return;
     }
     try {
@@ -48,35 +53,48 @@ export function SettingsPage() {
       setConfirmPassword("");
       setChangeOpen(false);
       setMessage("Password changed successfully.");
+      showToast("success", "Password Changed", "Your password was updated successfully.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not change password.");
     }
   }
 
+  const portalSidebar = location.pathname.startsWith("/admin")
+    ? sidebar
+    : location.pathname.startsWith("/management")
+      ? managementSidebar
+      : userSidebar;
+  const dashboardPath = user?.role === "super_admin"
+    ? "/admin/dashboard"
+    : user?.role === "management"
+      ? "/management/dashboard"
+      : "/user/dashboard";
+
   return (
     <Page>
-      <PageHero title="Profile Settings" text="Smart Sportz uses the normal light theme on every device." />
-      {message && <div className="form-alert success-alert">{message}</div>}
-      {error && <div className="form-alert">{error}</div>}
-      <form className="panel settings-panel" onSubmit={openChangePassword}>
-        <ShieldCheck size={28} />
-        <h2>Change Password</h2>
-        <p>{user?.email ? `Signed in as ${user.email}.` : "Update your account password."}</p>
-        <label>Current password<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
-        <button className="btn btn-primary" type="submit">Continue</button>
-      </form>
-      <div className="panel settings-panel">
-        <ShieldCheck size={28} />
-        <h2>Appearance</h2>
-        <p>Theme is fixed to the clean Smart Sportz light mode, even when the device is using dark mode.</p>
-        <div className="theme-choice-grid light-only-theme" role="group" aria-label="Theme mode">
-          <button className="active" type="button">
-            <Sun size={18} />
-            <span>Light mode</span>
-            <small>Default and only active appearance for the platform.</small>
-          </button>
+      <PortalShell title="Profile Settings" subtitle="Account security and Smart Sportz appearance controls." sidebar={portalSidebar} action={<Link className="btn btn-primary" to={dashboardPath}>Dashboard</Link>}>
+        {message && <div className="form-alert success-alert">{message}</div>}
+        {error && <div className="form-alert">{error}</div>}
+        <form className="panel settings-panel" onSubmit={openChangePassword}>
+          <ShieldCheck size={28} />
+          <h2>Change Password</h2>
+          <p>{user?.email ? `Signed in as ${user.email}.` : "Update your account password."}</p>
+          <label>Current password<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
+          <button className="btn btn-primary" type="submit">Continue</button>
+        </form>
+        <div className="panel settings-panel">
+          <ShieldCheck size={28} />
+          <h2>Appearance</h2>
+          <p>Theme is fixed to the clean Smart Sportz light mode, even when the device is using dark mode.</p>
+          <div className="theme-choice-grid light-only-theme" role="group" aria-label="Theme mode">
+            <button className="active" type="button">
+              <Sun size={18} />
+              <span>Light mode</span>
+              <small>Default and only active appearance for the platform.</small>
+            </button>
+          </div>
         </div>
-      </div>
+      </PortalShell>
       {changeOpen && (
         <div className="modal-backdrop">
           <section className="confirm-modal panel">
