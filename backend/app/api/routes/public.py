@@ -4,14 +4,16 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.api.deps import optional_current_user
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.job_queue import enqueue
+from app.services.likes import like_states
 from app.services.media import normalize_media_record, normalize_media_records
 from app.services.tournament_status import apply_registration_window_statuses, with_runtime_status
 
@@ -111,7 +113,7 @@ def gallery_album_page(limit: int, offset: int) -> tuple[int, list[dict]]:
     return total, albums
 
 
-def gallery_social_map(actor_key: str = "", image_keys: list[str] | None = None) -> dict:
+def gallery_social_map(actor_key: str = "", image_keys: list[str] | None = None, user_id: str | None = None) -> dict:
     params: tuple[str, ...] = ()
     where_clause = ""
     if image_keys:
@@ -133,16 +135,26 @@ def gallery_social_map(actor_key: str = "", image_keys: list[str] | None = None)
         else:
             liked_rows = rows("SELECT image_key FROM gallery_likes WHERE actor_key = ?", (actor_key,))
         liked_keys = {item["image_key"] for item in liked_rows}
+    like_map = like_states("gallery", image_keys or [item["image_key"] for item in records], user_id)
     social = {
         item["image_key"]: {
-            "likes": item["likes"],
+            "likes": like_map.get(item["image_key"], {}).get("like_count", 0),
+            "like_count": like_map.get(item["image_key"], {}).get("like_count", 0),
             "comments": parse_comments(item["comments_json"]),
-            "liked": item["image_key"] in liked_keys,
+            "liked": like_map.get(item["image_key"], {}).get("liked_by_me", item["image_key"] in liked_keys),
+            "liked_by_me": like_map.get(item["image_key"], {}).get("liked_by_me", False),
         }
         for item in records
     }
     for image_key in image_keys or []:
-        social.setdefault(image_key, {"likes": 0, "comments": [], "liked": image_key in liked_keys})
+        like_item = like_map.get(image_key, {"like_count": 0, "liked_by_me": False})
+        social.setdefault(image_key, {
+            "likes": like_item["like_count"],
+            "like_count": like_item["like_count"],
+            "comments": [],
+            "liked": like_item["liked_by_me"] or image_key in liked_keys,
+            "liked_by_me": like_item["liked_by_me"],
+        })
     return social
 
 
@@ -365,21 +377,31 @@ def published_announcements():
 
 
 @router.get("/gallery/social")
-def gallery_social(actor_key: str = ""):
-    return ok(gallery_social_map(actor_key))
+def gallery_social(actor_key: str = "", user: dict | None = Depends(optional_current_user)):
+    return ok(gallery_social_map(actor_key, user_id=user["id"] if user else None))
 
 
 @router.get("/gallery/albums")
-def gallery_albums(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+def gallery_albums(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0), user: dict | None = Depends(optional_current_user)):
     total, albums = gallery_album_page(limit, offset)
+    like_map = like_states("gallery", [f"album:{item['slug']}" for item in albums], user["id"] if user else None)
+    for item in albums:
+        state = like_map.get(f"album:{item['slug']}", {"like_count": 0, "liked_by_me": False})
+        item["like_count"] = state["like_count"]
+        item["liked_by_me"] = state["liked_by_me"]
     return ok(albums, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/gallery/bootstrap")
-def gallery_bootstrap(actor_key: str = "", limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+def gallery_bootstrap(actor_key: str = "", limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0), user: dict | None = Depends(optional_current_user)):
     total, albums = gallery_album_page(limit, offset)
     image_keys = [f"album:{item['slug']}" for item in albums]
-    return ok({"albums": albums, "social": gallery_social_map(actor_key, image_keys)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+    social = gallery_social_map(actor_key, image_keys, user["id"] if user else None)
+    for item in albums:
+        state = social.get(f"album:{item['slug']}", {"like_count": 0, "liked_by_me": False})
+        item["like_count"] = state["like_count"]
+        item["liked_by_me"] = state["liked_by_me"]
+    return ok({"albums": albums, "social": social}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.post("/gallery/social/like")

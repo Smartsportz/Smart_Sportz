@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Page, SectionTitle, TournamentCard } from "../components/UI";
+import { ProgressiveImage } from "../components/ProgressiveImage";
 import { assets, leaderboardRecords, sports, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest, mediaUrl } from "../lib/api";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
@@ -321,7 +322,7 @@ export function HomePage() {
         <div className="notice-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="home-notice-title">
           <article className="notice-modal">
             <button className="notice-close" type="button" aria-label="Close notice" onClick={closeNotice}>×</button>
-            <img src={mediaUrl(activeNotice.image)} alt="" />
+            <ProgressiveImage src={mediaUrl(activeNotice.image)} alt="" />
             <div>
               <span className="status emerald">Tournament Notice</span>
               <h2 id="home-notice-title">{activeNotice.title}</h2>
@@ -420,7 +421,7 @@ export function HomePage() {
           <div className="queue-track discovery-queue-track wheel-horizontal" ref={(node) => { discoveryQueueRef.current = node; setDiscoveryEl(node); }}>
           {discoveryQueue.map((card, index) => (
             <Link className="sport-home-card click-card" to={`/discover/${card.slug}`} key={`${card.slug}-${index}`}>
-              <img src={mediaUrl(card.image || assets.cricket)} alt="" loading="lazy" />
+              <ProgressiveImage src={mediaUrl(card.image || assets.cricket)} alt="" />
               <div className="sport-home-card-body">
                 <span className="status emerald">{card.label}</span>
                 <h3>{card.title}</h3>
@@ -517,7 +518,7 @@ export function HomePage() {
       <ProgressiveSection query={homeApi.liveHighlight} prefetch={[homeApi.organizers]} skeletonRows={3}>
       {(liveHighlight) => liveHighlight ? <section className="section split live-analytics-section">
         <motion.div className="live-video-card" {...fade}>
-          <img src={mediaUrl(liveHighlight.image)} alt="Live analytics match" loading="lazy" />
+          <ProgressiveImage src={mediaUrl(liveHighlight.image)} alt="Live analytics match" />
           <button type="button"><Radio size={24} /></button>
         </motion.div>
         <motion.div {...fade}>
@@ -589,7 +590,7 @@ export function HomePage() {
           {oldMatchNews.map((post) => (
             <Link className="panel news-card home-news-card click-card" to={`/news/${post.slug}`} key={post.slug}>
               <div className="news-card-media">
-                <img src={mediaUrl(post.image)} alt="" loading="lazy" />
+                <ProgressiveImage src={mediaUrl(post.image)} alt="" />
               </div>
               <div className="news-card-copy">
                 <span className="status emerald">{post.category}</span>
@@ -649,7 +650,7 @@ export function HomePage() {
           <div className="queue-track sponsor-logo-grid wheel-horizontal" ref={(node) => { sponsorQueueRef.current = node; setSponsorEl(node); }}>
           {sponsorQueue.map((sponsor, index) => (
             <a className="sponsor-logo-card" href={externalUrl(sponsor.link_url)} target="_blank" rel="noreferrer" key={`${sponsor.slug}-${index}`} aria-label={sponsor.name}>
-              <img src={mediaUrl(sponsor.image)} alt="" loading="lazy" />
+              <ProgressiveImage src={mediaUrl(sponsor.image)} alt="" />
             </a>
           ))}
           </div>

@@ -4,14 +4,16 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.api.deps import optional_current_user
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.job_queue import enqueue
+from app.services.likes import like_states
 from app.services.media import materialize_data_url, normalize_media_record, normalize_media_records
 from app.services.tournament_status import apply_registration_window_statuses
 
@@ -59,7 +61,7 @@ def attach_news_blocks(post: dict) -> dict:
     return post
 
 
-def news_social_map(actor_key: str = "", slugs: list[str] | None = None) -> dict:
+def news_social_map(actor_key: str = "", slugs: list[str] | None = None, user_id: str | None = None) -> dict:
     params: tuple[str, ...] = ()
     where_clause = ""
     if slugs:
@@ -78,16 +80,26 @@ def news_social_map(actor_key: str = "", slugs: list[str] | None = None) -> dict
         else:
             liked_rows = rows("SELECT news_slug FROM news_likes WHERE actor_key = ?", (actor_key,))
         liked_slugs = {item["news_slug"] for item in liked_rows}
+    like_map = like_states("news", slugs or [item["news_slug"] for item in items], user_id)
     social = {
         item["news_slug"]: {
-            "likes": item["likes"],
+            "likes": like_map.get(item["news_slug"], {}).get("like_count", 0),
+            "like_count": like_map.get(item["news_slug"], {}).get("like_count", 0),
             "comments": parse_comments(item["comments_json"]),
-            "liked": item["news_slug"] in liked_slugs,
+            "liked": like_map.get(item["news_slug"], {}).get("liked_by_me", item["news_slug"] in liked_slugs),
+            "liked_by_me": like_map.get(item["news_slug"], {}).get("liked_by_me", False),
         }
         for item in items
     }
     for slug in slugs or []:
-        social.setdefault(slug, {"likes": 0, "comments": [], "liked": slug in liked_slugs})
+        like_item = like_map.get(slug, {"like_count": 0, "liked_by_me": False})
+        social.setdefault(slug, {
+            "likes": like_item["like_count"],
+            "like_count": like_item["like_count"],
+            "comments": [],
+            "liked": like_item["liked_by_me"] or slug in liked_slugs,
+            "liked_by_me": like_item["liked_by_me"],
+        })
     return social
 
 
@@ -114,8 +126,8 @@ def paged_news_posts(limit: int, offset: int) -> tuple[int, list[dict]]:
 
 
 @router.get("/news/social")
-def news_social(actor_key: str = ""):
-    return ok(news_social_map(actor_key))
+def news_social(actor_key: str = "", user: dict | None = Depends(optional_current_user)):
+    return ok(news_social_map(actor_key, user_id=user["id"] if user else None))
 
 
 @router.post("/news/social/like")
@@ -162,20 +174,30 @@ def news_comment(payload: NewsCommentPayload):
 
 
 @router.get("/news")
-def news(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+def news(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0), user: dict | None = Depends(optional_current_user)):
     total, posts = paged_news_posts(limit, offset)
+    like_map = like_states("news", [item["slug"] for item in posts], user["id"] if user else None)
+    for item in posts:
+        state = like_map.get(item["slug"], {"like_count": 0, "liked_by_me": False})
+        item["like_count"] = state["like_count"]
+        item["liked_by_me"] = state["liked_by_me"]
     return ok(posts, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/news/bootstrap")
-def news_bootstrap(actor_key: str = "", limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+def news_bootstrap(actor_key: str = "", limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0), user: dict | None = Depends(optional_current_user)):
     total, posts = paged_news_posts(limit, offset)
     slugs = [item["slug"] for item in posts]
-    return ok({"posts": posts, "social": news_social_map(actor_key, slugs)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+    social = news_social_map(actor_key, slugs, user["id"] if user else None)
+    for item in posts:
+        state = social.get(item["slug"], {"like_count": 0, "liked_by_me": False})
+        item["like_count"] = state["like_count"]
+        item["liked_by_me"] = state["liked_by_me"]
+    return ok({"posts": posts, "social": social}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/news/{slug}")
-def news_detail(slug: str):
+def news_detail(slug: str, user: dict | None = Depends(optional_current_user)):
     def build():
         post = row("SELECT * FROM news_posts WHERE slug = ? AND status = 'published'", (slug,))
         if not post:
@@ -191,7 +213,11 @@ def news_detail(slug: str):
         post["related"] = related
         return post
 
-    return ok(get_or_set_json(cache_key("content:news-detail", slug), build))
+    post = dict(get_or_set_json(cache_key("content:news-detail", slug), build))
+    state = like_states("news", [post["slug"]], user["id"] if user else None).get(post["slug"], {"like_count": 0, "liked_by_me": False})
+    post["like_count"] = state["like_count"]
+    post["liked_by_me"] = state["liked_by_me"]
+    return ok(post)
 
 
 @router.get("/home/sports")

@@ -194,6 +194,7 @@ type AdminTournamentForm = {
   name: string;
   sport: string;
   newSportName: string;
+  newCity: string;
   status: string;
   location: string;
   date: string;
@@ -225,6 +226,7 @@ const emptyAdminTournamentForm: AdminTournamentForm = {
   name: "",
   sport: "Cricket",
   newSportName: "",
+  newCity: "",
   status: "Upcoming",
   location: "Mumbai",
   date: "",
@@ -302,6 +304,7 @@ function adminFormFromTournament(item?: Record<string, any>): AdminTournamentFor
     name: item.name ?? "",
     sport: item.sport ?? "Cricket",
     newSportName: "",
+    newCity: "",
     status: item.status ?? "Upcoming",
     location: item.location ?? cities[0] ?? "Mumbai",
     date: formatDateInput(item.date),
@@ -502,18 +505,33 @@ function AdminTournamentsDbPanel() {
     patchForm({ prizes: form.prizes.map((line, i) => i === index ? { ...line, ...patch } : line) });
   }
 
+  function applyPrimaryPlace(place: string) {
+    if (place === "__new_city__") {
+      patchForm({ location: "__new_city__" });
+      return;
+    }
+    patchForm({ location: place, cities: Array.from(new Set([...form.cities, place].filter(Boolean))) });
+  }
+
+  function saveNewPrimaryPlace() {
+    const place = form.newCity.trim();
+    if (!place) return;
+    patchForm({ location: place, newCity: "", cities: Array.from(new Set([...form.cities, place])) });
+  }
+
   async function saveTournament() {
     setMessage("");
     setError("");
     const prizeTotal = form.prizes.reduce((total, line) => total + Number(line.amount || 0), 0);
-    const cities = Array.from(new Set([form.location, ...form.cities].map((city) => city.trim()).filter(Boolean)));
+    const primaryPlace = form.location === "__new_city__" ? form.newCity.trim() : form.location.trim();
+    const cities = Array.from(new Set([primaryPlace, ...form.cities].map((city) => city.trim()).filter((city) => city && city !== "__new_city__")));
     const payload = {
       slug: form.slug,
       name: form.name,
       sport: form.sport === "__new__" ? form.newSportName : form.sport,
       new_sport_name: form.sport === "__new__" ? form.newSportName : undefined,
       status: form.status === "Featured" ? "Upcoming" : form.status,
-      location: form.location || "Mumbai",
+      location: primaryPlace || "Mumbai",
       date: form.date || "TBA",
       registration_start: form.registrationStart || "TBA",
       registration_end: form.registrationEnd || "TBA",
@@ -747,7 +765,17 @@ function AdminTournamentsDbPanel() {
               <label>Sport<select value={form.sport} onChange={(event) => patchForm({ sport: event.target.value })}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}<option value="__new__">Add new sport</option></select></label>
               {form.sport === "__new__" && <label>New sport name<input value={form.newSportName} onChange={(event) => patchForm({ newSportName: event.target.value })} /></label>}
               <label>Status<select value={form.status} onChange={(event) => patchForm({ status: event.target.value })}><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
-              <label>Primary place<select value={form.location} onChange={(event) => patchForm({ location: event.target.value, cities: Array.from(new Set([...form.cities, event.target.value])) })}>{cityOptions.map((city) => <option key={city}>{city}</option>)}</select></label>
+              <label>Primary place
+                <select value={form.location} onChange={(event) => applyPrimaryPlace(event.target.value)}>
+                  {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
+                  <option value="__new_city__">Add new place</option>
+                </select>
+              </label>
+              {form.location === "__new_city__" && (
+                <label>New place
+                  <input value={form.newCity} onChange={(event) => patchForm({ newCity: event.target.value })} onBlur={saveNewPrimaryPlace} placeholder="e.g. Trichy" />
+                </label>
+              )}
               <label>Tournament date<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
               <label>Registration opens<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
               <label>Registration closes<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
@@ -1813,18 +1841,33 @@ export function AdminTournamentEditorPage() {
     patchForm({ prizes: form.prizes.map((line, i) => i === index ? { ...line, ...patch } : line) });
   }
 
+  function applyPrimaryPlace(place: string) {
+    if (place === "__new_city__") {
+      patchForm({ location: "__new_city__" });
+      return;
+    }
+    patchForm({ location: place, cities: Array.from(new Set([...form.cities, place].filter(Boolean))) });
+  }
+
+  function saveNewPrimaryPlace() {
+    const place = form.newCity.trim();
+    if (!place) return;
+    patchForm({ location: place, newCity: "", cities: Array.from(new Set([...form.cities, place])) });
+  }
+
   async function saveTournament() {
     setMessage("");
     setError("");
     const prizeTotal = form.prizes.reduce((total, line) => total + Number(line.amount || 0), 0);
-    const cities = Array.from(new Set([form.location, ...form.cities].map((city) => city.trim()).filter(Boolean)));
+    const primaryPlace = form.location === "__new_city__" ? form.newCity.trim() : form.location.trim();
+    const cities = Array.from(new Set([primaryPlace, ...form.cities].map((city) => city.trim()).filter((city) => city && city !== "__new_city__")));
     const payload = {
       slug: form.slug,
       name: form.name,
       sport: form.sport === "__new__" ? form.newSportName : form.sport,
       new_sport_name: form.sport === "__new__" ? form.newSportName : undefined,
       status: form.status === "Featured" ? "Upcoming" : form.status,
-      location: form.location || "Mumbai",
+      location: primaryPlace || "Mumbai",
       date: form.date || "TBA",
       registration_start: form.registrationStart || "TBA",
       registration_end: form.registrationEnd || "TBA",
@@ -1887,6 +1930,17 @@ export function AdminTournamentEditorPage() {
                     const file = event.target.files?.[0];
                     if (file) void uploadFile(file, token, { silent: true }).then((upload) => patchForm({ image: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload tournament image."));
                   }} /></label>
+                  <label>Primary place
+                    <select value={form.location} onChange={(event) => applyPrimaryPlace(event.target.value)}>
+                      {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
+                      <option value="__new_city__">Add new place</option>
+                    </select>
+                  </label>
+                  {form.location === "__new_city__" && (
+                    <label>New place
+                      <input value={form.newCity} onChange={(event) => patchForm({ newCity: event.target.value })} onBlur={saveNewPrimaryPlace} placeholder="e.g. Trichy" />
+                    </label>
+                  )}
                   <label>Description<textarea value={form.tournamentDescription} onChange={(event) => patchForm({ tournamentDescription: event.target.value })} placeholder="Short upcoming tournament description" /></label>
                 </div>
                 <div className="registration-actions compact-actions">
@@ -1901,7 +1955,17 @@ export function AdminTournamentEditorPage() {
                   <label>Sport<select value={form.sport} onChange={(event) => patchForm({ sport: event.target.value })}>{sportOptions.map((sport) => <option key={sport}>{sport}</option>)}<option value="__new__">Add new sport</option></select></label>
                   {form.sport === "__new__" && <label>New sport name<input value={form.newSportName} onChange={(event) => patchForm({ newSportName: event.target.value })} /></label>}
                   <label>Status<select value={form.status} onChange={(event) => patchForm({ status: event.target.value })}><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
-                  <label>Primary place<select value={form.location} onChange={(event) => patchForm({ location: event.target.value, cities: Array.from(new Set([...form.cities, event.target.value])) })}>{cityOptions.map((city) => <option key={city}>{city}</option>)}</select></label>
+                  <label>Primary place
+                    <select value={form.location} onChange={(event) => applyPrimaryPlace(event.target.value)}>
+                      {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
+                      <option value="__new_city__">Add new place</option>
+                    </select>
+                  </label>
+                  {form.location === "__new_city__" && (
+                    <label>New place
+                      <input value={form.newCity} onChange={(event) => patchForm({ newCity: event.target.value })} onBlur={saveNewPrimaryPlace} placeholder="e.g. Trichy" />
+                    </label>
+                  )}
                   <label>Tournament date<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
                   <label>Registration opens<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
                   <label>Registration closes<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>

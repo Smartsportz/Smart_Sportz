@@ -1,8 +1,11 @@
-import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
+import { CalendarDays, MessageCircle, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { LikeControl } from "../components/LikeControl";
 import { Page } from "../components/UI";
+import { ProgressiveImage } from "../components/ProgressiveImage";
+import { useAuth } from "../auth/AuthContext";
 import { apiRequest, mediaUrl } from "../lib/api";
 import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 import { socialActorKey } from "../lib/socialIdentity";
@@ -21,9 +24,12 @@ type NewsPost = {
   date: string;
   tournamentSlug?: string;
   highlight?: boolean;
+  like_count?: number;
+  liked_by_me?: boolean;
   blocks: NewsBlock[];
 };
-type NewsSocial = Record<string, { liked?: boolean; likes: number; comments: Array<{ text: string; createdAt?: string }> }>;
+type NewsSocialItem = { liked?: boolean; liked_by_me?: boolean; likes?: number; like_count?: number; comments: Array<{ text: string; createdAt?: string }> };
+type NewsSocial = Record<string, NewsSocialItem>;
 type NewsBootstrap = { posts: any[]; social: NewsSocial };
 
 function normalizePost(item: any): NewsPost {
@@ -38,6 +44,8 @@ function normalizePost(item: any): NewsPost {
     date: item.date ?? item.published_at?.slice(0, 10) ?? item.created_at?.slice(0, 10) ?? "Published",
     tournamentSlug: item.tournamentSlug ?? item.tournament_slug,
     highlight: Boolean(item.highlight ?? item.is_highlight),
+    like_count: Number(item.like_count ?? 0),
+    liked_by_me: Boolean(item.liked_by_me),
     blocks: (item.blocks ?? []).map((block: any) => ({
       type: block.type ?? block.block_type ?? "paragraph",
       content: block.content ?? block.text ?? "",
@@ -58,25 +66,34 @@ function renderBlock(block: { type: string; content: string }, index: number) {
   return <p key={index}>{block.content}</p>;
 }
 
-function newsBootstrapQuery(actorKey: string) {
+function newsBootstrapQuery(actorKey: string, token: string | null) {
   return {
-    queryKey: ["news", "bootstrap", actorKey] as const,
-    queryFn: () => apiRequest<NewsBootstrap>(`/news/bootstrap?actor_key=${encodeURIComponent(actorKey)}&limit=12`, { silent: true }),
+    queryKey: ["news", "bootstrap", actorKey, Boolean(token)] as const,
+    queryFn: () => apiRequest<NewsBootstrap>(`/news/bootstrap?actor_key=${encodeURIComponent(actorKey)}&limit=12`, { silent: true }, token ?? undefined),
   };
 }
 
-function newsDetailQuery(slug?: string) {
+function newsDetailQuery(slug: string | undefined, token: string | null) {
   return {
-    queryKey: ["news", "detail", slug] as const,
-    queryFn: () => apiRequest<any>(`/news/${slug}`, { silent: true }),
+    queryKey: ["news", "detail", slug, Boolean(token)] as const,
+    queryFn: () => apiRequest<any>(`/news/${slug}`, { silent: true }, token ?? undefined),
   };
+}
+
+function liked(state?: NewsSocialItem) {
+  return Boolean(state?.liked_by_me ?? state?.liked);
+}
+
+function likeCount(state?: NewsSocialItem) {
+  return Math.max(0, Number(state?.like_count ?? state?.likes ?? 0));
 }
 
 export function NewsPage() {
   useWheelHorizontal();
+  const { token } = useAuth();
   const actorKey = useMemo(() => socialActorKey(), []);
   const queryClient = useQueryClient();
-  const bootstrapQuery = useMemo(() => newsBootstrapQuery(actorKey), [actorKey]);
+  const bootstrapQuery = useMemo(() => newsBootstrapQuery(actorKey, token), [actorKey, token]);
   const { data: bootstrap, isLoading } = useQuery(bootstrapQuery);
   const [social, setSocial] = useState<NewsSocial>({});
   const categoryScrollers = useRef<Record<string, HTMLDivElement | null>>({});
@@ -112,25 +129,11 @@ export function NewsPage() {
     });
   }
 
-  async function toggleLike(slug: string) {
-    const current = social[slug] ?? { likes: 0, comments: [], liked: false };
-    const liked = !current.liked;
-    const optimistic = { ...current, liked, likes: Math.max(0, current.likes + (liked ? 1 : -1)) };
-    setSocial((value) => ({ ...value, [slug]: optimistic }));
-    updateSocialCache(slug, optimistic);
-    try {
-      const updated = await apiRequest<{ slug: string; liked: boolean; likes: number }>("/news/social/like", {
-        method: "POST",
-        body: JSON.stringify({ slug, liked, actor_key: actorKey }),
-        silent: true,
-      });
-      const next = { ...(optimistic ?? { comments: [] }), liked: updated.liked, likes: updated.likes };
-      setSocial((value) => ({ ...value, [slug]: next }));
-      updateSocialCache(slug, next);
-    } catch {
-      setSocial((value) => ({ ...value, [slug]: current }));
-      updateSocialCache(slug, current);
-    }
+  function updateLikeState(slug: string, next: { liked: boolean; count: number }) {
+    const current = social[slug] ?? { comments: [] };
+    const updated = { ...current, liked: next.liked, liked_by_me: next.liked, likes: next.count, like_count: next.count };
+    setSocial((value) => ({ ...value, [slug]: updated }));
+    updateSocialCache(slug, updated);
   }
 
   async function sharePost(post: NewsPost) {
@@ -152,7 +155,7 @@ export function NewsPage() {
     <Page className="news-page">
       {activeHighlight ? <section className="news-highlight-section">
         <Link className="news-highlight-card click-card" to={`/news/${activeHighlight.slug}`} key={activeHighlight.slug}>
-          <img src={mediaUrl(activeHighlight.image)} alt="" loading="eager" fetchpriority="high" />
+          <ProgressiveImage src={mediaUrl(activeHighlight.image)} alt="" loading="eager" fetchpriority="high" />
           <div className="news-highlight-overlay">
             <div className="news-highlight-copy" key={`${activeHighlight.slug}-copy`}>
               <span className="status emerald">{activeHighlight.category}</span>
@@ -187,7 +190,7 @@ export function NewsPage() {
                       <article className="news-card panel" key={post.slug}>
                         <Link className="click-card news-card-link" to={`/news/${post.slug}`}>
                           <div className="news-card-media">
-                            <img src={mediaUrl(post.image)} alt="" loading="lazy" />
+                            <ProgressiveImage src={mediaUrl(post.image)} alt="" />
                           </div>
                           <div className="news-card-copy">
                             <span className="status blue">{post.category}</span>
@@ -197,7 +200,7 @@ export function NewsPage() {
                           </div>
                         </Link>
                         <div className="news-social-actions">
-                          <button type="button" className={social[post.slug]?.liked ? "active" : ""} onClick={() => void toggleLike(post.slug)}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
+                          <LikeControl contentType="news" contentId={post.slug} liked={liked(social[post.slug])} count={likeCount(social[post.slug])} onChange={(next) => updateLikeState(post.slug, next)} />
                           <Link to={`/news/${post.slug}#comments`}><MessageCircle size={15} />{social[post.slug]?.comments?.length ?? 0}</Link>
                           <button type="button" onClick={() => void sharePost(post)}><Share2 size={15} />Share</button>
                         </div>
@@ -216,13 +219,14 @@ export function NewsPage() {
 
 export function NewsDetailPage() {
   const { slug } = useParams();
+  const { token } = useAuth();
   const actorKey = useMemo(() => socialActorKey(), []);
   const queryClient = useQueryClient();
-  const detailQuery = useMemo(() => newsDetailQuery(slug), [slug]);
+  const detailQuery = useMemo(() => newsDetailQuery(slug, token), [slug, token]);
   const socialQuery = useMemo(() => ({
-    queryKey: ["news", "social", actorKey] as const,
-    queryFn: () => apiRequest<NewsSocial>(`/news/social?actor_key=${encodeURIComponent(actorKey)}`, { silent: true }),
-  }), [actorKey]);
+    queryKey: ["news", "social", actorKey, Boolean(token)] as const,
+    queryFn: () => apiRequest<NewsSocial>(`/news/social?actor_key=${encodeURIComponent(actorKey)}`, { silent: true }, token ?? undefined),
+  }), [actorKey, token]);
   const { data: remotePost, isLoading, isError } = useQuery({ ...detailQuery, enabled: Boolean(slug) });
   const { data: remoteSocial } = useQuery(socialQuery);
   const [social, setSocial] = useState<NewsSocial>({});
@@ -263,32 +267,17 @@ export function NewsDetailPage() {
       body: JSON.stringify({ slug: post.slug, comment }),
       silent: true,
     });
-    const next = { ...(social[post.slug] ?? { likes: 0, liked: false }), comments: updated.comments };
+    const next = { ...(social[post.slug] ?? { likes: 0, like_count: 0, liked: false, liked_by_me: false }), comments: updated.comments };
     setSocial((current) => ({ ...current, [post.slug]: next }));
     updateDetailSocialCache(post.slug, next);
     setComment("");
   }
 
-  async function toggleDetailLike() {
-    if (!post) return;
-    const current = social[post.slug] ?? { likes: 0, comments: [], liked: false };
-    const liked = !current.liked;
-    const optimistic = { ...current, liked, likes: Math.max(0, current.likes + (liked ? 1 : -1)) };
-    setSocial((value) => ({ ...value, [post.slug]: optimistic }));
-    updateDetailSocialCache(post.slug, optimistic);
-    try {
-      const updated = await apiRequest<{ slug: string; liked: boolean; likes: number }>("/news/social/like", {
-        method: "POST",
-        body: JSON.stringify({ slug: post.slug, liked, actor_key: actorKey }),
-        silent: true,
-      });
-      const next = { ...(optimistic ?? { comments: [] }), liked: updated.liked, likes: updated.likes };
-      setSocial((value) => ({ ...value, [post.slug]: next }));
-      updateDetailSocialCache(post.slug, next);
-    } catch {
-      setSocial((value) => ({ ...value, [post.slug]: current }));
-      updateDetailSocialCache(post.slug, current);
-    }
+  function updateDetailLikeState(newsSlug: string, next: { liked: boolean; count: number }) {
+    const current = social[newsSlug] ?? { comments: [] };
+    const updated = { ...current, liked: next.liked, liked_by_me: next.liked, likes: next.count, like_count: next.count };
+    setSocial((value) => ({ ...value, [newsSlug]: updated }));
+    updateDetailSocialCache(newsSlug, updated);
   }
 
   return (
@@ -303,7 +292,7 @@ export function NewsDetailPage() {
         </section>
       ) : <>
       <article className="news-detail">
-        <img className="news-detail-image" src={mediaUrl(post.image)} alt="" loading="eager" fetchpriority="high" />
+        <ProgressiveImage className="news-detail-image" src={mediaUrl(post.image)} alt="" loading="eager" fetchpriority="high" />
         <div className="news-detail-copy">
           <span className="status emerald">{post.category}</span>
           <h1>{post.title}</h1>
@@ -320,7 +309,7 @@ export function NewsDetailPage() {
       <section className="article-body panel">
         {post.blocks.map(renderBlock)}
         <div className="news-social-actions news-detail-actions">
-          <button type="button" className={social[post.slug]?.liked ? "active" : ""} onClick={() => void toggleDetailLike()}><Heart size={15} />{social[post.slug]?.likes ?? 0}</button>
+          <LikeControl contentType="news" contentId={post.slug} liked={liked(social[post.slug] ?? { liked_by_me: post.liked_by_me, like_count: post.like_count, comments: [] } as any)} count={likeCount(social[post.slug] ?? { like_count: post.like_count, comments: [] } as any)} onChange={(next) => updateDetailLikeState(post.slug, next)} />
           <button type="button" onClick={() => void shareNews()}><Share2 size={15} />Share</button>
         </div>
         <div className="news-comments" id="comments">
@@ -337,7 +326,7 @@ export function NewsDetailPage() {
         <div className="content-grid news-list-grid related-news-grid">
           {related.map((item) => (
             <Link className="panel click-card news-card" to={`/news/${item.slug}`} key={item.slug}>
-              <div className="news-card-media"><img src={mediaUrl(item.image)} alt="" loading="lazy" /></div>
+              <div className="news-card-media"><ProgressiveImage src={mediaUrl(item.image)} alt="" /></div>
               <div className="news-card-copy">
                 <h3>{item.title}</h3>
                 <p>{item.shortDescription}</p>

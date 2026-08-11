@@ -427,6 +427,16 @@ CREATE TABLE IF NOT EXISTS gallery_likes (
   UNIQUE(image_key, actor_key)
 );
 
+CREATE TABLE IF NOT EXISTS content_likes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  content_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, content_type, content_id),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS gallery_albums (
   slug TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -565,6 +575,8 @@ CREATE INDEX IF NOT EXISTS idx_gallery_social_updated ON gallery_social(updated_
 CREATE INDEX IF NOT EXISTS idx_gallery_social_image_key ON gallery_social(image_key);
 CREATE INDEX IF NOT EXISTS idx_gallery_likes_actor ON gallery_likes(actor_key, image_key);
 CREATE INDEX IF NOT EXISTS idx_gallery_likes_image_actor ON gallery_likes(image_key, actor_key);
+CREATE INDEX IF NOT EXISTS idx_content_likes_user_content ON content_likes(user_id, content_type, content_id);
+CREATE INDEX IF NOT EXISTS idx_content_likes_content ON content_likes(content_type, content_id);
 CREATE INDEX IF NOT EXISTS idx_gallery_albums_published ON gallery_albums(published, sort_order);
 CREATE INDEX IF NOT EXISTS idx_gallery_albums_month ON gallery_albums(month_label, sort_order);
 CREATE INDEX IF NOT EXISTS idx_live_matches_status ON live_matches(status);

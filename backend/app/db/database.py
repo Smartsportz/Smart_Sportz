@@ -46,6 +46,7 @@ OPERATIONAL_TABLE_ORDER = [
     "news_posts",
     "news_blocks",
     "news_social",
+    "content_likes",
     "sport_home_visibility",
     "manager_city_assignments",
     "tournament_manager_assignments",

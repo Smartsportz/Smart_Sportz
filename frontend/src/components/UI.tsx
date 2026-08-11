@@ -6,6 +6,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { navItems, withRuntimeTournamentStatus } from "../data/platform";
 import { mediaUrl } from "../lib/api";
+import { ProgressiveImage } from "./ProgressiveImage";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -121,6 +122,10 @@ export function Footer() {
         <div><b>Resources</b><Link to="/news">News</Link><Link to="/gallery">Gallery</Link><Link to="/faq">FAQ</Link></div>
         <div><b>Company</b><Link to="/about">About</Link><Link to="/contact">Contact</Link><Link to="/sponsors">Sponsors</Link></div>
       </div>
+      <p className="footer-rights">
+        <span>all rights received by smartsportz.in@2026</span>
+        <span>powered by brillaris global pro</span>
+      </p>
     </footer>
   );
 }
@@ -275,7 +280,7 @@ export function TournamentCard({ item }: { item: any }) {
   return (
     <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
-      <img src={mediaUrl(tournament.image)} alt={`${tournament.name} visual`} loading="lazy" />
+      <ProgressiveImage src={mediaUrl(tournament.image)} alt={`${tournament.name} visual`} />
       <div className="card-body">
         <span className={`status ${tournament.accent}`}>{tournament.status}</span>
         <h3>{tournament.name}</h3>
@@ -296,7 +301,7 @@ export function TournamentCard({ item }: { item: any }) {
 export function LiveMatchCard({ match }: { match: any }) {
   return (
     <Link className="live-card click-card" to={`/live/${match.id}`}>
-      <div className="live-media"><img src={mediaUrl(match.image)} alt="" loading="lazy" /><span className="live-dot">Live</span></div>
+      <div className="live-media"><ProgressiveImage src={mediaUrl(match.image)} alt="" /><span className="live-dot">Live</span></div>
       <div>
         <p className="eyebrow">{match.tournament}</p>
         <h3>{match.home} vs {match.away}</h3>

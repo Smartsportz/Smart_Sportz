@@ -1,8 +1,11 @@
-import { CalendarDays, Heart, MessageCircle, Share2 } from "lucide-react";
+import { CalendarDays, MessageCircle, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { LikeControl } from "../components/LikeControl";
 import { Page } from "../components/UI";
+import { ProgressiveImage } from "../components/ProgressiveImage";
+import { useAuth } from "../auth/AuthContext";
 import { apiRequest, mediaUrl } from "../lib/api";
 import { socialActorKey } from "../lib/socialIdentity";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
@@ -19,7 +22,8 @@ type GalleryAlbum = {
   summary?: string;
 };
 
-type GallerySocialState = Record<string, { liked?: boolean; likes?: number; comments?: string[] }>;
+type GallerySocialItem = { liked?: boolean; liked_by_me?: boolean; likes?: number; like_count?: number; comments?: string[] };
+type GallerySocialState = Record<string, GallerySocialItem>;
 type GalleryBootstrap = {
   albums: GalleryAlbum[];
   social: GallerySocialState;
@@ -29,11 +33,19 @@ function imageKey(album: GalleryAlbum) {
   return `album:${album.slug}`;
 }
 
-function galleryBootstrapQuery(actorKey: string) {
+function galleryBootstrapQuery(actorKey: string, token: string | null) {
   return {
-    queryKey: ["gallery", "bootstrap", actorKey] as const,
-    queryFn: () => apiRequest<GalleryBootstrap>(`/public/gallery/bootstrap?actor_key=${encodeURIComponent(actorKey)}&limit=12`, { silent: true }),
+    queryKey: ["gallery", "bootstrap", actorKey, Boolean(token)] as const,
+    queryFn: () => apiRequest<GalleryBootstrap>(`/public/gallery/bootstrap?actor_key=${encodeURIComponent(actorKey)}&limit=12`, { silent: true }, token ?? undefined),
   };
+}
+
+function liked(state?: GallerySocialItem) {
+  return Boolean(state?.liked_by_me ?? state?.liked);
+}
+
+function likeCount(state?: GallerySocialItem) {
+  return Math.max(0, Number(state?.like_count ?? state?.likes ?? 0));
 }
 
 function GallerySkeleton() {
@@ -48,9 +60,10 @@ function GallerySkeleton() {
 
 export function GalleryPage() {
   useWheelHorizontal(".gallery-feed-grid");
+  const { token } = useAuth();
   const actorKey = useMemo(() => socialActorKey(), []);
   const queryClient = useQueryClient();
-  const bootstrapQuery = useMemo(() => galleryBootstrapQuery(actorKey), [actorKey]);
+  const bootstrapQuery = useMemo(() => galleryBootstrapQuery(actorKey, token), [actorKey, token]);
   const { data: bootstrap, isLoading } = useQuery(bootstrapQuery);
   const albums = bootstrap?.albums ?? [];
   const [social, setSocial] = useState<GallerySocialState>({});
@@ -67,26 +80,11 @@ export function GalleryPage() {
     });
   }
 
-  async function toggleLike(album: GalleryAlbum) {
-    const key = imageKey(album);
-    const current = social[key] ?? { likes: 0, comments: [], liked: false };
-    const liked = !current.liked;
-    const optimistic = { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) };
-    setSocial((value) => ({ ...value, [key]: optimistic }));
-    updateSocialCache(key, optimistic);
-    try {
-      const remote = await apiRequest<{ image_key: string; liked: boolean; likes: number; comments: string[] }>("/public/gallery/social/like", {
-        method: "POST",
-        body: JSON.stringify({ image_key: key, liked, actor_key: actorKey }),
-        silent: true,
-      });
-      const next = { ...optimistic, liked: remote.liked, likes: remote.likes, comments: remote.comments };
-      setSocial((value) => ({ ...value, [key]: next }));
-      updateSocialCache(key, next);
-    } catch {
-      setSocial((value) => ({ ...value, [key]: current }));
-      updateSocialCache(key, current);
-    }
+  function updateLikeState(key: string, next: { liked: boolean; count: number }) {
+    const current = social[key] ?? { comments: [] };
+    const updated = { ...current, liked: next.liked, liked_by_me: next.liked, likes: next.count, like_count: next.count };
+    setSocial((value) => ({ ...value, [key]: updated }));
+    updateSocialCache(key, updated);
   }
 
   async function shareAlbum(album: GalleryAlbum) {
@@ -120,13 +118,13 @@ export function GalleryPage() {
               return (
                 <article className="gallery-feed-card" key={album.slug}>
                   <Link className="gallery-image-open" to={`/gallery/${album.slug}`}>
-                    {album.cover && <div className="gallery-winner-media"><img src={mediaUrl(album.cover)} alt="" loading="lazy" /></div>}
+                    {album.cover && <div className="gallery-winner-media"><ProgressiveImage src={mediaUrl(album.cover)} alt="" /></div>}
                     <h3>{album.title}</h3>
                     <p>{album.summary}</p>
                     <small><CalendarDays size={14} /> {album.date_label || album.month_label || "Published gallery"}</small>
                   </Link>
                   <div className="gallery-social-row">
-                    <button type="button" className={state.liked ? "active" : ""} onClick={() => void toggleLike(album)}><Heart size={15} />{state.likes ?? 0}</button>
+                    <LikeControl contentType="gallery" contentId={imageKey(album)} liked={liked(state)} count={likeCount(state)} onChange={(next) => updateLikeState(imageKey(album), next)} />
                     <Link to={`/gallery/${album.slug}`}><MessageCircle size={15} />{state.comments?.length ?? 0}</Link>
                     <button type="button" onClick={() => void shareAlbum(album)}><Share2 size={15} />Share</button>
                   </div>
@@ -148,9 +146,10 @@ export function GalleryPage() {
 
 export function GalleryAlbumPage() {
   const { slug } = useParams();
+  const { token } = useAuth();
   const actorKey = useMemo(() => socialActorKey(), []);
   const queryClient = useQueryClient();
-  const bootstrapQuery = useMemo(() => galleryBootstrapQuery(actorKey), [actorKey]);
+  const bootstrapQuery = useMemo(() => galleryBootstrapQuery(actorKey, token), [actorKey, token]);
   const { data: bootstrap, isLoading } = useQuery(bootstrapQuery);
   const albums = bootstrap?.albums ?? [];
   const [comment, setComment] = useState("");
@@ -182,27 +181,11 @@ export function GalleryAlbumPage() {
     setComment("");
   }
 
-  async function toggleLike() {
-    if (!album) return;
-    const key = imageKey(album);
-    const current = social[key] ?? { likes: 0, comments: [], liked: false };
-    const liked = !current.liked;
-    const optimistic = { ...current, liked, likes: Math.max(0, (current.likes ?? 0) + (liked ? 1 : -1)) };
-    setSocial((value) => ({ ...value, [key]: optimistic }));
-    updateSocialCache(key, optimistic);
-    try {
-      const remote = await apiRequest<{ image_key: string; liked: boolean; likes: number; comments: string[] }>("/public/gallery/social/like", {
-        method: "POST",
-        body: JSON.stringify({ image_key: key, liked, actor_key: actorKey }),
-        silent: true,
-      });
-      const next = { ...optimistic, liked: remote.liked, likes: remote.likes, comments: remote.comments };
-      setSocial((value) => ({ ...value, [key]: next }));
-      updateSocialCache(key, next);
-    } catch {
-      setSocial((value) => ({ ...value, [key]: current }));
-      updateSocialCache(key, current);
-    }
+  function updateLikeState(key: string, next: { liked: boolean; count: number }) {
+    const current = social[key] ?? { comments: [] };
+    const updated = { ...current, liked: next.liked, liked_by_me: next.liked, likes: next.count, like_count: next.count };
+    setSocial((value) => ({ ...value, [key]: updated }));
+    updateSocialCache(key, updated);
   }
 
   if (isLoading) {
@@ -230,7 +213,7 @@ export function GalleryAlbumPage() {
   return (
     <Page className="gallery-page gallery-detail-page">
       <section className="gallery-detail-hero">
-        {album.cover && <img src={mediaUrl(album.cover)} alt="" loading="lazy" />}
+        {album.cover && <ProgressiveImage src={mediaUrl(album.cover)} alt="" />}
         <div>
           <Link className="inline-link" to="/gallery">Back</Link>
           <h1>{album.title}</h1>
@@ -240,7 +223,7 @@ export function GalleryAlbumPage() {
       </section>
       <section className="article-body panel">
         <div className="news-social-actions news-detail-actions">
-          <button type="button" className={state.liked ? "active" : ""} onClick={() => void toggleLike()}><Heart size={15} />{state.likes ?? 0}</button>
+          <LikeControl contentType="gallery" contentId={imageKey(album)} liked={liked(state)} count={likeCount(state)} onChange={(next) => updateLikeState(imageKey(album), next)} />
           <button type="button"><MessageCircle size={15} />{state.comments?.length ?? 0}</button>
         </div>
         <div className="news-comments">

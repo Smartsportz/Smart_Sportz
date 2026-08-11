@@ -21,6 +21,15 @@ def current_user(authorization: str | None = Header(default=None)) -> dict:
     return user
 
 
+def optional_current_user(authorization: str | None = Header(default=None)) -> dict | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    try:
+        return current_user(authorization)
+    except HTTPException:
+        return None
+
+
 def require_roles(*roles: str):
     def checker(user: dict = Depends(current_user)) -> dict:
         if user["role"] not in roles:
