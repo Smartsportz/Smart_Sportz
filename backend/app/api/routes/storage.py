@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -25,6 +26,27 @@ ALLOWED_MIME_TYPES = {
     "application/pdf",
 }
 CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+HASHED_STORAGE_NAME = re.compile(r"(?P<digest>[a-f0-9]{24})(?P<suffix>\.[a-z0-9]+)$", re.IGNORECASE)
+
+
+def resolve_stored_file(filename: str) -> Path:
+    upload_root = settings.upload_dir.resolve()
+    target = (settings.upload_dir / filename).resolve()
+    if upload_root not in target.parents and target != upload_root:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    if target.exists() and target.is_file():
+        return target
+
+    match = HASHED_STORAGE_NAME.search(filename)
+    if match:
+        digest = match.group("digest")
+        suffix = match.group("suffix")
+        for candidate in sorted(settings.upload_dir.glob(f"*{digest}{suffix}")):
+            resolved = candidate.resolve()
+            if upload_root in resolved.parents and resolved.is_file():
+                return resolved
+
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 @router.post("/upload")
@@ -49,12 +71,7 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(current
 
 @router.get("/files/{filename}")
 def get_file(filename: str):
-    target = (settings.upload_dir / filename).resolve()
-    upload_root = settings.upload_dir.resolve()
-    if upload_root not in target.parents and target != upload_root:
-        raise HTTPException(status_code=400, detail="Invalid file path")
-    if not target.exists() or not target.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+    target = resolve_stored_file(filename)
     if target.suffix.lower() == ".pdf":
         return FileResponse(target, media_type="application/pdf", filename=filename, content_disposition_type="attachment", headers=CACHE_HEADERS)
     media_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"

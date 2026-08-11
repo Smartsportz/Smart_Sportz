@@ -150,9 +150,7 @@ img { max-width: 100%; display: block; }
 .hero-panel { position: relative; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-xl); box-shadow: var(--shadow); overflow: hidden; }
 .hero-panel .hero-image { height: 520px; width: 100%; object-fit: cover; object-position: center; border-radius: 18px; }
 .progressive-image { position: relative; display: block; overflow: hidden; background: rgba(234, 244, 228, .65); }
-.progressive-image > img { width: 100%; height: 100%; display: block; object-fit: cover; opacity: 0; transition: opacity .18s ease; }
-.progressive-image.is-loaded > img { opacity: 1; }
-.progressive-image-skeleton { position: absolute; inset: 0; z-index: 1; display: block; background: linear-gradient(90deg, rgba(234, 244, 228, .78), rgba(255, 255, 255, .92), rgba(234, 244, 228, .78)); background-size: 220% 100%; animation: skeletonSweep 1.25s ease-in-out infinite; }
+.progressive-image > img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .hero-panel .progressive-image,
 .hero-panel .progressive-image > img { height: 520px; border-radius: 18px; }
 .home-reference-page { width: 100%; padding-top: 0; }
