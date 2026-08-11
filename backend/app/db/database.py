@@ -237,6 +237,32 @@ def execute_many(statements: list[tuple[str, Iterable[Any]]]) -> None:
         sync_mirror()
 
 
+def ensure_column(table: str, column: str, definition: str) -> None:
+    with connect() as conn:
+        if using_postgres():
+            exists = conn.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
+                (table, column),
+            ).fetchone()
+        else:
+            exists = any(item[1] == column for item in conn.execute(f"PRAGMA table_info({table})").fetchall())
+        if not exists:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                if using_postgres():
+                    exists = conn.execute(
+                        "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
+                        (table, column),
+                    ).fetchone()
+                else:
+                    exists = any(item[1] == column for item in conn.execute(f"PRAGMA table_info({table})").fetchall())
+                if not exists:
+                    raise
+
+
 def audit_rows(sql: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
     with connect_audit() as conn:
         return [dict(item) for item in conn.execute(_translate_sql(sql), tuple(params)).fetchall()]
@@ -274,6 +300,14 @@ def connection_pool_status() -> dict[str, Any]:
         "timeoutSeconds": settings.postgres_pool_timeout_seconds,
         "readFromMirror": settings.read_from_mirror,
     }
+
+
+def close_postgres_pools() -> None:
+    with _pool_lock:
+        pools = list(_postgres_pools.values())
+        _postgres_pools.clear()
+    for pool in pools:
+        pool.close()
 
 
 def table_names(path: Path | None = None) -> list[str]:

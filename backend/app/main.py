@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.db.database import close_postgres_pools
 from app.db.init_db import initialize_database
 from app.services.metrics import metrics_middleware, prometheus_text
 
@@ -30,6 +31,10 @@ def create_app() -> FastAPI:
     )
     app.middleware("http")(metrics_middleware)
     app.include_router(api_router)
+
+    @app.on_event("shutdown")
+    def shutdown_pools():
+        close_postgres_pools()
 
     @app.get("/metrics", include_in_schema=False)
     def metrics():

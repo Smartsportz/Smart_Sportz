@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import optional_current_user
 from app.core.config import settings
 from app.core.responses import ok
-from app.db.database import execute, row, rows
+from app.db.database import ensure_column, execute, row, rows
 from app.services.cache import cache_key, get_or_set_json
 from app.services.job_queue import enqueue
 from app.services.likes import like_states
@@ -18,6 +18,7 @@ from app.services.media import normalize_media_record, normalize_media_records
 from app.services.tournament_status import apply_registration_window_statuses, with_runtime_status
 
 router = APIRouter(prefix="/public", tags=["public"])
+_tournament_visibility_ready = False
 
 
 class GalleryLikePayload(BaseModel):
@@ -33,6 +34,14 @@ class GalleryCommentPayload(BaseModel):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def ensure_tournament_visibility_column() -> None:
+    global _tournament_visibility_ready
+    if _tournament_visibility_ready:
+        return
+    ensure_column("tournaments", "published", "INTEGER NOT NULL DEFAULT 1")
+    _tournament_visibility_ready = True
 
 
 def parse_comments(value: str | None) -> list[str]:
@@ -280,6 +289,7 @@ def tournament_jersey_options(tournament_slug: str) -> list[dict]:
 @router.get("/home")
 def home():
     def build():
+        ensure_tournament_visibility_column()
         apply_registration_window_statuses()
         return {
             "stats": {
@@ -430,6 +440,7 @@ def gallery_social_comment(payload: GalleryCommentPayload):
 @router.get("/tournaments")
 def tournaments():
     def build():
+        ensure_tournament_visibility_column()
         apply_registration_window_statuses()
         return normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 ORDER BY name")), "tournament", {"image", "poster", "rules_pdf"}, "tournaments")
 
@@ -439,6 +450,7 @@ def tournaments():
 @router.get("/tournaments/{slug}")
 def tournament_detail(slug: str):
     def build():
+        ensure_tournament_visibility_column()
         apply_registration_window_statuses()
         item = row("SELECT * FROM tournaments WHERE slug = ? AND COALESCE(published, 1) = 1", (slug,))
         if not item:
@@ -456,6 +468,7 @@ def tournament_jerseys(slug: str):
 @router.get("/tournaments/{slug}/bracket")
 def tournament_bracket(slug: str):
     def build():
+        ensure_tournament_visibility_column()
         apply_registration_window_statuses()
         item = row("SELECT * FROM tournaments WHERE slug = ? AND COALESCE(published, 1) = 1", (slug,))
         if not item:
@@ -485,6 +498,7 @@ def sports():
 @router.get("/home-discovery/{slug}")
 def home_discovery_detail(slug: str):
     def build():
+        ensure_tournament_visibility_column()
         apply_registration_window_statuses()
         card = row("SELECT * FROM home_discovery_cards WHERE slug = ? AND published = 1", (slug,))
         if not card:
@@ -500,7 +514,7 @@ def home_discovery_detail(slug: str):
             sport = row("SELECT * FROM sports WHERE slug = ?", (slug,))
             if not sport:
                 raise HTTPException(status_code=404, detail="Discovery card not found")
-            tournament = row("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND lower(sport) = lower(?) ORDER BY show_on_home DESC, created_at DESC LIMIT 1", (sport["name"],))
+            tournament = row("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND lower(sport) = lower(?) ORDER BY show_on_home DESC, name LIMIT 1", (sport["name"],))
             card = {
                 "slug": sport["slug"],
                 "label": f"{sport['name']} Program",

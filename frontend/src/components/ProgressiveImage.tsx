@@ -21,20 +21,19 @@ export function ProgressiveImage({
 }: ProgressiveImageProps) {
   const resolved = src ? mediaUrl(src) : "";
   if (!resolved) {
-    return <span className={`progressive-image ${className}`} aria-hidden="true" />;
+    return null;
   }
 
   return (
-    <span className={`progressive-image ${className}`}>
-      <img
-        src={resolved}
-        srcSet={srcSet}
-        sizes={sizes}
-        alt={alt}
-        loading={loading}
-        decoding="async"
-        fetchpriority={fetchpriority}
-      />
-    </span>
+    <img
+      className={`progressive-image ${className}`.trim()}
+      src={resolved}
+      srcSet={srcSet}
+      sizes={sizes}
+      alt={alt}
+      loading={loading}
+      decoding="async"
+      fetchpriority={fetchpriority}
+    />
   );
 }

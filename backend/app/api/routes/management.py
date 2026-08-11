@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
-from app.db.database import execute, execute_many, row, rows
+from app.db.database import ensure_column, execute, execute_many, row, rows
 from app.schemas import BracketSavePayload, GalleryAlbumPayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
@@ -20,6 +20,15 @@ from app.services.runtime_state import runtime_state
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
+_tournament_visibility_ready = False
+
+
+def ensure_tournament_visibility_column() -> None:
+    global _tournament_visibility_ready
+    if _tournament_visibility_ready:
+        return
+    ensure_column("tournaments", "published", "INTEGER NOT NULL DEFAULT 1")
+    _tournament_visibility_ready = True
 
 
 def manager_cities(user: dict) -> list[str]:
@@ -228,6 +237,7 @@ def tournaments(user: dict = Depends(require_roles("super_admin", "management"))
 
 @router.post("/tournaments")
 def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_tournament_visibility_column()
     ensure_city_access(user, payload.location)
     sport_name = payload.new_sport_name.strip() if payload.new_sport_name else payload.sport
     sport_slug = tournament_slugify(sport_name)
@@ -291,6 +301,7 @@ def create_tournament(payload: TournamentUpsertPayload, user: dict = Depends(req
 
 @router.patch("/tournaments/{tournament_slug}")
 def update_tournament(tournament_slug: str, payload: TournamentUpsertPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_tournament_visibility_column()
     item = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
     if not item:
         raise HTTPException(status_code=404, detail="Tournament not found")
