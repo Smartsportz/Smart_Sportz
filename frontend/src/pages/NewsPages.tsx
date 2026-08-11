@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
-import { apiRequest } from "../lib/api";
+import { apiRequest, mediaUrl } from "../lib/api";
 import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 import { socialActorKey } from "../lib/socialIdentity";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
@@ -54,14 +54,14 @@ function renderBlock(block: { type: string; content: string }, index: number) {
   if (block.type === "list") {
     return <ul key={index}>{block.content.split("|").map((item) => <li key={item}>{item}</li>)}</ul>;
   }
-  if (block.type === "image") return <img className="article-inline-image" key={index} src={block.content} alt="" loading="lazy" />;
+  if (block.type === "image") return <img className="article-inline-image" key={index} src={mediaUrl(block.content)} alt="" loading="lazy" />;
   return <p key={index}>{block.content}</p>;
 }
 
 function newsBootstrapQuery(actorKey: string) {
   return {
     queryKey: ["news", "bootstrap", actorKey] as const,
-    queryFn: () => apiRequest<NewsBootstrap>(`/news/bootstrap?actor_key=${encodeURIComponent(actorKey)}`, { silent: true }),
+    queryFn: () => apiRequest<NewsBootstrap>(`/news/bootstrap?actor_key=${encodeURIComponent(actorKey)}&limit=12`, { silent: true }),
   };
 }
 
@@ -135,7 +135,7 @@ export function NewsPage() {
 
   async function sharePost(post: NewsPost) {
     const url = new URL(`/news/${post.slug}`, window.location.origin).toString();
-    const imageUrl = new URL(post.image, window.location.origin).toString();
+    const imageUrl = new URL(mediaUrl(post.image), window.location.origin).toString();
     const payload = { title: post.title, text: `${post.shortDescription} Image: ${imageUrl}`, url };
     if (navigator.share) {
       await navigator.share(payload);
@@ -152,7 +152,7 @@ export function NewsPage() {
     <Page className="news-page">
       {activeHighlight ? <section className="news-highlight-section">
         <Link className="news-highlight-card click-card" to={`/news/${activeHighlight.slug}`} key={activeHighlight.slug}>
-          <img src={activeHighlight.image} alt="" loading="eager" fetchpriority="high" />
+          <img src={mediaUrl(activeHighlight.image)} alt="" loading="eager" fetchpriority="high" />
           <div className="news-highlight-overlay">
             <div className="news-highlight-copy" key={`${activeHighlight.slug}-copy`}>
               <span className="status emerald">{activeHighlight.category}</span>
@@ -187,7 +187,7 @@ export function NewsPage() {
                       <article className="news-card panel" key={post.slug}>
                         <Link className="click-card news-card-link" to={`/news/${post.slug}`}>
                           <div className="news-card-media">
-                            <img src={post.image} alt="" loading="lazy" />
+                            <img src={mediaUrl(post.image)} alt="" loading="lazy" />
                           </div>
                           <div className="news-card-copy">
                             <span className="status blue">{post.category}</span>
@@ -241,7 +241,7 @@ export function NewsDetailPage() {
   async function shareNews() {
     if (!post) return;
     const url = window.location.href;
-    const imageUrl = new URL(post.image, window.location.origin).toString();
+    const imageUrl = new URL(mediaUrl(post.image), window.location.origin).toString();
     const sharePayload = {
       title: post.title,
       text: `${post.shortDescription} Image: ${imageUrl}`,
@@ -303,7 +303,7 @@ export function NewsDetailPage() {
         </section>
       ) : <>
       <article className="news-detail">
-        <img className="news-detail-image" src={post.image} alt="" loading="eager" fetchpriority="high" />
+        <img className="news-detail-image" src={mediaUrl(post.image)} alt="" loading="eager" fetchpriority="high" />
         <div className="news-detail-copy">
           <span className="status emerald">{post.category}</span>
           <h1>{post.title}</h1>
@@ -337,7 +337,7 @@ export function NewsDetailPage() {
         <div className="content-grid news-list-grid related-news-grid">
           {related.map((item) => (
             <Link className="panel click-card news-card" to={`/news/${item.slug}`} key={item.slug}>
-              <div className="news-card-media"><img src={item.image} alt="" loading="lazy" /></div>
+              <div className="news-card-media"><img src={mediaUrl(item.image)} alt="" loading="lazy" /></div>
               <div className="news-card-copy">
                 <h3>{item.title}</h3>
                 <p>{item.shortDescription}</p>

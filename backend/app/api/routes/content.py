@@ -91,11 +91,26 @@ def news_social_map(actor_key: str = "", slugs: list[str] | None = None) -> dict
     return social
 
 
-def published_news_posts() -> list[dict]:
-    return get_or_set_json(cache_key("content:news"), lambda: [
-        attach_news_blocks(item)
-        for item in normalize_media_records(rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC"), "news", {"image"})
-    ], ttl_seconds=max(settings.public_cache_ttl_seconds, 300))
+def paged_news_posts(limit: int, offset: int) -> tuple[int, list[dict]]:
+    safe_limit = max(1, min(limit, 48))
+    safe_offset = max(0, offset)
+    total = int(row("SELECT COUNT(*) AS count FROM news_posts WHERE status = 'published'")["count"] or 0)
+    posts = get_or_set_json(
+        cache_key("content:news", safe_limit, safe_offset),
+        lambda: normalize_media_records(rows(
+            """
+            SELECT slug, title, short_description, image, category, sport, city,
+                   tournament_slug, is_highlight, published_at, created_at
+            FROM news_posts
+            WHERE status = 'published'
+            ORDER BY published_at DESC, created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (safe_limit, safe_offset),
+        ), "news", {"image"}, "news_posts"),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
+    )
+    return total, posts
 
 
 @router.get("/news/social")
@@ -147,19 +162,16 @@ def news_comment(payload: NewsCommentPayload):
 
 
 @router.get("/news")
-def news(limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
-    posts = published_news_posts()
-    total = len(posts)
-    return ok(posts[offset:offset + limit], meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+def news(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+    total, posts = paged_news_posts(limit, offset)
+    return ok(posts, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/news/bootstrap")
-def news_bootstrap(actor_key: str = "", limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
-    posts = published_news_posts()
-    total = len(posts)
-    page = posts[offset:offset + limit]
-    slugs = [item["slug"] for item in page]
-    return ok({"posts": page, "social": news_social_map(actor_key, slugs)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+def news_bootstrap(actor_key: str = "", limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+    total, posts = paged_news_posts(limit, offset)
+    slugs = [item["slug"] for item in posts]
+    return ok({"posts": posts, "social": news_social_map(actor_key, slugs)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/news/{slug}")
@@ -174,8 +186,8 @@ def news_detail(slug: str):
                WHERE status = 'published' AND slug != ? AND (sport = ? OR city = ?)
                ORDER BY published_at DESC LIMIT 3""",
             (slug, post["sport"], post["city"]),
-        ), "news-related", {"image"})
-        post = attach_news_blocks(normalize_media_record(post, "news-detail", {"image"}))
+        ), "news-related", {"image"}, "news_posts")
+        post = attach_news_blocks(normalize_media_record(post, "news-detail", {"image"}, "news_posts"))
         post["related"] = related
         return post
 

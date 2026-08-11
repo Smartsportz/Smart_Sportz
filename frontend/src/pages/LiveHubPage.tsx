@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Page } from "../components/UI";
-import { apiRequest, websocketUrl } from "../lib/api";
+import { apiRequest, mediaUrl, websocketUrl } from "../lib/api";
 import { ProgressiveSection } from "../lib/progressive";
 import { liveMatches, timeline } from "../data/platform";
 
@@ -93,12 +93,6 @@ function teamPlayers(players: LivePerson[] = [], team: string) {
 
 function scoreRows(scores: PlayerScore[] = [], team: string) {
   return scores.filter((score) => score.team === team);
-}
-
-function assetUrl(path: string) {
-  if (!path) return "";
-  if (/^https?:\/\//.test(path)) return path;
-  return `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
 }
 
 export function LiveMatchCenter({ initialMatchId }: { initialMatchId?: string }) {

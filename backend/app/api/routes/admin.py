@@ -44,14 +44,25 @@ def slugify(title: str) -> str:
 
 
 def clear_public_cache(*news_slugs: str) -> None:
+    prefixes = [
+        "cache:public:home",
+        "cache:public:home:notice",
+        "cache:public:home:discovery",
+        "cache:public:home:organizers",
+        "cache:public:home:sponsors",
+        "cache:public:home:news",
+        "cache:public:gallery:albums",
+        "cache:content:news",
+    ]
     keys = [
         cache_key("public:home"),
         cache_key("public:tournaments"),
-        cache_key("content:news"),
     ]
     keys.extend(cache_key("public:tournament", slug) for slug in news_slugs if slug)
     keys.extend(cache_key("public:bracket", slug) for slug in news_slugs if slug)
     keys.extend(cache_key("content:news-detail", slug) for slug in news_slugs if slug)
+    for prefix in prefixes:
+        runtime_state.delete_prefix(prefix)
     for key in keys:
         runtime_state.delete(key)
 
@@ -826,6 +837,7 @@ def admin_news(
             rows(f"SELECT * {query} ORDER BY created_at DESC LIMIT ? OFFSET ?", tuple([*params, limit, offset])),
             "admin-news",
             {"image"},
+            "news_posts",
         )
 
         # Get blocks for each news post
@@ -918,7 +930,7 @@ def create_news(
         )
 
         # Return created news with blocks
-        result = normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "admin-news", {"image"})
+        result = normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "admin-news", {"image"}, "news_posts")
         result["blocks"] = rows(
             "SELECT * FROM news_blocks WHERE post_slug = ? ORDER BY sort_order",
             (slug,)
@@ -961,7 +973,7 @@ def get_news_by_id(
             author = row("SELECT name FROM users WHERE id = ?", (news["author_id"],))
             news["author_name"] = author["name"] if author else None
 
-        return ok(normalize_media_record(news, "admin-news", {"image"}))
+        return ok(normalize_media_record(news, "admin-news", {"image"}, "news_posts"))
     except HTTPException:
         raise
     except Exception as e:
@@ -1058,7 +1070,7 @@ def update_news(
         )
 
         # Return updated news with blocks
-        result = normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "admin-news", {"image"})
+        result = normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "admin-news", {"image"}, "news_posts")
         result["blocks"] = rows(
             "SELECT * FROM news_blocks WHERE post_slug = ? ORDER BY sort_order",
             (slug,)
@@ -1325,7 +1337,7 @@ def admin_registrations(
 ):
     total = int(row("SELECT COUNT(*) AS count FROM registrations")["count"] or 0)
     items = rows("SELECT * FROM registrations ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
-    return ok(normalize_media_records(items, "admin-registration", {"team_logo", "selected_jersey_image"}), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+    return ok(normalize_media_records(items, "admin-registration", {"team_logo", "selected_jersey_image"}, "registrations", "id"), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 def user_with_counts(user: dict) -> dict:
@@ -1364,7 +1376,7 @@ def user_detail_payload(user_id: str, role: str = "user") -> dict:
         ORDER BY r.created_at DESC
         """,
         (user_id,),
-    ), "admin-user-registration", {"team_logo", "selected_jersey_image", "image"})
+    ), "admin-user-registration", {"team_logo", "selected_jersey_image"}, "registrations", "id")
     registration_ids = [item["id"] for item in registrations]
     payments: list[dict] = []
     documents: list[dict] = []

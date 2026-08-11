@@ -1,13 +1,7 @@
 import { Link } from "react-router-dom";
 import { Page } from "../components/UI";
 import { assets, sports } from "../data/platform";
-
-function assetUrl(path: string) {
-  if (/^(https?:|data:|blob:)/i.test(path)) return path;
-  if (path.startsWith(import.meta.env.BASE_URL)) return path;
-  if (/^\/(assets|media)\//.test(path)) return `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
-  return path;
-}
+import { mediaUrl } from "../lib/api";
 
 const sportDetails: Record<string, {
   title: string;
@@ -135,7 +129,7 @@ export function SportsPage() {
               <Link className="inline-link" to={`/sports/${sport.slug}`}>Open {sport.name} tournaments</Link>
             </div>
             <div className="sports-editorial-image">
-              <img src={assetUrl(detail.image)} alt="" />
+              <img src={mediaUrl(detail.image)} alt="" />
             </div>
           </section>
         ))}

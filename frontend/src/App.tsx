@@ -174,6 +174,7 @@ export default function App() {
           <Route path="/management/matches/:id/control" element={<ProtectedRoute roles={["management"]}><LiveMatchPage /></ProtectedRoute>} />
           <Route path="/management/group-bracket" element={<ProtectedRoute roles={["management"]}><BracketWorkspacePage /></ProtectedRoute>} />
           <Route path="/management/tournaments/:slug/bracket" element={<ProtectedRoute roles={["management"]}><BracketWorkspacePage /></ProtectedRoute>} />
+          <Route path="/management/settings" element={<ProtectedRoute roles={["management"]}><SettingsPage /></ProtectedRoute>} />
           <Route path="/management/*" element={<ProtectedRoute roles={["management"]}><ManagementPage /></ProtectedRoute>} />
           <Route path="/super-admin" element={<Navigate to="/super-admin/programs" replace />} />
           <Route path="/super-admin/programs" element={<ProtectedRoute roles={["super_admin"]}><RoleProgramsPage role="super_admin" /></ProtectedRoute>} />

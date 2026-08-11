@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
-import { apiRequest } from "../lib/api";
+import { apiRequest, mediaUrl } from "../lib/api";
 import { socialActorKey } from "../lib/socialIdentity";
 import { useWheelHorizontal } from "../lib/useWheelHorizontal";
 
@@ -29,17 +29,10 @@ function imageKey(album: GalleryAlbum) {
   return `album:${album.slug}`;
 }
 
-function assetUrl(path?: string) {
-  if (!path) return "";
-  if (/^(https?:|data:|blob:)/i.test(path)) return path;
-  if (/^\/(assets|media)\//.test(path)) return `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
-  return path;
-}
-
 function galleryBootstrapQuery(actorKey: string) {
   return {
     queryKey: ["gallery", "bootstrap", actorKey] as const,
-    queryFn: () => apiRequest<GalleryBootstrap>(`/public/gallery/bootstrap?actor_key=${encodeURIComponent(actorKey)}`, { silent: true }),
+    queryFn: () => apiRequest<GalleryBootstrap>(`/public/gallery/bootstrap?actor_key=${encodeURIComponent(actorKey)}&limit=12`, { silent: true }),
   };
 }
 
@@ -127,7 +120,7 @@ export function GalleryPage() {
               return (
                 <article className="gallery-feed-card" key={album.slug}>
                   <Link className="gallery-image-open" to={`/gallery/${album.slug}`}>
-                    {album.cover && <div className="gallery-winner-media"><img src={assetUrl(album.cover)} alt="" loading="lazy" /></div>}
+                    {album.cover && <div className="gallery-winner-media"><img src={mediaUrl(album.cover)} alt="" loading="lazy" /></div>}
                     <h3>{album.title}</h3>
                     <p>{album.summary}</p>
                     <small><CalendarDays size={14} /> {album.date_label || album.month_label || "Published gallery"}</small>
@@ -237,7 +230,7 @@ export function GalleryAlbumPage() {
   return (
     <Page className="gallery-page gallery-detail-page">
       <section className="gallery-detail-hero">
-        {album.cover && <img src={assetUrl(album.cover)} alt="" loading="lazy" />}
+        {album.cover && <img src={mediaUrl(album.cover)} alt="" loading="lazy" />}
         <div>
           <Link className="inline-link" to="/gallery">Back</Link>
           <h1>{album.title}</h1>

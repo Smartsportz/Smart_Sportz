@@ -8,7 +8,7 @@ import { managementSidebar, sidebar, sportHomeVisibility, sports, tournaments, u
 import { DashboardGrid, InfoPanel, MatchControlTable } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
 import { AnnouncementManagerPanel, AdminNewsPage, GalleryManagerPanel } from "./AdminPage";
-import { apiRequest, uploadFile } from "../lib/api";
+import { apiRequest, mediaUrl, uploadFile } from "../lib/api";
 import { downloadRegistrationPassPdf } from "../lib/downloads";
 import { SectionSkeleton } from "../lib/progressive";
 import { useAuth } from "../auth/AuthContext";
@@ -579,7 +579,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                 {items.map((item) => (
                   <article className="manager-tournament-card" key={item.slug}>
                     <div className="manager-tournament-image">
-                      <img src={item.image || "/assets/cricket-stadium.png"} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
+                      <img src={mediaUrl(item.image || "/assets/cricket-stadium.png")} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
                     </div>
                     <div>
                       <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>

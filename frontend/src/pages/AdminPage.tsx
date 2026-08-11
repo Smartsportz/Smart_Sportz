@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
 import { logRows, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
-import { apiRequest, uploadFile } from "../lib/api";
+import { apiRequest, mediaUrl, uploadFile } from "../lib/api";
 import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
@@ -709,7 +709,7 @@ function AdminTournamentsDbPanel() {
                 {items.map((item) => (
                   <article className="manager-tournament-card" key={item.slug}>
                     <div className="manager-tournament-image">
-                      <img src={item.image || "/assets/cricket-stadium.png"} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
+                      <img src={mediaUrl(item.image || "/assets/cricket-stadium.png")} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
                     </div>
                     <div>
                       <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>
@@ -2001,7 +2001,7 @@ function AdminTournamentPickerPanel({ mode }: { mode: "teams" | "payments" }) {
         {records.map((item) => (
           <article className="manager-tournament-card" key={item.slug}>
             <div className="manager-tournament-image">
-              <img src={item.image || "/assets/cricket-stadium.png"} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
+              <img src={mediaUrl(item.image || "/assets/cricket-stadium.png")} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
             </div>
             <div>
               <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>

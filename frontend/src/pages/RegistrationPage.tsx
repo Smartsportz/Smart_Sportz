@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
-import { apiRequest } from "../lib/api";
+import { apiRequest, mediaUrl } from "../lib/api";
 import { downloadRegistrationPassPdf } from "../lib/downloads";
 import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
 import { useAuth } from "../auth/AuthContext";
@@ -494,7 +494,7 @@ function RegistrationSummary({ tournament, amount, showTimeline = false }: { tou
           <small>ORDER #{tournament.slug.slice(0, 3).toUpperCase()}-{tournament.capacity}{tournament.teams}-26</small>
         </div>
         <div className="summary-tournament">
-          <img src={tournament.image} alt={tournament.name} loading="eager" fetchpriority="high" />
+          <img src={mediaUrl(tournament.image)} alt={tournament.name} loading="eager" fetchpriority="high" />
           <div>
             <strong>{tournament.name}</strong>
             <span>{tournament.sport} Category</span>
@@ -536,7 +536,7 @@ function TournamentPosterPanel({ tournament }: { tournament: (typeof tournaments
           <small>Visible on the first step only</small>
         </div>
         <div className="registration-poster-frame">
-          <img src={poster} alt={`${tournament.name} poster`} loading="lazy" />
+          <img src={mediaUrl(poster)} alt={`${tournament.name} poster`} loading="lazy" />
         </div>
         <div className="registration-poster-meta">
           <strong>{tournament.name}</strong>
@@ -1149,7 +1149,7 @@ export function RegistrationPage() {
                   <span className={`status ${tournament.accent}`}>{tournament.status}</span>
                 </div>
                 <div className="registration-choice-card">
-                  <img src={tournament.image} alt={tournament.name} loading="lazy" />
+                  <img src={mediaUrl(tournament.image)} alt={tournament.name} loading="lazy" />
                   <div>
                     <h3>{tournament.name}</h3>
                     <p>{tournament.sport} - {tournament.location} - {tournament.date}</p>

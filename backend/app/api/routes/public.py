@@ -85,9 +85,30 @@ def gallery_album_records() -> list[dict]:
             WHERE published = 1
             ORDER BY sort_order, month_label DESC, title
             """
-        ), "gallery", {"cover"}),
+        ), "gallery", {"cover"}, "gallery_albums"),
         ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     )
+
+
+def gallery_album_page(limit: int, offset: int) -> tuple[int, list[dict]]:
+    safe_limit = max(1, min(limit, 48))
+    safe_offset = max(0, offset)
+    total = int(row("SELECT COUNT(*) AS count FROM gallery_albums WHERE published = 1")["count"] or 0)
+    albums = get_or_set_json(
+        cache_key("public:gallery:albums", safe_limit, safe_offset),
+        lambda: normalize_media_records(rows(
+            """
+            SELECT slug, title, sport, city, date_label, month_label, day_count, cover, summary
+            FROM gallery_albums
+            WHERE published = 1
+            ORDER BY sort_order, title
+            LIMIT ? OFFSET ?
+            """,
+            (safe_limit, safe_offset),
+        ), "gallery", {"cover"}, "gallery_albums"),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
+    )
+    return total, albums
 
 
 def gallery_social_map(actor_key: str = "", image_keys: list[str] | None = None) -> dict:
@@ -256,13 +277,22 @@ def home():
                 "liveMatches": 8,
             },
             "featuredTournaments": attach_tournament_metadata(rows("SELECT * FROM tournaments LIMIT 3")),
-            "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches LIMIT 3"), "home-live-match", {"image"}),
-            "discoveryCards": normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"), "home-discovery", {"image", "sponsor_image"}),
-            "liveHighlight": normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}) or None,
-            "sponsorLogos": normalize_media_records(rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"), "sponsor", {"image"}),
-            "organizerCards": rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title"),
-            "announcements": normalize_media_records(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"), "announcement", {"image"}),
-            "newsPosts": normalize_media_records(rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"), "home-news", {"image"}),
+            "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches LIMIT 3"), "home-live-match", {"image"}, "live_matches", "id"),
+            "discoveryCards": normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title LIMIT 8"), "home-discovery", {"image", "sponsor_image"}, "home_discovery_cards"),
+            "liveHighlight": normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}, "live_highlights", "id") or None,
+            "sponsorLogos": normalize_media_records(rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name LIMIT 12"), "sponsor", {"image"}, "sponsor_logos"),
+            "organizerCards": rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title LIMIT 6"),
+            "announcements": normalize_media_records(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"), "announcement", {"image"}, "announcements", "id"),
+            "newsPosts": normalize_media_records(rows(
+                """
+                SELECT slug, title, short_description, image, category, sport, city,
+                       tournament_slug, is_highlight, published_at, created_at
+                FROM news_posts
+                WHERE status = 'published'
+                ORDER BY published_at DESC, created_at DESC
+                LIMIT 6
+                """
+            ), "home-news", {"image"}, "news_posts"),
         }
 
     return ok(get_or_set_json(cache_key("public:home"), build))
@@ -272,15 +302,16 @@ def home():
 def home_notice():
     return ok(get_or_set_json(
         cache_key("public:home:notice"),
-        lambda: normalize_media_records(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"), "announcement", {"image"}),
+        lambda: normalize_media_records(rows("SELECT * FROM announcements WHERE published = 1 ORDER BY created_at DESC LIMIT 3"), "announcement", {"image"}, "announcements", "id"),
     ))
 
 
 @router.get("/home/discovery")
-def home_discovery():
+def home_discovery(limit: int = Query(8, ge=1, le=24), offset: int = Query(0, ge=0)):
     return ok(get_or_set_json(
-        cache_key("public:home:discovery"),
-        lambda: normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title"), "home-discovery", {"image", "sponsor_image"}),
+        cache_key("public:home:discovery", limit, offset),
+        lambda: normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title LIMIT ? OFFSET ?", (limit, offset)), "home-discovery", {"image", "sponsor_image"}, "home_discovery_cards"),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     ))
 
 
@@ -288,23 +319,25 @@ def home_discovery():
 def home_live_highlight():
     return ok(get_or_set_json(
         cache_key("public:home:live-highlight"),
-        lambda: normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}) or None,
+        lambda: normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}, "live_highlights", "id") or None,
     ))
 
 
 @router.get("/home/organizers")
-def home_organizers():
+def home_organizers(limit: int = Query(6, ge=1, le=24), offset: int = Query(0, ge=0)):
     return ok(get_or_set_json(
-        cache_key("public:home:organizers"),
-        lambda: rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title"),
+        cache_key("public:home:organizers", limit, offset),
+        lambda: rows("SELECT * FROM home_organizer_cards WHERE published = 1 ORDER BY sort_order, title LIMIT ? OFFSET ?", (limit, offset)),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     ))
 
 
 @router.get("/home/sponsors")
-def home_sponsors():
+def home_sponsors(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
     return ok(get_or_set_json(
-        cache_key("public:home:sponsors"),
-        lambda: normalize_media_records(rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name"), "sponsor", {"image"}),
+        cache_key("public:home:sponsors", limit, offset),
+        lambda: normalize_media_records(rows("SELECT * FROM sponsor_logos WHERE published = 1 ORDER BY sort_order, name LIMIT ? OFFSET ?", (limit, offset)), "sponsor", {"image"}, "sponsor_logos"),
+        ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     ))
 
 
@@ -312,7 +345,16 @@ def home_sponsors():
 def home_news():
     return ok(get_or_set_json(
         cache_key("public:home:news"),
-        lambda: normalize_media_records(rows("SELECT * FROM news_posts WHERE status = 'published' ORDER BY published_at DESC, created_at DESC LIMIT 6"), "home-news", {"image"}),
+        lambda: normalize_media_records(rows(
+            """
+            SELECT slug, title, short_description, image, category, sport, city,
+                   tournament_slug, is_highlight, published_at, created_at
+            FROM news_posts
+            WHERE status = 'published'
+            ORDER BY published_at DESC, created_at DESC
+            LIMIT 6
+            """
+        ), "home-news", {"image"}, "news_posts"),
         ttl_seconds=max(settings.public_cache_ttl_seconds, 300),
     ))
 
@@ -328,19 +370,16 @@ def gallery_social(actor_key: str = ""):
 
 
 @router.get("/gallery/albums")
-def gallery_albums(limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
-    albums = gallery_album_records()
-    total = len(albums)
-    return ok(albums[offset:offset + limit], meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+def gallery_albums(limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+    total, albums = gallery_album_page(limit, offset)
+    return ok(albums, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.get("/gallery/bootstrap")
-def gallery_bootstrap(actor_key: str = "", limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
-    albums = gallery_album_records()
-    total = len(albums)
-    page = albums[offset:offset + limit]
-    image_keys = [f"album:{item['slug']}" for item in page]
-    return ok({"albums": page, "social": gallery_social_map(actor_key, image_keys)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+def gallery_bootstrap(actor_key: str = "", limit: int = Query(12, ge=1, le=48), offset: int = Query(0, ge=0)):
+    total, albums = gallery_album_page(limit, offset)
+    image_keys = [f"album:{item['slug']}" for item in albums]
+    return ok({"albums": albums, "social": gallery_social_map(actor_key, image_keys)}, meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.post("/gallery/social/like")
@@ -370,7 +409,7 @@ def gallery_social_comment(payload: GalleryCommentPayload):
 def tournaments():
     def build():
         apply_registration_window_statuses()
-        return normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments ORDER BY name")), "tournament", {"image", "poster", "rules_pdf"})
+        return normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments ORDER BY name")), "tournament", {"image", "poster", "rules_pdf"}, "tournaments")
 
     return ok(get_or_set_json(cache_key("public:tournaments"), build))
 
@@ -382,7 +421,7 @@ def tournament_detail(slug: str):
         item = row("SELECT * FROM tournaments WHERE slug = ?", (slug,))
         if not item:
             raise HTTPException(status_code=404, detail="Tournament not found")
-        return normalize_media_record(attach_cities(item), "tournament", {"image", "poster", "rules_pdf"})
+        return normalize_media_record(attach_cities(item), "tournament", {"image", "poster", "rules_pdf"}, "tournaments")
 
     return ok(get_or_set_json(cache_key("public:tournament", slug), build))
 

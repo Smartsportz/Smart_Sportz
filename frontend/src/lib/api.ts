@@ -18,6 +18,17 @@ function resolveApiBaseUrl() {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 45000);
+
+export function mediaUrl(path?: string) {
+  if (!path) return "";
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  if (path.startsWith(import.meta.env.BASE_URL)) return path;
+  if (path.startsWith("/api/v1/")) return `${API_BASE_URL}${path.slice("/api/v1".length)}`;
+  if (path.startsWith("/storage/")) return `${API_BASE_URL}${path}`;
+  if (/^\/(assets|media)\//.test(path)) return `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
+  return path;
+}
+
 export function websocketUrl(path: string) {
   const base = API_BASE_URL.startsWith("http")
     ? API_BASE_URL.replace(/^http/, "ws")

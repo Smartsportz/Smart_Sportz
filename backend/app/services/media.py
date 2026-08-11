@@ -30,6 +30,7 @@ MEDIA_FIELDS = {
     "tournament_image",
     "rules_pdf",
 }
+IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def materialize_data_url(value: Any, namespace: str = "media") -> Any:
@@ -54,15 +55,43 @@ def materialize_data_url(value: Any, namespace: str = "media") -> Any:
     return f"/api/v1/storage/files/{filename}"
 
 
-def normalize_media_record(item: dict[str, Any], namespace: str = "media", fields: set[str] | None = None) -> dict[str, Any]:
+def normalize_media_record(
+    item: dict[str, Any],
+    namespace: str = "media",
+    fields: set[str] | None = None,
+    table: str | None = None,
+    key_field: str = "slug",
+) -> dict[str, Any]:
     active_fields = fields or MEDIA_FIELDS
     normalized = dict(item)
+    changed: dict[str, Any] = {}
     for field in active_fields:
         if field in normalized:
-            normalized[field] = materialize_data_url(normalized[field], f"{namespace}-{field}")
+            original = normalized[field]
+            normalized[field] = materialize_data_url(original, f"{namespace}-{field}")
+            if original != normalized[field]:
+                changed[field] = normalized[field]
+    if table and changed and key_field in normalized and IDENTIFIER_RE.match(table) and IDENTIFIER_RE.match(key_field):
+        safe_fields = [field for field in changed if IDENTIFIER_RE.match(field)]
+        if safe_fields:
+            try:
+                from app.db.database import execute
+
+                assignments = ", ".join(f"{field} = ?" for field in safe_fields)
+                execute(
+                    f"UPDATE {table} SET {assignments} WHERE {key_field} = ?",
+                    tuple(changed[field] for field in safe_fields) + (normalized[key_field],),
+                )
+            except Exception:
+                pass
     return normalized
 
 
-def normalize_media_records(items: list[dict[str, Any]], namespace: str = "media", fields: set[str] | None = None) -> list[dict[str, Any]]:
-    return [normalize_media_record(item, namespace, fields) for item in items]
-
+def normalize_media_records(
+    items: list[dict[str, Any]],
+    namespace: str = "media",
+    fields: set[str] | None = None,
+    table: str | None = None,
+    key_field: str = "slug",
+) -> list[dict[str, Any]]:
+    return [normalize_media_record(item, namespace, fields, table, key_field) for item in items]

@@ -5,6 +5,7 @@ import type React from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { navItems, withRuntimeTournamentStatus } from "../data/platform";
+import { mediaUrl } from "../lib/api";
 
 export function Page({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -274,7 +275,7 @@ export function TournamentCard({ item }: { item: any }) {
   return (
     <Link to={destination} className="click-card">
     <motion.article className="tournament-card" whileHover={{ y: -6, scale: 1.01 }} transition={{ type: "spring", stiffness: 260, damping: 22 }}>
-      <img src={tournament.image} alt={`${tournament.name} visual`} loading="lazy" />
+      <img src={mediaUrl(tournament.image)} alt={`${tournament.name} visual`} loading="lazy" />
       <div className="card-body">
         <span className={`status ${tournament.accent}`}>{tournament.status}</span>
         <h3>{tournament.name}</h3>
@@ -295,7 +296,7 @@ export function TournamentCard({ item }: { item: any }) {
 export function LiveMatchCard({ match }: { match: any }) {
   return (
     <Link className="live-card click-card" to={`/live/${match.id}`}>
-      <div className="live-media"><img src={match.image} alt="" loading="lazy" /><span className="live-dot">Live</span></div>
+      <div className="live-media"><img src={mediaUrl(match.image)} alt="" loading="lazy" /><span className="live-dot">Live</span></div>
       <div>
         <p className="eyebrow">{match.tournament}</p>
         <h3>{match.home} vs {match.away}</h3>

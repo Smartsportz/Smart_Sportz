@@ -66,15 +66,25 @@ def slugify(title: str) -> str:
 
 
 def clear_public_cache(*slugs: str) -> None:
+    prefixes = [
+        "cache:public:home",
+        "cache:public:home:notice",
+        "cache:public:home:discovery",
+        "cache:public:home:organizers",
+        "cache:public:home:sponsors",
+        "cache:public:home:news",
+        "cache:public:gallery:albums",
+        "cache:content:news",
+    ]
     keys = [
         cache_key("public:home"),
         cache_key("public:tournaments"),
-        cache_key("public:gallery:albums"),
-        cache_key("content:news"),
     ]
     keys.extend(cache_key("public:tournament", slug) for slug in slugs if slug)
     keys.extend(cache_key("public:bracket", slug) for slug in slugs if slug)
     keys.extend(cache_key("content:news-detail", slug) for slug in slugs if slug)
+    for prefix in prefixes:
+        runtime_state.delete_prefix(prefix)
     for key in keys:
         runtime_state.delete(key)
 
@@ -184,9 +194,9 @@ def dashboard(user: dict = Depends(require_roles("super_admin", "management"))):
         registration_filter = "" if user["role"] == "super_admin" else (f" AND city IN ({','.join(['?'] * len(cities))})" if cities else " AND 1 = 0")
         return {
             "assignedCities": cities,
-            "assignedTournaments": normalize_media_records(rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", tuple(tournament_params)), "management-tournament", {"image", "poster", "rules_pdf"}),
-            "pendingRegistrations": normalize_media_records(rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval', 'waiting'){registration_filter}", cities), "management-registration", {"team_logo", "selected_jersey_image"}),
-            "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches"), "management-live", {"image"}),
+            "assignedTournaments": normalize_media_records(rows(f"SELECT * FROM tournaments WHERE 1 = 1{tournament_filter} ORDER BY name", tuple(tournament_params)), "management-tournament", {"image", "poster", "rules_pdf"}, "tournaments"),
+            "pendingRegistrations": normalize_media_records(rows(f"SELECT * FROM registrations WHERE status IN ('pending_payment', 'pending_approval', 'waiting'){registration_filter}", cities), "management-registration", {"team_logo", "selected_jersey_image"}, "registrations", "id"),
+            "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches"), "management-live", {"image"}, "live_matches", "id"),
         }
 
     return ok(build())
@@ -211,7 +221,7 @@ def tournaments(user: dict = Depends(require_roles("super_admin", "management"))
             records = rows(f"SELECT * FROM tournaments WHERE {' OR '.join(filters)} ORDER BY name", tuple(params)) if filters else []
         order = {"Upcoming": 0, "Registration Open": 1, "Live": 2, "Registration Closed": 3, "Completed": 4}
         details = [_tournament_detail(item["slug"]) for item in records]
-        return normalize_media_records(sorted([item for item in details if item], key=lambda item: (order.get(item["status"], 9), item["name"])), "management-tournament", {"image", "poster", "rules_pdf"})
+        return normalize_media_records(sorted([item for item in details if item], key=lambda item: (order.get(item["status"], 9), item["name"])), "management-tournament", {"image", "poster", "rules_pdf"}, "tournaments")
 
     return ok(get_or_set_json(cache_key("management:tournaments", user["id"], user["role"]), build, settings.dashboard_cache_ttl_seconds))
 
@@ -370,7 +380,7 @@ def manager_news(
         total = int(row(f"SELECT COUNT(*) AS count FROM news_posts {where}", tuple(params))["count"] or 0)
         return {
             "assignedCities": cities,
-            "posts": normalize_media_records(rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC LIMIT ? OFFSET ?", tuple([*params, limit, offset])), "management-news", {"image"}),
+            "posts": normalize_media_records(rows(f"SELECT * FROM news_posts {where} ORDER BY updated_at DESC LIMIT ? OFFSET ?", tuple([*params, limit, offset])), "management-news", {"image"}, "news_posts"),
             "sports": rows(
                 """SELECT s.slug, s.name, s.color, COALESCE(v.show_on_home, 0) AS show_on_home, COALESCE(v.sort_order, 99) AS sort_order
                    FROM sports s LEFT JOIN sport_home_visibility v ON v.sport_slug = s.slug
@@ -410,7 +420,7 @@ def create_news(payload: NewsPostPayload, user: dict = Depends(require_roles("su
         execute_many(statements)
     log(user["email"], "news_created", "news", slug, f"News post created for {payload.city}")
     clear_public_cache(slug)
-    return ok(normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "management-news", {"image"}), "News post created")
+    return ok(normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "management-news", {"image"}, "news_posts"), "News post created")
 
 
 @router.patch("/news/{slug}")
@@ -440,7 +450,7 @@ def update_news(slug: str, payload: NewsPostPayload, user: dict = Depends(requir
         execute_many(statements)
     log(user["email"], "news_updated", "news", slug, f"News post updated for {payload.city}")
     clear_public_cache(slug)
-    return ok(normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "management-news", {"image"}), "News post updated")
+    return ok(normalize_media_record(row("SELECT * FROM news_posts WHERE slug = ?", (slug,)) or {}, "management-news", {"image"}, "news_posts"), "News post updated")
 
 
 @router.get("/gallery")
@@ -455,11 +465,11 @@ def gallery_albums(
     if user["role"] == "super_admin":
         total = int(row("SELECT COUNT(*) AS count FROM gallery_albums")["count"] or 0)
         items = rows("SELECT * FROM gallery_albums ORDER BY sort_order, title LIMIT ? OFFSET ?", (limit, offset))
-        return ok(normalize_media_records(items, "management-gallery", {"cover"}), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+        return ok(normalize_media_records(items, "management-gallery", {"cover"}, "gallery_albums"), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
     placeholders = ",".join(["?"] * len(cities))
     total = int(row(f"SELECT COUNT(*) AS count FROM gallery_albums WHERE city IN ({placeholders})", tuple(cities))["count"] or 0)
     items = rows(f"SELECT * FROM gallery_albums WHERE city IN ({placeholders}) ORDER BY sort_order, title LIMIT ? OFFSET ?", tuple([*cities, limit, offset]))
-    return ok(normalize_media_records(items, "management-gallery", {"cover"}), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
+    return ok(normalize_media_records(items, "management-gallery", {"cover"}, "gallery_albums"), meta={"total": total, "limit": limit, "offset": offset, "hasMore": offset + limit < total})
 
 
 @router.post("/gallery")
@@ -481,7 +491,7 @@ def create_gallery_album(payload: GalleryAlbumPayload, user: dict = Depends(requ
     )
     log(user["email"], "gallery_created", "gallery", slug, f"Gallery album created: {payload.title}")
     clear_public_cache()
-    return ok(normalize_media_record(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)) or {}, "management-gallery", {"cover"}), "Gallery created")
+    return ok(normalize_media_record(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)) or {}, "management-gallery", {"cover"}, "gallery_albums"), "Gallery created")
 
 
 @router.patch("/gallery/{slug}")
@@ -503,7 +513,7 @@ def update_gallery_album(slug: str, payload: GalleryAlbumPayload, user: dict = D
     )
     log(user["email"], "gallery_updated", "gallery", slug, f"Gallery album updated: {payload.title}")
     clear_public_cache()
-    return ok(normalize_media_record(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)) or {}, "management-gallery", {"cover"}), "Gallery updated")
+    return ok(normalize_media_record(row("SELECT * FROM gallery_albums WHERE slug = ?", (slug,)) or {}, "management-gallery", {"cover"}, "gallery_albums"), "Gallery updated")
 
 
 @router.delete("/gallery/{slug}")

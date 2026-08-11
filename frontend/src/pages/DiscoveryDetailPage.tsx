@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Page } from "../components/UI";
-import { apiRequest } from "../lib/api";
+import { apiRequest, mediaUrl } from "../lib/api";
 import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 
 type DiscoveryDetail = Record<string, any> & {
@@ -28,7 +28,7 @@ export function DiscoveryDetailPage() {
       ) : (
         <>
           <section className="discovery-detail-hero">
-            <img src={detail.image} alt="" loading="eager" fetchpriority="high" />
+            <img src={mediaUrl(detail.image)} alt="" loading="eager" fetchpriority="high" />
             <div>
               <span className="status emerald">{detail.label}</span>
               <h1>{detail.title}</h1>
@@ -55,7 +55,7 @@ export function DiscoveryDetailPage() {
                 <article className="panel">
                   <h2>Sponsor Details</h2>
                   <div className="sponsor-detail-logo">
-                    <img src={detail.sponsor_image || detail.image} alt="" loading="lazy" />
+                    <img src={mediaUrl(detail.sponsor_image || detail.image)} alt="" loading="lazy" />
                     <strong>{detail.sponsor_name}</strong>
                   </div>
                   <p>{detail.sponsor_details}</p>

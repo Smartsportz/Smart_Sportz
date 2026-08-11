@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { archiveForTournament, individualScores, liveMatches, withRuntimeTournamentStatus } from "../data/platform";
 import { InfoPanel, Metric } from "./shared";
-import { apiRequest } from "../lib/api";
+import { apiRequest, mediaUrl } from "../lib/api";
 import { SectionSkeleton } from "../lib/progressive";
 
 async function downloadRulesPdf(tournament: Record<string, any>) {
@@ -119,7 +119,7 @@ export function TournamentDetailPage() {
   return (
     <Page>
       <section className="detail-hero">
-        <img src={item.image} alt="" loading="eager" fetchpriority="high" />
+        <img src={mediaUrl(item.image)} alt="" loading="eager" fetchpriority="high" />
         <div>
           <span className={`status ${item.accent}`}>{item.status}</span>
           <h1>{item.name}</h1>
@@ -137,7 +137,7 @@ export function TournamentDetailPage() {
           <div className="detail-grid">
             <section className="panel video-panel">
               <span className="live-dot">Live video</span>
-              <img src={item.image} alt="" loading="lazy" />
+              <img src={mediaUrl(item.image)} alt="" loading="lazy" />
             </section>
             <section className="panel">
               <h2>Live match intelligence</h2>
