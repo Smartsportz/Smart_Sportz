@@ -64,6 +64,38 @@ function ScrollToTop() {
   const { showFor } = useLoading();
 
   useEffect(() => {
+    const actionButtonPattern = /\b(save|saved|confirm|publish|create|update|upload|login|sign in|change password|record refund|cancel payment)\b/i;
+
+    function elementText(element: HTMLElement) {
+      if (element instanceof HTMLInputElement) {
+        return element.value || element.getAttribute("aria-label") || "";
+      }
+      return `${element.textContent || ""} ${element.getAttribute("aria-label") || ""}`.trim();
+    }
+
+    function shouldShowActionLoader(element: HTMLElement | null) {
+      if (!element || element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true") {
+        return false;
+      }
+      const text = elementText(element);
+      return actionButtonPattern.test(text);
+    }
+
+    function handleActionClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button, input[type='submit'], input[type='button'], [role='button']") as HTMLElement | null;
+      if (shouldShowActionLoader(button)) {
+        showFor(1800);
+      }
+    }
+
+    function handleFormSubmit(event: SubmitEvent) {
+      const submitter = event.submitter as HTMLElement | null;
+      if (shouldShowActionLoader(submitter)) {
+        showFor(2200);
+      }
+    }
+
     function handleInternalNavigation(event: MouseEvent) {
       const target = event.target as HTMLElement | null;
       const link = target?.closest("a[href]") as HTMLAnchorElement | null;
@@ -78,8 +110,14 @@ function ScrollToTop() {
       showFor(1300);
     }
 
+    document.addEventListener("click", handleActionClick, true);
+    document.addEventListener("submit", handleFormSubmit, true);
     document.addEventListener("click", handleInternalNavigation, true);
-    return () => document.removeEventListener("click", handleInternalNavigation, true);
+    return () => {
+      document.removeEventListener("click", handleActionClick, true);
+      document.removeEventListener("submit", handleFormSubmit, true);
+      document.removeEventListener("click", handleInternalNavigation, true);
+    };
   }, [showFor]);
 
   useEffect(() => {
