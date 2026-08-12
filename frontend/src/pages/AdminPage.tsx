@@ -1343,6 +1343,7 @@ function AdminCmsDbPanel() {
       {/* Main CMS Table */}
       <DataTable
         columns={["Section", "Type", "Path", "Status", "Action"]}
+        topScrollbar="always"
         rows={records.map((item) => [
           item.title,
           item.type,
@@ -1393,6 +1394,7 @@ function AdminCmsDbPanel() {
           ) : (
             <DataTable
               columns={["Section", "Type", "Path", "Status", "Action"]}
+              topScrollbar="always"
               rows={discoveryRows}
             />
           )}
@@ -1415,6 +1417,7 @@ function AdminCmsDbPanel() {
           ) : (
             <DataTable
               columns={["Section", "Type", "Path", "Status", "Action"]}
+              topScrollbar="always"
               rows={sponsorRows}
             />
           )}
@@ -1435,6 +1438,7 @@ function AdminCmsDbPanel() {
           ) : (
             <DataTable
               columns={["Section", "Type", "Path", "Status", "Action"]}
+              topScrollbar="always"
               rows={organizerRows}
             />
           )}

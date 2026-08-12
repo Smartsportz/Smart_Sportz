@@ -336,7 +336,7 @@ function downloadTableCsv(columns: string[], rows: Array<Array<React.ReactNode>>
   URL.revokeObjectURL(url);
 }
 
-export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Array<React.ReactNode>> }) {
+export function DataTable({ columns, rows, topScrollbar = "auto" }: { columns: string[]; rows: Array<Array<React.ReactNode>>; topScrollbar?: "auto" | "always" }) {
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -347,8 +347,8 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
     const update = () => {
       const tableWidth = tableRef.current?.scrollWidth ?? 0;
       const bodyWidth = bodyScrollRef.current?.clientWidth ?? 0;
-      setScrollWidth(tableWidth);
-      setHasHorizontalScroll(tableWidth > bodyWidth + 1);
+      setScrollWidth(topScrollbar === "always" ? Math.max(tableWidth, bodyWidth + 1) : tableWidth);
+      setHasHorizontalScroll(topScrollbar === "always" || tableWidth > bodyWidth + 1);
     };
     update();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
@@ -361,7 +361,7 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
       observer?.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [rows, columns]);
+  }, [rows, columns, topScrollbar]);
 
   function syncScroll(source: "top" | "body") {
     const top = topScrollRef.current;
