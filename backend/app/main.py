@@ -9,12 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.init_db import initialize_database
+from app.services.media_cleanup import replace_legacy_media_urls
 from app.services.metrics import metrics_middleware, prometheus_text
 
 
 def create_app() -> FastAPI:
     if settings.init_db_on_startup:
         initialize_database()
+    replace_legacy_media_urls()
 
     app = FastAPI(
         title=settings.app_name,
