@@ -243,15 +243,6 @@ async function optimizeImageForUpload(file: File) {
   }
 }
 
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("Unable to read file."));
-    reader.readAsDataURL(file);
-  });
-}
-
 type ApiRequestOptions = RequestInit & { silent?: boolean; toast?: boolean; successToast?: string | boolean };
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}, token?: string | null): Promise<T> {
@@ -294,13 +285,6 @@ export async function uploadFile(file: File, token?: string | null, options: { s
     const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
     const requestToken = token ?? storedToken;
     const upload = await optimizeImageForUpload(file);
-    if (file.type.startsWith("image/")) {
-      const url = await fileToDataUrl(upload);
-      if (options.successToast) {
-        showToast("success", "Upload Complete", options.successToast === true ? "Image ready to save." : options.successToast);
-      }
-      return { filename: upload.name, originalName: file.name, size: upload.size, url };
-    }
     const formData = new FormData();
     formData.append("file", upload);
     const response = await fetchWithTimeout(`${API_BASE_URL}/storage/upload`, {

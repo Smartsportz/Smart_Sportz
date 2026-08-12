@@ -737,7 +737,7 @@ function AdminTournamentsDbPanel() {
                 {items.map((item) => (
                   <article className="manager-tournament-card" key={item.slug}>
                     <div className="manager-tournament-image">
-                      <img src={mediaUrl(item.image || "/assets/cricket-stadium.png")} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
+                      {item.image && <img src={mediaUrl(item.image)} alt="" />}
                     </div>
                     <div>
                       <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>
@@ -2089,7 +2089,7 @@ function AdminTournamentPickerPanel({ mode }: { mode: "teams" | "payments" }) {
         {records.map((item) => (
           <article className="manager-tournament-card" key={item.slug}>
             <div className="manager-tournament-image">
-              <img src={mediaUrl(item.image || "/assets/cricket-stadium.png")} alt="" onError={(event) => { event.currentTarget.src = "/assets/cricket-stadium.png"; }} />
+              {item.image && <img src={mediaUrl(item.image)} alt="" />}
             </div>
             <div>
               <span className={`status ${item.accent ?? "emerald"}`}>{item.status}</span>

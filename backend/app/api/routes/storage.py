@@ -16,6 +16,7 @@ from app.db.database import execute, row
 from app.services.audit import log
 
 router = APIRouter(prefix="/storage", tags=["storage"])
+media_router = APIRouter(prefix="/media", tags=["media"])
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".pdf"}
@@ -100,11 +101,10 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(current
     media_type = file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
     _store_media_file(stored_name, file.filename or stored_name, media_type, content)
     log(user["email"], "file_uploaded", "file", stored_name, f"Uploaded {file.filename}")
-    return ok({"filename": stored_name, "originalName": file.filename, "size": len(content), "url": f"/api/v1/storage/files/{stored_name}"}, "File uploaded")
+    return ok({"filename": stored_name, "originalName": file.filename, "size": len(content), "url": f"/api/v1/media/files/{stored_name}"}, "File uploaded")
 
 
-@router.get("/files/{filename}")
-def get_file(filename: str):
+def media_file_response(filename: str):
     try:
         target = resolve_stored_file(filename)
         media_type = "application/pdf" if target.suffix.lower() == ".pdf" else mimetypes.guess_type(target.name)[0] or "application/octet-stream"
@@ -130,3 +130,13 @@ def get_file(filename: str):
     if media_type == "application/pdf":
         headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return Response(bytes(content), media_type=media_type, headers=headers)
+
+
+@router.get("/files/{filename}")
+def get_file(filename: str):
+    return media_file_response(filename)
+
+
+@media_router.get("/files/{filename}")
+def get_media_file(filename: str):
+    return media_file_response(filename)
