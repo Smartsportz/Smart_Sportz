@@ -336,7 +336,17 @@ function downloadTableCsv(columns: string[], rows: Array<Array<React.ReactNode>>
   URL.revokeObjectURL(url);
 }
 
-export function DataTable({ columns, rows, topScrollbar = "auto" }: { columns: string[]; rows: Array<Array<React.ReactNode>>; topScrollbar?: "auto" | "always" }) {
+export function DataTable({
+  columns,
+  rows,
+  topScrollbar = "auto",
+  className = "",
+}: {
+  columns: string[];
+  rows: Array<Array<React.ReactNode>>;
+  topScrollbar?: "auto" | "always";
+  className?: string;
+}) {
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -347,8 +357,8 @@ export function DataTable({ columns, rows, topScrollbar = "auto" }: { columns: s
     const update = () => {
       const bodyWidth = bodyScrollRef.current?.clientWidth ?? 0;
       const contentWidth = bodyScrollRef.current?.scrollWidth ?? tableRef.current?.scrollWidth ?? 0;
-      const visibleTrackWidth = topScrollbar === "always" ? Math.max(contentWidth, Math.round(bodyWidth * 1.6)) : contentWidth;
-      setScrollWidth(visibleTrackWidth);
+      const measuredWidth = contentWidth > bodyWidth + 1 ? contentWidth : bodyWidth;
+      setScrollWidth(measuredWidth);
       setHasHorizontalScroll(topScrollbar === "always" || contentWidth > bodyWidth + 1);
     };
     update();
@@ -373,7 +383,7 @@ export function DataTable({ columns, rows, topScrollbar = "auto" }: { columns: s
   }
 
   return (
-    <div className="table-wrap">
+    <div className={`table-wrap ${className}`.trim()}>
       {rows.length > 0 && (
         <div className="table-export-actions">
           <button type="button" onClick={() => downloadTableCsv(columns, rows)}><Download size={16} /> Download</button>

@@ -1118,6 +1118,23 @@ table { width: max-content; min-width: 100%; border-collapse: collapse; }
 th, td { padding: 16px 18px; border-bottom: 1px solid var(--line); text-align: left; }
 th, td { white-space: nowrap; }
 th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.cms-table-wrap { justify-self: stretch; width: 100%; max-width: 100%; contain: inline-size; }
+.cms-table-wrap .table-scroll-top,
+.cms-table-wrap .table-scroll-body { width: 100%; max-width: 100%; min-width: 0; }
+.cms-table-wrap table { width: 100%; min-width: 760px; max-width: 100%; table-layout: fixed; }
+.cms-table-wrap th,
+.cms-table-wrap td { white-space: normal; overflow-wrap: anywhere; vertical-align: middle; }
+.cms-table-wrap th:nth-child(1),
+.cms-table-wrap td:nth-child(1) { width: 30%; }
+.cms-table-wrap th:nth-child(2),
+.cms-table-wrap td:nth-child(2) { width: 18%; }
+.cms-table-wrap th:nth-child(3),
+.cms-table-wrap td:nth-child(3) { width: 24%; }
+.cms-table-wrap th:nth-child(4),
+.cms-table-wrap td:nth-child(4) { width: 12%; }
+.cms-table-wrap th:nth-child(5),
+.cms-table-wrap td:nth-child(5) { width: 16%; }
+.cms-table-wrap .table-actions { white-space: nowrap; }
 .row-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .row-item:hover { color: var(--primary-dark); }
 .profile-panel { display: grid; grid-template-columns: 360px 1fr; gap: 24px; padding: 18px; }
