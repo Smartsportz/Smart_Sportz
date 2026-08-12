@@ -15,7 +15,7 @@ export function ProgressiveImage({
   src,
   alt,
   className = "",
-  fallbackSrc = "/assets/cricket-stadium.png",
+  fallbackSrc = "",
   loading = "lazy",
   fetchpriority,
   srcSet,
