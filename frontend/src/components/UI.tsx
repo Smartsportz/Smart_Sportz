@@ -341,12 +341,14 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const tableRef = useRef<HTMLTableElement | null>(null);
   const [scrollWidth, setScrollWidth] = useState(0);
+  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
 
   useEffect(() => {
     const update = () => {
       const tableWidth = tableRef.current?.scrollWidth ?? 0;
       const bodyWidth = bodyScrollRef.current?.clientWidth ?? 0;
-      setScrollWidth(Math.max(tableWidth, bodyWidth));
+      setScrollWidth(tableWidth);
+      setHasHorizontalScroll(tableWidth > bodyWidth + 1);
     };
     update();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
@@ -376,7 +378,9 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
           <button type="button" onClick={() => downloadTableCsv(columns, rows)}><Download size={16} /> Download</button>
         </div>
       )}
-      <div className="table-scroll-top" ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
+      {hasHorizontalScroll && (
+        <div className="table-scroll-top" ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
+      )}
       <div className="table-scroll-body" ref={bodyScrollRef} onScroll={() => syncScroll("body")}>
         <table ref={tableRef}>
           <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
