@@ -16,7 +16,6 @@ from app.db.database import execute, row
 from app.services.audit import log
 
 router = APIRouter(prefix="/storage", tags=["storage"])
-media_router = APIRouter(prefix="/media", tags=["media"])
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".pdf"}
@@ -54,9 +53,20 @@ def resolve_stored_file(filename: str) -> Path:
 
 def _media_row(filename: str) -> dict | None:
     try:
-        return row("SELECT filename, content_type, content FROM media_files WHERE filename = ?", (filename,))
+        found = row("SELECT filename, content_type, content FROM media_files WHERE filename = ?", (filename,))
+        if found:
+            return found
+        match = HASHED_STORAGE_NAME.search(filename)
+        if match:
+            digest = match.group("digest")
+            suffix = match.group("suffix")
+            return row(
+                "SELECT filename, content_type, content FROM media_files WHERE filename LIKE ? ORDER BY created_at DESC LIMIT 1",
+                (f"%{digest}{suffix}",),
+            )
     except Exception:
         return None
+    return None
 
 
 def _store_media_file(filename: str, original_name: str, content_type: str, content: bytes) -> None:
@@ -98,7 +108,7 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(current
     media_type = file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
     _store_media_file(stored_name, file.filename or stored_name, media_type, content)
     log(user["email"], "file_uploaded", "file", stored_name, f"Uploaded {file.filename}")
-    return ok({"filename": stored_name, "originalName": file.filename, "size": len(content), "url": f"/api/v1/media/files/{stored_name}"}, "File uploaded")
+    return ok({"filename": stored_name, "originalName": file.filename, "size": len(content), "url": f"/api/v1/storage/files/{stored_name}"}, "File uploaded")
 
 
 def media_file_response(filename: str):
@@ -131,9 +141,4 @@ def media_file_response(filename: str):
 
 @router.get("/files/{filename}")
 def get_file(filename: str):
-    return media_file_response(filename)
-
-
-@media_router.get("/files/{filename}")
-def get_media_file(filename: str):
     return media_file_response(filename)
