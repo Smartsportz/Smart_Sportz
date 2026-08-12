@@ -4,6 +4,7 @@ type ProgressiveImageProps = {
   src?: string;
   alt: string;
   className?: string;
+  fallbackSrc?: string;
   loading?: "eager" | "lazy";
   fetchpriority?: "high" | "low" | "auto";
   srcSet?: string;
@@ -14,14 +15,26 @@ export function ProgressiveImage({
   src,
   alt,
   className = "",
+  fallbackSrc = "/assets/cricket-stadium.png",
   loading = "lazy",
   fetchpriority,
   srcSet,
   sizes,
 }: ProgressiveImageProps) {
   const resolved = src ? mediaUrl(src) : "";
+  const fallback = fallbackSrc ? mediaUrl(fallbackSrc) : "";
   if (!resolved) {
-    return null;
+    if (!fallback) return null;
+    return (
+      <img
+        className={`progressive-image ${className}`.trim()}
+        src={fallback}
+        alt={alt}
+        loading={loading}
+        decoding="async"
+        fetchpriority={fetchpriority}
+      />
+    );
   }
 
   return (
@@ -34,6 +47,12 @@ export function ProgressiveImage({
       loading={loading}
       decoding="async"
       fetchpriority={fetchpriority}
+      onError={(event) => {
+        if (fallback && event.currentTarget.src !== fallback) {
+          event.currentTarget.src = fallback;
+          event.currentTarget.removeAttribute("srcset");
+        }
+      }}
     />
   );
 }

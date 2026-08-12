@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Any
 
@@ -53,6 +54,22 @@ def materialize_data_url(value: Any, namespace: str = "media") -> Any:
     target = settings.upload_dir / filename
     if not target.exists():
         target.write_bytes(content)
+    try:
+        from app.db.database import execute
+
+        execute(
+            """
+            INSERT INTO media_files(filename, original_name, content_type, size, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(filename) DO UPDATE SET
+              content_type = excluded.content_type,
+              size = excluded.size,
+              content = excluded.content
+            """,
+            (filename, filename, mime, len(content), content, datetime.now(timezone.utc).isoformat()),
+        )
+    except Exception:
+        pass
     return f"/api/v1/storage/files/{filename}"
 
 

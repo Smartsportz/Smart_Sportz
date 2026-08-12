@@ -46,6 +46,7 @@ OPERATIONAL_TABLE_ORDER = [
     "leaderboard_records",
     "gallery_albums",
     "gallery_social",
+    "media_files",
     "audit_logs",
 ]
 

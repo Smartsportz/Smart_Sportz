@@ -299,7 +299,7 @@ def home():
                 "totalTeams": 156,
                 "liveMatches": 8,
             },
-            "featuredTournaments": attach_tournament_metadata(rows("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND show_on_home = 1 ORDER BY name LIMIT 3")),
+            "featuredTournaments": normalize_media_records(attach_tournament_metadata(rows("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND show_on_home = 1 ORDER BY name LIMIT 3")), "home-tournament", {"image", "poster", "rules_pdf"}, "tournaments"),
             "liveMatches": normalize_media_records(rows("SELECT * FROM live_matches LIMIT 3"), "home-live-match", {"image"}, "live_matches", "id"),
             "discoveryCards": normalize_media_records(rows("SELECT * FROM home_discovery_cards WHERE published = 1 ORDER BY sort_order, title LIMIT 8"), "home-discovery", {"image", "sponsor_image"}, "home_discovery_cards"),
             "liveHighlight": normalize_media_record(row("SELECT * FROM live_highlights WHERE published = 1 ORDER BY sort_order, title LIMIT 1") or {}, "live-highlight", {"image"}, "live_highlights", "id") or None,

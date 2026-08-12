@@ -452,6 +452,15 @@ CREATE TABLE IF NOT EXISTS gallery_albums (
   published INTEGER NOT NULL DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS media_files (
+  filename TEXT PRIMARY KEY,
+  original_name TEXT NOT NULL DEFAULT '',
+  content_type TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  content BYTEA NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor TEXT NOT NULL,
