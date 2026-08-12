@@ -522,6 +522,18 @@ function AdminTournamentsDbPanel() {
     patchForm({ location: place, newCity: "", cities: Array.from(new Set([...form.cities, place])) });
   }
 
+  function finishTournamentSave(saved: Record<string, any>) {
+    setRecords((current) => [saved, ...current.filter((item) => item.slug !== (editing?.slug ?? saved.slug))]);
+    void loadTournaments();
+    setEditing(saved);
+    setSavedTournament(saved);
+    setForm(adminFormFromTournament(saved));
+    setMessage(`${saved.name} saved in database.`);
+    setShowForm(false);
+    setFlowStage("form");
+    navigate("/admin/tournaments");
+  }
+
   async function saveTournament() {
     setMessage("");
     setError("");
@@ -568,13 +580,7 @@ function AdminTournamentsDbPanel() {
         { method: editing ? "PATCH" : "POST", body: JSON.stringify(payload) }, 
         token,
       );
-      setRecords((current) => [saved, ...current.filter((item) => item.slug !== (editing?.slug ?? saved.slug))]);
-      void loadTournaments();
-      setEditing(saved);
-      setSavedTournament(saved);
-      setForm(adminFormFromTournament(saved));
-      setMessage(`${saved.name} saved in database.`);
-      setFlowStage("workspace");
+      finishTournamentSave(saved);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save tournament.");
     }
@@ -3103,7 +3109,7 @@ export function AdminTeamEditPage() {
     setError("");
     setMessage("");
     try {
-      await apiRequest(`/admin/teams/${id}`, { method: "POST", body: JSON.stringify(form) }, token);
+      await apiRequest(`/admin/teams/${id}`, { method: "PATCH", body: JSON.stringify(form) }, token);
       setMessage("Team updated successfully.");
       setTimeout(() => navigate(`/admin/teams/registrations/${id}`), 500);
     } catch (caught) {

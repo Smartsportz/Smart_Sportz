@@ -7,6 +7,5 @@ email-validator==2.2.0
 redis==5.2.1
 celery==5.4.0
 psycopg[binary]==3.3.4
-psycopg_pool==3.3.0
 resend==2.35.0
 reportlab==4.4.5

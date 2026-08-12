@@ -84,6 +84,10 @@ def clear_public_cache(*slugs: str) -> None:
         "cache:public:home:news",
         "cache:public:gallery:albums",
         "cache:content:news",
+        "cache:management:dashboard",
+        "cache:management:tournaments",
+        "cache:management:news",
+        "cache:management:matches",
     ]
     keys = [
         cache_key("public:home"),

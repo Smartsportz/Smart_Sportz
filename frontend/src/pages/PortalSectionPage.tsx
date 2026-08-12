@@ -412,6 +412,20 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     setTournamentForm((current) => ({ ...current, ...patch }));
   }
 
+  function applyTournamentPlace(place: string) {
+    if (place === "__new_city__") {
+      patchTournamentForm({ location: "__new_city__" });
+      return;
+    }
+    patchTournamentForm({ location: place, cities: Array.from(new Set([...tournamentForm.cities, place].filter(Boolean))) });
+  }
+
+  function saveTournamentPlace() {
+    const place = tournamentForm.newCity.trim();
+    if (!place) return;
+    patchTournamentForm({ location: place, newCity: "", cities: Array.from(new Set([...tournamentForm.cities, place])) });
+  }
+
   function setMoneyLine(index: number, patch: Partial<MoneyLine>) {
     patchTournamentForm({
       feeBreakdown: tournamentForm.feeBreakdown.map((line, i) => i === index ? { ...line, ...patch } : line),
@@ -426,7 +440,8 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
 
   async function saveTournamentForm() {
     setManagerMessage("");
-    const selectedCities = Array.from(new Set([tournamentForm.location, ...tournamentForm.cities].filter(Boolean)));
+    const primaryPlace = tournamentForm.location === "__new_city__" ? tournamentForm.newCity.trim() : tournamentForm.location.trim();
+    const selectedCities = Array.from(new Set([primaryPlace, ...tournamentForm.cities].map((city) => city.trim()).filter((city) => city && city !== "__new_city__")));
     const prizeTotal = tournamentForm.prizes.reduce((total, line) => total + Number(line.amount || 0), 0);
     const payload = {
       slug: tournamentForm.slug,
@@ -434,7 +449,7 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
       sport: tournamentForm.sport === "__new__" ? tournamentForm.newSportName : tournamentForm.sport,
       new_sport_name: tournamentForm.sport === "__new__" ? tournamentForm.newSportName : undefined,
       status: tournamentForm.status === "Featured" ? "Upcoming" : tournamentForm.status,
-      location: tournamentForm.location || "Mumbai",
+      location: primaryPlace || "Mumbai",
       date: tournamentForm.date || "TBA",
       registration_start: tournamentForm.registrationStart || "TBA",
       registration_end: tournamentForm.registrationEnd || "TBA",
@@ -728,12 +743,12 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
                     {tournamentForm.sport === "__new__" && <label>New sport name<input value={tournamentForm.newSportName} onChange={(event) => patchTournamentForm({ newSportName: event.target.value })} placeholder="e.g. Hockey" /></label>}
                     <label>Status<select value={tournamentForm.status} onChange={(event) => patchTournamentForm({ status: event.target.value })}><option>Featured</option><option>Upcoming</option><option>Registration Open</option><option>Registration Closed</option><option>Live</option><option>Completed</option></select></label>
                     <label>Primary place
-                      <select value={tournamentForm.location} onChange={(event) => patchTournamentForm({ location: event.target.value, cities: Array.from(new Set([...tournamentForm.cities, event.target.value])) })}>
+                      <select value={tournamentForm.location} onChange={(event) => applyTournamentPlace(event.target.value)}>
                         {cityOptions.map((city) => <option key={city}>{city}</option>)}
-                        {!assignedCities.length && <option value="__new_city__">Add new place</option>}
+                        <option value="__new_city__">Add new place</option>
                       </select>
                     </label>
-                    {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={() => tournamentForm.newCity && patchTournamentForm({ location: tournamentForm.newCity, cities: Array.from(new Set([...tournamentForm.cities, tournamentForm.newCity])) })} /></label>}
+                    {tournamentForm.location === "__new_city__" && <label>New place<input value={tournamentForm.newCity} onChange={(event) => patchTournamentForm({ newCity: event.target.value })} onBlur={saveTournamentPlace} /></label>}
                     <label>Tournament date<input value={tournamentForm.date} onChange={(event) => patchTournamentForm({ date: event.target.value })} placeholder="Aug 14 - Sep 02" /></label>
                     <label>Registration opens<input value={tournamentForm.registrationStart} onChange={(event) => patchTournamentForm({ registrationStart: event.target.value })} placeholder="Aug 01, 2026" /></label>
                     <label>Registration closes<input value={tournamentForm.registrationEnd} onChange={(event) => patchTournamentForm({ registrationEnd: event.target.value })} placeholder="Aug 10, 2026" /></label>

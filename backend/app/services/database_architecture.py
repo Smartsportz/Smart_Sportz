@@ -8,7 +8,7 @@ from typing import Any
 from app.core.config import settings
 from hashlib import sha256
 
-from app.db.database import audit_db_path, connect, connection_pool_status, db_path, mirror_db_path, table_names, using_postgres
+from app.db.database import audit_db_path, connect, connection_status, db_path, mirror_db_path, table_names, using_postgres
 
 
 def _utc_stamp() -> str:
@@ -77,7 +77,7 @@ def database_status() -> dict[str, Any]:
             "exists": True if using_postgres() else audit_db_path().exists(),
         },
         "redis": _safe_redis_url(),
-        "connectionPool": connection_pool_status(),
+        "connection": connection_status(),
         "mirrorHealthy": all(item["checksumMatch"] and item["rowCountMatch"] for item in comparisons),
         "tables": comparisons,
     }
