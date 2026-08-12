@@ -21,6 +21,8 @@ const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 45000);
 
 export function mediaUrl(path?: string) {
   if (!path) return "";
+  const apiStorageMatch = path.match(/^https?:\/\/[^/]+\/api\/v1(\/storage\/files\/.+)$/i);
+  if (apiStorageMatch) return `${API_BASE_URL}${apiStorageMatch[1]}`;
   if (/^(https?:|data:|blob:)/i.test(path)) return path;
   if (path.startsWith(import.meta.env.BASE_URL)) return path;
   if (path.startsWith("/api/v1/")) return `${API_BASE_URL}${path.slice("/api/v1".length)}`;
@@ -294,7 +296,12 @@ export async function uploadFile(file: File, token?: string | null, options: { s
     if (!response.ok || !payload.success) {
       throw new ApiError(friendlyError(response.status, payload as ApiEnvelope<unknown>));
     }
-    const url = /^https?:\/\//i.test(payload.data.url) ? payload.data.url : `${API_BASE_URL}${payload.data.url.replace(/^\/api\/v1/, "")}`;
+    const rawUrl = String(payload.data.url || "");
+    const url = rawUrl.startsWith("/api/v1/")
+      ? rawUrl
+      : /^https?:\/\//i.test(rawUrl)
+        ? rawUrl
+        : `/api/v1${rawUrl.startsWith("/") ? rawUrl : `/${rawUrl}`}`;
     if (options.successToast) {
       showToast("success", "Upload Complete", options.successToast === true ? "File uploaded successfully." : options.successToast);
     }

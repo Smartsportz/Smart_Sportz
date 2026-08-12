@@ -885,7 +885,7 @@ function AdminTournamentsDbPanel() {
                   <label>Category<select value={newsDraft.category} onChange={(event) => setNewsDraft((current) => ({ ...current, category: event.target.value }))}><option>Winner Teams</option><option>Match Updates</option><option>Tournament Updates</option><option>Announcements</option></select></label>
                   <label>Main image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) void fileToDataUrl(file).then((image) => setNewsDraft((current) => ({ ...current, image })));
+                    if (file) void uploadFile(file, token, { silent: true }).then((upload) => setNewsDraft((current) => ({ ...current, image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload news image."));
                   }} /></label>
                   <label>Image URL<input value={newsDraft.image} readOnly /></label>
                   <label>Sub header<input value={newsDraft.subHeader} onChange={(event) => setNewsDraft((current) => ({ ...current, subHeader: event.target.value }))} /></label>
@@ -900,7 +900,7 @@ function AdminTournamentsDbPanel() {
                         <label>Sub title<input value={section.subHeader} onChange={(event) => updateNewsSection(index, { subHeader: event.target.value })} /></label>
                         <label>Optional image<input type="file" accept="image/*" onChange={(event) => {
                           const file = event.target.files?.[0];
-                          if (file) void fileToDataUrl(file).then((image) => updateNewsSection(index, { image }));
+                          if (file) void uploadFile(file, token, { silent: true }).then((upload) => updateNewsSection(index, { image: upload.url })).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload section image."));
                         }} /></label>
                       </div>
                       <label>Sub title description<textarea value={section.description} onChange={(event) => updateNewsSection(index, { description: event.target.value })} /></label>
@@ -928,7 +928,7 @@ function AdminTournamentsDbPanel() {
                   <label>Title<input value={announcementDraft.title} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))} /></label>
                   <label>Image<input type="file" accept="image/*" onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) void fileToDataUrl(file).then((image) => setAnnouncementDraft(prev => ({...prev, image})));
+                    if (file) void uploadFile(file, token, { silent: true }).then((upload) => setAnnouncementDraft(prev => ({...prev, image: upload.url}))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload announcement image."));
                   }} /></label>
                 </div>
                 <label>Description<textarea value={announcementDraft.description} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, description: event.target.value }))} /></label>
@@ -1174,11 +1174,11 @@ export function AdminCMSEditPage() {
                 <label>Sponsor Name<input value={formData.sponsor_name || ""} onChange={(e) => setFormData({...formData, sponsor_name: e.target.value})} /></label>
                 <label>Image Upload<input type="file" accept="image/*" onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, image })));
+                  if (file) void uploadFile(file, token, { silent: true }).then((upload) => setFormData((current) => ({ ...current, image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload image."));
                 }} /></label>
                 <label>Sponsor Image Upload<input type="file" accept="image/*" onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, sponsor_image: image })));
+                  if (file) void uploadFile(file, token, { silent: true }).then((upload) => setFormData((current) => ({ ...current, sponsor_image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload sponsor image."));
                 }} /></label>
                 <label>Event Date<input value={formData.event_date || ""} onChange={(e) => setFormData({...formData, event_date: e.target.value})} /></label>
                 <label>Register Path<input value={formData.register_path || ""} onChange={(e) => setFormData({...formData, register_path: e.target.value})} /></label>
@@ -1199,7 +1199,7 @@ export function AdminCMSEditPage() {
                 <label>Name<input value={formData.name || ""} onChange={(e) => setFormData({...formData, name: e.target.value})} /></label>
                 <label>Image Upload<input type="file" accept="image/*" onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) void fileToDataUrl(file).then((image) => setFormData((current) => ({ ...current, image })));
+                  if (file) void uploadFile(file, token, { silent: true }).then((upload) => setFormData((current) => ({ ...current, image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload image."));
                 }} /></label>
                 <label>Link URL<input value={formData.link_url || ""} onChange={(e) => setFormData({...formData, link_url: e.target.value})} /></label>
                 <label>Sort Order<input type="number" value={formData.sort_order || 1} onChange={(e) => setFormData({...formData, sort_order: Number(e.target.value)})} /></label>
@@ -1515,8 +1515,7 @@ export function AnnouncementManagerPanel({ role = "admin" }: { role?: "admin" | 
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
       
-      // Store the file path (in a real app, you'd upload to server and get URL)
-      void fileToDataUrl(file).then((image) => setDraft((current) => ({ ...current, image })));
+      void uploadFile(file, token, { silent: true }).then((upload) => setDraft((current) => ({ ...current, image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload announcement image."));
     }
   };
 
@@ -2403,7 +2402,7 @@ export function AdminNewsPage({ mode = "news" }: { mode?: string }) {
                       accept="image/*"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) void fileToDataUrl(file).then((image) => setFormData({ ...formData, image }));
+                        if (file) void uploadFile(file, token, { silent: true }).then((upload) => setFormData((current) => ({ ...current, image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload news image."));
                       }}
                     />
                   </label>
@@ -2648,7 +2647,7 @@ export function GalleryManagerPanel() {
                 <label>To date<input type="date" value={form.to_date} onChange={(event) => setForm({ ...form, to_date: event.target.value })} /></label>
                 <label>Image upload<input type="file" accept="image/*" onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) void fileToDataUrl(file).then((image) => setForm((current) => ({ ...current, image })));
+                  if (file) void uploadFile(file, token, { silent: true }).then((upload) => setForm((current) => ({ ...current, image: upload.url }))).catch((caught) => setError(caught instanceof Error ? caught.message : "Unable to upload gallery image."));
                 }} /></label>
                 <label>Image URL<input value={form.image.startsWith("data:") ? "Uploaded image selected" : form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} placeholder="Optional image URL" /></label>
                 <label>Sort order<input type="number" value={form.sort_order} onChange={(event) => setForm({ ...form, sort_order: Number(event.target.value) })} /></label>

@@ -188,10 +188,9 @@ def execute_many(statements: list[tuple[str, Iterable[Any]]]) -> None:
 def ensure_column(table: str, column: str, definition: str) -> None:
     with connect() as conn:
         if using_postgres():
-            exists = conn.execute(
-                "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = %s AND column_name = %s",
-                (table, column),
-            ).fetchone()
+            conn.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "{column}" {definition}')
+            conn.commit()
+            return
         else:
             exists = any(item[1] == column for item in conn.execute(f"PRAGMA table_info({table})").fetchall())
         if not exists:

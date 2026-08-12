@@ -625,7 +625,10 @@ def _column_exists(conn, table: str, column: str) -> bool:
 def _add_column(conn, table: str, column: str, definition: str) -> None:
     if _column_exists(conn, table, column):
         return
-    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    if using_postgres():
+        conn.execute(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "{column}" {definition}')
+    else:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def _apply_operational_schema(path=None) -> None:

@@ -41,6 +41,7 @@ def ensure_tournament_visibility_column() -> None:
     if _tournament_visibility_ready:
         return
     ensure_column("tournaments", "published", "INTEGER NOT NULL DEFAULT 1")
+    ensure_column("tournaments", "show_on_home", "INTEGER NOT NULL DEFAULT 1")
     _tournament_visibility_ready = True
 
 
