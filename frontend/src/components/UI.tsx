@@ -345,10 +345,11 @@ export function DataTable({ columns, rows, topScrollbar = "auto" }: { columns: s
 
   useEffect(() => {
     const update = () => {
-      const tableWidth = tableRef.current?.scrollWidth ?? 0;
       const bodyWidth = bodyScrollRef.current?.clientWidth ?? 0;
-      setScrollWidth(topScrollbar === "always" ? Math.max(tableWidth, bodyWidth + 1) : tableWidth);
-      setHasHorizontalScroll(topScrollbar === "always" || tableWidth > bodyWidth + 1);
+      const contentWidth = bodyScrollRef.current?.scrollWidth ?? tableRef.current?.scrollWidth ?? 0;
+      const visibleTrackWidth = topScrollbar === "always" ? Math.max(contentWidth, Math.round(bodyWidth * 1.6)) : contentWidth;
+      setScrollWidth(visibleTrackWidth);
+      setHasHorizontalScroll(topScrollbar === "always" || contentWidth > bodyWidth + 1);
     };
     update();
     const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
@@ -379,7 +380,7 @@ export function DataTable({ columns, rows, topScrollbar = "auto" }: { columns: s
         </div>
       )}
       {hasHorizontalScroll && (
-        <div className="table-scroll-top" ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
+        <div className={`table-scroll-top ${topScrollbar === "always" ? "table-scroll-top-visible" : ""}`} ref={topScrollRef} onScroll={() => syncScroll("top")}><div style={{ width: scrollWidth }} /></div>
       )}
       <div className="table-scroll-body" ref={bodyScrollRef} onScroll={() => syncScroll("body")}>
         <table ref={tableRef}>
