@@ -2571,9 +2571,10 @@ export function GalleryManagerPanel() {
     setError("");
     setMessage("");
     try {
+      const image = form.image.trim();
       const saved = await apiRequest<any>(editing ? `/management/gallery/${editing.slug}` : "/management/gallery", {
         method: editing ? "PATCH" : "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, image, cover: image }),
       }, token);
       setRecords((current) => editing ? current.map((item) => item.slug === saved.slug ? saved : item) : [saved, ...current]);
       setMessage(editing ? "Gallery updated successfully." : "Gallery created successfully.");

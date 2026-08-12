@@ -238,6 +238,7 @@ class GalleryAlbumPayload(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     description: str = Field(default="", max_length=1000)
     image: str = Field(default="", max_length=20000000)
+    cover: str = Field(default="", max_length=20000000)
     sport: str = Field(default="Gallery", max_length=80)
     city: str = Field(default="", max_length=80)
     from_date: str = Field(default="", max_length=40)

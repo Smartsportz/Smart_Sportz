@@ -84,20 +84,17 @@ def _store_media_file(filename: str, original_name: str, content_type: str, cont
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), user: dict = Depends(current_user)):
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported file type")
     if file.content_type and file.content_type.lower() not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type")
     stored_name = f"{uuid4().hex}{suffix}"
-    target = settings.upload_dir / stored_name
     content = await file.read()
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File is too large")
     if not content:
         raise HTTPException(status_code=400, detail="File is empty")
-    target.write_bytes(content)
     media_type = file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
     _store_media_file(stored_name, file.filename or stored_name, media_type, content)
     log(user["email"], "file_uploaded", "file", stored_name, f"Uploaded {file.filename}")
@@ -105,6 +102,16 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(current
 
 
 def media_file_response(filename: str):
+    stored = _media_row(filename)
+    if stored:
+        content = stored.get("content") or b""
+        if isinstance(content, memoryview):
+            content = content.tobytes()
+        media_type = stored.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        headers = dict(CACHE_HEADERS)
+        if media_type == "application/pdf":
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return Response(bytes(content), media_type=media_type, headers=headers)
     try:
         target = resolve_stored_file(filename)
         media_type = "application/pdf" if target.suffix.lower() == ".pdf" else mimetypes.guess_type(target.name)[0] or "application/octet-stream"
@@ -119,17 +126,7 @@ def media_file_response(filename: str):
     except HTTPException as exc:
         if exc.status_code != 404:
             raise
-    stored = _media_row(filename)
-    if not stored:
-        raise HTTPException(status_code=404, detail="File not found")
-    content = stored.get("content") or b""
-    if isinstance(content, memoryview):
-        content = content.tobytes()
-    media_type = stored.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    headers = dict(CACHE_HEADERS)
-    if media_type == "application/pdf":
-        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return Response(bytes(content), media_type=media_type, headers=headers)
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 @router.get("/files/{filename}")

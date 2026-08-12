@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import Any
+
+API_STORAGE_URL_RE = re.compile(r"^(?P<prefix>(?:https?://[^/]+)?/api/v1)/storage/files/(?P<filename>[^?#]+)(?P<suffix>[?#].*)?$", re.IGNORECASE)
 
 
 def materialize_data_url(value: Any, namespace: str = "media") -> Any:
@@ -16,6 +19,10 @@ def materialize_data_url(value: Any, namespace: str = "media") -> Any:
 
 def normalize_media_value(value: Any, namespace: str = "media") -> Any:
     _ = namespace
+    if isinstance(value, str):
+        match = API_STORAGE_URL_RE.match(value.strip())
+        if match:
+            return f"{match.group('prefix')}/media/files/{match.group('filename')}{match.group('suffix') or ''}"
     return value
 
 
@@ -26,8 +33,13 @@ def normalize_media_record(
     table: str | None = None,
     key_field: str = "slug",
 ) -> dict[str, Any]:
-    _ = namespace, fields, table, key_field
-    return dict(item)
+    _ = table, key_field
+    active_fields = fields or set()
+    normalized = dict(item)
+    for field in active_fields:
+        if field in normalized:
+            normalized[field] = normalize_media_value(normalized[field], f"{namespace}-{field}")
+    return normalized
 
 
 def normalize_media_records(
@@ -37,5 +49,4 @@ def normalize_media_records(
     table: str | None = None,
     key_field: str = "slug",
 ) -> list[dict[str, Any]]:
-    _ = namespace, fields, table, key_field
-    return [dict(item) for item in items]
+    return [normalize_media_record(item, namespace, fields, table, key_field) for item in items]

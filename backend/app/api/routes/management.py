@@ -501,10 +501,11 @@ def create_gallery_album(payload: GalleryAlbumPayload, user: dict = Depends(requ
         counter += 1
     date_label = " - ".join([value for value in [payload.from_date, payload.to_date] if value]) or payload.from_date or payload.to_date or "Published gallery"
     month_label = payload.from_date[:7] if payload.from_date else ""
+    cover = (payload.cover or payload.image or "").strip()
     execute(
         """INSERT INTO gallery_albums(slug, title, sport, city, date_label, month_label, day_count, cover, summary, sort_order, published)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (slug, payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, 1, payload.image, payload.description, payload.sort_order, int(payload.published)),
+        (slug, payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, 1, cover, payload.description, payload.sort_order, int(payload.published)),
     )
     log(user["email"], "gallery_created", "gallery", slug, f"Gallery album created: {payload.title}")
     clear_public_cache()
@@ -522,11 +523,12 @@ def update_gallery_album(slug: str, payload: GalleryAlbumPayload, user: dict = D
         ensure_city_access(user, payload.city)
     date_label = " - ".join([value for value in [payload.from_date, payload.to_date] if value]) or payload.from_date or payload.to_date or item["date_label"]
     month_label = payload.from_date[:7] if payload.from_date else item["month_label"]
+    cover = (payload.cover or payload.image or "").strip()
     execute(
         """UPDATE gallery_albums
            SET title = ?, sport = ?, city = ?, date_label = ?, month_label = ?, cover = ?, summary = ?, sort_order = ?, published = ?
            WHERE slug = ?""",
-        (payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, payload.image, payload.description, payload.sort_order, int(payload.published), slug),
+        (payload.title, payload.sport or "Gallery", payload.city, date_label, month_label, cover, payload.description, payload.sort_order, int(payload.published), slug),
     )
     log(user["email"], "gallery_updated", "gallery", slug, f"Gallery album updated: {payload.title}")
     clear_public_cache()
