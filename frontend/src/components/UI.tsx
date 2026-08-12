@@ -343,10 +343,22 @@ export function DataTable({ columns, rows }: { columns: string[]; rows: Array<Ar
   const [scrollWidth, setScrollWidth] = useState(0);
 
   useEffect(() => {
-    const update = () => setScrollWidth(tableRef.current?.scrollWidth ?? 0);
+    const update = () => {
+      const tableWidth = tableRef.current?.scrollWidth ?? 0;
+      const bodyWidth = bodyScrollRef.current?.clientWidth ?? 0;
+      setScrollWidth(Math.max(tableWidth, bodyWidth));
+    };
     update();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    if (observer) {
+      if (tableRef.current) observer.observe(tableRef.current);
+      if (bodyScrollRef.current) observer.observe(bodyScrollRef.current);
+    }
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, [rows, columns]);
 
   function syncScroll(source: "top" | "body") {

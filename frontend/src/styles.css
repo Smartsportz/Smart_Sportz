@@ -1097,8 +1097,11 @@ textarea { width: 100%; min-height: 112px; padding: 12px 14px; border: 1px solid
 .table-export-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 14px 0; }
 .table-export-actions button, .content-scroll-controls button, .news-category-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--brand); font-weight: 900; cursor: pointer; box-shadow: var(--shadow-soft); }
 .table-export-actions button { padding: 0 14px; }
-.table-scroll-top { height: 16px; margin: 10px 14px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
-.table-scroll-top > div { height: 1px; }
+.table-scroll-top { height: 18px; margin: 10px 14px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: rgba(11, 108, 64, .45) rgba(11, 136, 82, .08); }
+.table-scroll-top > div { height: 1px; min-width: 100%; }
+.table-scroll-top::-webkit-scrollbar { height: 10px; }
+.table-scroll-top::-webkit-scrollbar-track { background: rgba(11, 136, 82, .08); border-radius: 999px; }
+.table-scroll-top::-webkit-scrollbar-thumb { background: rgba(11, 108, 64, .45); border-radius: 999px; }
 .table-scroll-body { max-width: 100%; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .table-scroll-body::-webkit-scrollbar { display: none; }
 .content-scroll-controls { display: flex; justify-content: flex-end; gap: 8px; margin: 0 0 12px; }
