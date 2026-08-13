@@ -90,7 +90,13 @@ def check_team_name(
     if len(name) < 2:
         return ok({"exists": False})
     existing = row(
-        "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(trim(team_name)) = lower(trim(?)) LIMIT 1",
+        """
+        SELECT id FROM registrations
+        WHERE tournament_slug = ?
+        AND lower(trim(team_name)) = lower(trim(?))
+        AND COALESCE(status, '') NOT IN ('rejected', 'cancelled')
+        LIMIT 1
+        """,
         (tournament_slug, name),
     )
     return ok({"exists": bool(existing)})
@@ -132,7 +138,12 @@ def create_registration(payload: RegistrationCreate, user: dict = Depends(curren
     if not city_allowed:
         raise HTTPException(status_code=422, detail="Selected city is not configured for this tournament")
     existing_team_name = row(
-        "SELECT id FROM registrations WHERE tournament_slug = ? AND lower(trim(team_name)) = lower(trim(?))",
+        """
+        SELECT id FROM registrations
+        WHERE tournament_slug = ?
+        AND lower(trim(team_name)) = lower(trim(?))
+        AND COALESCE(status, '') NOT IN ('rejected', 'cancelled')
+        """,
         (payload.tournament_slug, payload.team_name),
     )
     if existing_team_name:

@@ -844,6 +844,9 @@ textarea { width: 100%; min-height: 112px; padding: 12px 14px; border: 1px solid
 .detail-score span { font-size: clamp(30px, 5vw, 54px); }
 .table-actions { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .table-actions a, .table-actions button { border: 0; padding: 0; background: transparent; color: var(--primary-dark); font-weight: 800; cursor: pointer; }
+.table-actions button:disabled { cursor: not-allowed; opacity: .65; }
+.reject-registration-button { display: inline-flex; align-items: center; gap: 5px; color: #b91c1c !important; }
+.rejected-registration-row td { color: #7f1d1d; text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: rgba(185, 28, 28, .75); background: rgba(185, 28, 28, .05); }
 .group-bracket-table { display: grid; gap: 10px; overflow-x: auto; padding: 6px 0 18px; }
 .group-bracket-head,
 .group-bracket-row { display: grid; grid-template-columns: 150px 180px 180px 190px 190px 150px 70px; gap: 8px; align-items: center; min-width: 1130px; }

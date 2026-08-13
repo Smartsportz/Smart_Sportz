@@ -341,11 +341,13 @@ export function DataTable({
   rows,
   topScrollbar = "auto",
   className = "",
+  rowClassName,
 }: {
   columns: string[];
   rows: Array<Array<React.ReactNode>>;
   topScrollbar?: "auto" | "always";
   className?: string;
+  rowClassName?: (row: Array<React.ReactNode>, index: number) => string;
 }) {
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
@@ -395,7 +397,7 @@ export function DataTable({
       <div className="table-scroll-body" ref={bodyScrollRef} onScroll={() => syncScroll("body")}>
         <table ref={tableRef}>
           <thead><tr>{columns.map((col) => <th key={col}>{col}</th>)}</tr></thead>
-          <tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
+          <tbody>{rows.map((row, index) => <tr key={index} className={rowClassName?.(row, index) || undefined}>{row.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody>
         </table>
       </div>
     </div>

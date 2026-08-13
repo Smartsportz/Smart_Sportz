@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search } from "lucide-react";
+import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search, Ban } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
@@ -1010,6 +1010,7 @@ function AdminRegistrationsPanel() {
   const [registrations, setRegistrations] = useState<Array<Record<string, any>>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [rejectingId, setRejectingId] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -1029,6 +1030,20 @@ function AdminRegistrationsPanel() {
       alive = false;
     };
   }, [token]);
+
+  async function rejectRegistration(item: Record<string, any>) {
+    if (item.status === "rejected" || rejectingId) return;
+    setRejectingId(item.id);
+    setError("");
+    try {
+      const updated = await apiRequest<Record<string, any>>(`/admin/registrations/${item.id}/reject`, { method: "POST", successToast: "Registration rejected." }, token);
+      setRegistrations((current) => current.map((registration) => registration.id === item.id ? updated : registration));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not reject registration.");
+    } finally {
+      setRejectingId("");
+    }
+  }
 
   if (loading) {
     return <section className="panel"><SectionSkeleton rows={3} /></section>;
@@ -1057,8 +1072,14 @@ function AdminRegistrationsPanel() {
             <span className={`status ${item.payment_status === "paid" ? "emerald" : "orange"}`}>{item.payment_status}</span>,
             item.status,
             item.created_at ? new Date(item.created_at).toLocaleDateString() : "-",
-            <Link className="inline-link" to={`/admin/teams/registrations/${item.id}`}>Open</Link>,
+            <span className="table-actions">
+              <Link className="inline-link" to={`/admin/teams/registrations/${item.id}`}>Open</Link>
+              <button type="button" className="reject-registration-button" disabled={item.status === "rejected" || rejectingId === item.id} onClick={() => rejectRegistration(item)}>
+                <Ban size={14} /> {item.status === "rejected" ? "Rejected" : rejectingId === item.id ? "Rejecting" : "Reject"}
+              </button>
+            </span>,
           ])}
+          rowClassName={(_, index) => registrations[index]?.status === "rejected" ? "rejected-registration-row" : ""}
         />
       )}
     </>

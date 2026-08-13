@@ -731,6 +731,7 @@ def admin_update_team(
         SELECT id FROM registrations
         WHERE tournament_slug = (SELECT tournament_slug FROM registrations WHERE id = ?)
         AND LOWER(team_name) = LOWER(?) AND id <> ?
+        AND COALESCE(status, '') NOT IN ('rejected', 'cancelled')
         """,
         (registration_id, payload.team_name.strip(), registration_id),
     )
@@ -790,6 +791,31 @@ def admin_delete_team(
     )
     clear_public_cache(existing["tournament_slug"])
     return ok({"id": registration_id}, "Team deleted")
+
+
+@router.post("/registrations/{registration_id}/reject")
+def reject_registration(
+    registration_id: str,
+    user: dict = Depends(require_roles("super_admin", "management"))
+):
+    item = row("SELECT * FROM registrations WHERE id = ?", (registration_id,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Registration not found")
+    if item["status"] == "rejected":
+        return ok(item, "Registration already rejected")
+    execute("UPDATE registrations SET status = ? WHERE id = ?", ("rejected", registration_id))
+    clear_public_cache(item["tournament_slug"])
+    log(
+        user["email"],
+        "registration_rejected",
+        "registration",
+        registration_id,
+        f"Rejected registration for {item['team_name']}"
+    )
+    return ok(
+        row("SELECT * FROM registrations WHERE id = ?", (registration_id,)),
+        "Registration rejected"
+    )
 
 
 # ==================== NEWS CRUD OPERATIONS ====================
