@@ -22,7 +22,11 @@ const AdminTournamentPaymentsPage = lazyNamed(() => import("./pages/AdminPage"),
 const AdminTournamentTeamsPage = lazyNamed(() => import("./pages/AdminPage"), "AdminTournamentTeamsPage");
 const AdminUserCreatePage = lazyNamed(() => import("./pages/AdminPage"), "AdminUserCreatePage");
 const AdminUserDetailPage = lazyNamed(() => import("./pages/AdminPage"), "AdminUserDetailPage");
+const ChessSchoolManagementPage = lazyNamed(() => import("./pages/AdminPage"), "ChessSchoolManagementPage");
+const SportEditorPage = lazyNamed(() => import("./pages/AdminPage"), "SportEditorPage");
+const SportManagementPage = lazyNamed(() => import("./pages/AdminPage"), "SportManagementPage");
 const CmsSectionPage = lazyNamed(() => import("./pages/CmsSectionPage"), "CmsSectionPage");
+const ChessSchoolsPage = lazyNamed(() => import("./pages/ChessSchoolsPage"), "ChessSchoolsPage");
 const ContentPage = lazyNamed(() => import("./pages/ContentPage"), "ContentPage");
 const DiscoveryDetailPage = lazyNamed(() => import("./pages/DiscoveryDetailPage"), "DiscoveryDetailPage");
 const GalleryAlbumPage = lazyNamed(() => import("./pages/GalleryPage"), "GalleryAlbumPage");
@@ -166,6 +170,8 @@ export default function App() {
           <Route path="/registration/:id/payment" element={<ProtectedRoute roles={["user"]}><RegistrationPaymentPage /></ProtectedRoute>} />
           <Route path="/payments/:id/receipt" element={<ProtectedRoute roles={["user", "super_admin"]}><UtilityDetailPage type="payment" /></ProtectedRoute>} />
           <Route path="/sports" element={<SportsPage />} />
+          <Route path="/sports/chess/schools" element={<ChessSchoolsPage />} />
+          <Route path="/sports/chess/schools/:schoolSlug" element={<ChessSchoolsPage />} />
           <Route path="/sports/:slug" element={<SportDetailPage />} />
           <Route path="/discover/:slug" element={<DiscoveryDetailPage />} />
           <Route path="/live" element={<LiveHubPage />} />
@@ -202,6 +208,10 @@ export default function App() {
           <Route path="/user/*" element={<ProtectedRoute roles={["user"]}><UserDashboardPage /></ProtectedRoute>} />
           <Route path="/management/programs" element={<ProtectedRoute roles={["management"]}><RoleProgramsPage role="management" /></ProtectedRoute>} />
           <Route path="/management/tournaments" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/management/sports/new" element={<ProtectedRoute roles={["management"]}><SportEditorPage role="manager" /></ProtectedRoute>} />
+          <Route path="/management/sports/chess/schools" element={<ProtectedRoute roles={["management"]}><ChessSchoolManagementPage role="manager" /></ProtectedRoute>} />
+          <Route path="/management/sports/:slug/edit" element={<ProtectedRoute roles={["management"]}><SportEditorPage role="manager" /></ProtectedRoute>} />
+          <Route path="/management/sports" element={<ProtectedRoute roles={["management"]}><SportManagementPage role="manager" /></ProtectedRoute>} />
           <Route path="/management/registrations" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="registrations" /></ProtectedRoute>} />
           <Route path="/management/matches" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="matches" /></ProtectedRoute>} />
           <Route path="/management/players" element={<ProtectedRoute roles={["management"]}><ManagementSectionPage section="players" /></ProtectedRoute>} />
@@ -224,6 +234,10 @@ export default function App() {
           <Route path="/admin/tournaments/:slug/group-bracket" element={<ProtectedRoute roles={["super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
           <Route path="/admin/tournaments/:slug/bracket" element={<ProtectedRoute roles={["super_admin"]}><BracketWorkspacePage /></ProtectedRoute>} />
           <Route path="/admin/tournaments" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="tournaments" /></ProtectedRoute>} />
+          <Route path="/admin/sports/new" element={<ProtectedRoute roles={["super_admin"]}><SportEditorPage role="admin" /></ProtectedRoute>} />
+          <Route path="/admin/sports/chess/schools" element={<ProtectedRoute roles={["super_admin"]}><ChessSchoolManagementPage role="admin" /></ProtectedRoute>} />
+          <Route path="/admin/sports/:slug/edit" element={<ProtectedRoute roles={["super_admin"]}><SportEditorPage role="admin" /></ProtectedRoute>} />
+          <Route path="/admin/sports" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="sports" /></ProtectedRoute>} />
           <Route path="/admin/announcements" element={<ProtectedRoute roles={["super_admin"]}><AdminPage section="announcements" /></ProtectedRoute>} />
           <Route path="/admin/users/add" element={<ProtectedRoute roles={["super_admin"]}><AdminUserCreatePage /></ProtectedRoute>} />
           <Route path="/admin/users/:id" element={<ProtectedRoute roles={["super_admin"]}><AdminUserDetailPage /></ProtectedRoute>} />

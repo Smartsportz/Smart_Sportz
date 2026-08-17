@@ -11,12 +11,14 @@ from app.api.deps import require_roles
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import ensure_column, execute, execute_many, row, rows
-from app.schemas import BracketSavePayload, GalleryAlbumPayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
+from app.schemas import BracketSavePayload, ChessSchoolManagePayload, GalleryAlbumPayload, GroupBracketSavePayload, NewsPostPayload, NotificationSendPayload, SportHomeVisibilityPayload, SportManagePayload, SportReorderPayload, TournamentCitiesPayload, TournamentJerseysPayload, TournamentRegistrationWindowPayload, TournamentTeamSizePayload, TournamentUpsertPayload, WinnerAdvancePayload
 from app.services.audit import log
 from app.services.cache import cache_key, get_or_set_json
 from app.services.media import normalize_media_record, normalize_media_records
 from app.services.notifications import match_reminder_message, send_match_selection_whatsapp, send_whatsapp_message
+from app.services.realtime import publish_realtime
 from app.services.runtime_state import runtime_state
+from app.services.sports_schema import ensure_chess_school_tables, ensure_chess_sport_content, ensure_sport_content_columns
 from app.services.tournament_status import apply_registration_window_statuses, runtime_status, accent_for_status
 
 router = APIRouter(prefix="/management", tags=["management"])
@@ -82,6 +84,8 @@ def clear_public_cache(*slugs: str) -> None:
         "cache:public:home:organizers",
         "cache:public:home:sponsors",
         "cache:public:home:news",
+        "cache:public:sports",
+        "cache:public:sports:chess",
         "cache:public:gallery:albums",
         "cache:content:news",
         "cache:management:dashboard",
@@ -92,14 +96,23 @@ def clear_public_cache(*slugs: str) -> None:
     keys = [
         cache_key("public:home"),
         cache_key("public:tournaments"),
+        cache_key("public:sports"),
     ]
     keys.extend(cache_key("public:tournament", slug) for slug in slugs if slug)
     keys.extend(cache_key("public:bracket", slug) for slug in slugs if slug)
+    keys.extend(cache_key("public:sport", slug) for slug in slugs if slug)
     keys.extend(cache_key("content:news-detail", slug) for slug in slugs if slug)
     for prefix in prefixes:
         runtime_state.delete_prefix(prefix)
     for key in keys:
         runtime_state.delete(key)
+    publish_realtime(
+        "content:changed",
+        entity="content",
+        action="cache-cleared",
+        payload={"slugs": [slug for slug in slugs if slug]},
+        invalidates=["home", "tournaments", "sports", "news", "gallery", "management"],
+    )
 
 
 def optional_tournament_slug(value: str | None) -> str | None:
@@ -408,6 +421,281 @@ def manager_news(
 
     payload = get_or_set_json(cache_key("management:news", user["id"], user["role"], limit, offset), build, max(settings.dashboard_cache_ttl_seconds, 120))
     return ok(payload, meta={"total": payload.get("total", len(payload.get("posts", []))), "limit": limit, "offset": offset, "hasMore": offset + limit < payload.get("total", 0)})
+
+
+def _sport_payload_values(payload: SportManagePayload, user_id: str, now: str) -> dict:
+    show_explore = payload.show_explore and bool(payload.explore_url.strip())
+    attributes = [
+        {"label": str(item.get("label", "")).strip(), "value": str(item.get("value", "")).strip()}
+        for item in payload.attributes
+        if str(item.get("label", "")).strip() or str(item.get("value", "")).strip()
+    ]
+    return {
+        "name": " ".join(payload.name.strip().split()),
+        "title": " ".join(payload.title.strip().split()),
+        "image": payload.image.strip(),
+        "description": payload.description.strip(),
+        "operations": payload.operations.strip(),
+        "attribute_json": json.dumps(attributes[:20]),
+        "color": payload.color.strip() or "emerald",
+        "active": payload.active,
+        "published": int(payload.published),
+        "sort_order": payload.sort_order,
+        "explore_label": (payload.explore_label.strip() or "Explore") if show_explore else "",
+        "explore_url": payload.explore_url.strip() if show_explore else "",
+        "created_by": user_id,
+        "updated_at": now,
+    }
+
+
+@router.get("/sports")
+def manager_sports(user: dict = Depends(require_roles("super_admin", "management"))):
+    _ = user
+    ensure_chess_sport_content()
+    items = rows("SELECT * FROM sports ORDER BY sort_order, name")
+    return ok(normalize_media_records(items, "management-sports", {"image"}, "sports"))
+
+
+@router.patch("/sports/reorder")
+def reorder_manager_sports(payload: SportReorderPayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_chess_sport_content()
+    clean_slugs: list[str] = []
+    for slug in payload.slugs:
+        value = str(slug).strip()
+        if value and value not in clean_slugs:
+            clean_slugs.append(value)
+    if not clean_slugs:
+        raise HTTPException(status_code=400, detail="At least one sport is required")
+    existing = {item["slug"] for item in rows("SELECT slug FROM sports")}
+    missing = [slug for slug in clean_slugs if slug not in existing]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Sport not found: {missing[0]}")
+    execute_many([
+        ("UPDATE sports SET sort_order = ?, updated_at = ? WHERE slug = ?", (index, datetime.now(timezone.utc).isoformat(), slug))
+        for index, slug in enumerate(clean_slugs, start=1)
+    ])
+    log(user["email"], "sports_reordered", "sport", "sports", f"Sports reordered: {', '.join(clean_slugs)}")
+    clear_public_cache()
+    return ok(normalize_media_records(rows("SELECT * FROM sports ORDER BY sort_order, name"), "management-sports", {"image"}, "sports"), "Sports reordered")
+
+
+def _chess_school_payload(slug: str) -> dict:
+    school = row("SELECT * FROM chess_schools WHERE slug = ?", (slug,))
+    if not school:
+        raise HTTPException(status_code=404, detail="Chess school not found")
+    school["students"] = normalize_media_records(
+        rows("SELECT * FROM chess_school_students WHERE school_slug = ? ORDER BY rank, name", (slug,)),
+        "chess-school-student",
+        {"avatar_image"},
+        "chess_school_students",
+        "id",
+    )
+    return normalize_media_record(school, "chess-school", set(), "chess_schools")
+
+
+def _save_chess_students(school_slug: str, payload: ChessSchoolManagePayload, now: str) -> None:
+    execute("DELETE FROM chess_school_students WHERE school_slug = ?", (school_slug,))
+    statements = []
+    for index, student in enumerate(payload.students, start=1):
+        student_id = (student.id or "").strip() or f"{school_slug}-student-{uuid4().hex[:8]}"
+        statements.append((
+            """INSERT INTO chess_school_students(
+                 id, school_slug, name, grade, rank, strength, note, avatar_image, published, created_at, updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                student_id,
+                school_slug,
+                " ".join(student.name.strip().split()),
+                student.grade.strip(),
+                student.rank or index,
+                student.strength.strip(),
+                student.note.strip(),
+                student.avatar_image.strip(),
+                int(student.published),
+                now,
+                now,
+            ),
+        ))
+    if statements:
+        execute_many(statements)
+
+
+@router.get("/sports/chess/schools")
+def manager_chess_schools(user: dict = Depends(require_roles("super_admin", "management"))):
+    _ = user
+    ensure_chess_school_tables()
+    schools = normalize_media_records(rows("SELECT * FROM chess_schools ORDER BY sort_order, name"), "chess-school", set(), "chess_schools")
+    counts = {
+        item["school_slug"]: int(item["count"] or 0)
+        for item in rows("SELECT school_slug, COUNT(*) AS count FROM chess_school_students GROUP BY school_slug")
+    }
+    for school in schools:
+        school["student_count"] = counts.get(school["slug"], 0)
+    return ok(schools, "Chess schools loaded")
+
+
+@router.get("/sports/chess/schools/{school_slug}")
+def manager_chess_school_detail(school_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    _ = user
+    ensure_chess_school_tables()
+    return ok(_chess_school_payload(school_slug), "Chess school loaded")
+
+
+@router.post("/sports/chess/schools")
+def create_manager_chess_school(payload: ChessSchoolManagePayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_chess_school_tables()
+    base_slug = slugify(payload.name)
+    slug = base_slug
+    counter = 2
+    while row("SELECT slug FROM chess_schools WHERE slug = ?", (slug,)):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    now = datetime.now(timezone.utc).isoformat()
+    execute(
+        """INSERT INTO chess_schools(slug, name, city, coordinator, summary, published, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            slug,
+            " ".join(payload.name.strip().split()),
+            payload.city.strip(),
+            payload.coordinator.strip(),
+            payload.summary.strip(),
+            int(payload.published),
+            payload.sort_order,
+            now,
+            now,
+        ),
+    )
+    _save_chess_students(slug, payload, now)
+    log(user["email"], "chess_school_created", "chess_school", slug, f"Chess school created: {payload.name}")
+    clear_public_cache("chess")
+    return ok(_chess_school_payload(slug), "Chess school created")
+
+
+@router.patch("/sports/chess/schools/{school_slug}")
+def update_manager_chess_school(school_slug: str, payload: ChessSchoolManagePayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_chess_school_tables()
+    if not row("SELECT slug FROM chess_schools WHERE slug = ?", (school_slug,)):
+        raise HTTPException(status_code=404, detail="Chess school not found")
+    now = datetime.now(timezone.utc).isoformat()
+    execute(
+        """UPDATE chess_schools
+           SET name = ?, city = ?, coordinator = ?, summary = ?, published = ?, sort_order = ?, updated_at = ?
+           WHERE slug = ?""",
+        (
+            " ".join(payload.name.strip().split()),
+            payload.city.strip(),
+            payload.coordinator.strip(),
+            payload.summary.strip(),
+            int(payload.published),
+            payload.sort_order,
+            now,
+            school_slug,
+        ),
+    )
+    _save_chess_students(school_slug, payload, now)
+    log(user["email"], "chess_school_updated", "chess_school", school_slug, f"Chess school updated: {payload.name}")
+    clear_public_cache("chess")
+    return ok(_chess_school_payload(school_slug), "Chess school updated")
+
+
+@router.get("/sports/{sport_slug}")
+def manager_sport_detail(sport_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    _ = user
+    ensure_sport_content_columns()
+    item = row("SELECT * FROM sports WHERE slug = ?", (sport_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Sport not found")
+    return ok(normalize_media_record(item, "management-sports", {"image"}, "sports"))
+
+
+@router.post("/sports")
+def create_manager_sport(payload: SportManagePayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_sport_content_columns()
+    values = _sport_payload_values(payload, user["id"], datetime.now(timezone.utc).isoformat())
+    base_slug = slugify(values["name"])
+    slug = base_slug
+    counter = 2
+    while row("SELECT slug FROM sports WHERE slug = ?", (slug,)):
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    execute(
+        """INSERT INTO sports(
+             slug, name, active, color, title, image, description, operations,
+             attribute_json, explore_label, explore_url, sort_order, published, created_by, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            slug,
+            values["name"],
+            values["active"],
+            values["color"],
+            values["title"],
+            values["image"],
+            values["description"],
+            values["operations"],
+            values["attribute_json"],
+            values["explore_label"],
+            values["explore_url"],
+            values["sort_order"],
+            values["published"],
+            values["created_by"],
+            values["updated_at"],
+            values["updated_at"],
+        ),
+    )
+    log(user["email"], "sport_created", "sport", slug, f"Sport created: {values['name']}")
+    clear_public_cache(slug)
+    return ok(normalize_media_record(row("SELECT * FROM sports WHERE slug = ?", (slug,)) or {}, "management-sports", {"image"}, "sports"), "Sport created")
+
+
+@router.patch("/sports/{sport_slug}")
+def update_manager_sport(sport_slug: str, payload: SportManagePayload, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_sport_content_columns()
+    item = row("SELECT * FROM sports WHERE slug = ?", (sport_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Sport not found")
+    values = _sport_payload_values(payload, user["id"], datetime.now(timezone.utc).isoformat())
+    execute(
+        """UPDATE sports
+           SET name = ?, active = ?, color = ?, title = ?, image = ?, description = ?, operations = ?,
+               attribute_json = ?, explore_label = ?, explore_url = ?, sort_order = ?, published = ?, updated_at = ?
+           WHERE slug = ?""",
+        (
+            values["name"],
+            values["active"],
+            values["color"],
+            values["title"],
+            values["image"],
+            values["description"],
+            values["operations"],
+            values["attribute_json"],
+            values["explore_label"],
+            values["explore_url"],
+            values["sort_order"],
+            values["published"],
+            values["updated_at"],
+            sport_slug,
+        ),
+    )
+    log(user["email"], "sport_updated", "sport", sport_slug, f"Sport updated: {values['name']}")
+    clear_public_cache(sport_slug)
+    return ok(normalize_media_record(row("SELECT * FROM sports WHERE slug = ?", (sport_slug,)) or {}, "management-sports", {"image"}, "sports"), "Sport updated")
+
+
+@router.delete("/sports/{sport_slug}")
+def delete_manager_sport(sport_slug: str, user: dict = Depends(require_roles("super_admin", "management"))):
+    ensure_sport_content_columns()
+    item = row("SELECT * FROM sports WHERE slug = ?", (sport_slug,))
+    if not item:
+        raise HTTPException(status_code=404, detail="Sport not found")
+    linked = row("SELECT COUNT(*) AS count FROM tournaments WHERE lower(sport) = lower(?)", (item["name"],))
+    if int(linked["count"] or 0):
+        raise HTTPException(status_code=409, detail="This sport has tournaments, so it cannot be deleted.")
+    execute("DELETE FROM sport_home_visibility WHERE sport_slug = ?", (sport_slug,))
+    execute("DELETE FROM sports WHERE slug = ?", (sport_slug,))
+    log(user["email"], "sport_deleted", "sport", sport_slug, f"Sport deleted: {item['name']}")
+    clear_public_cache(sport_slug)
+    return ok({"deleted": True, "slug": sport_slug}, "Sport deleted")
 
 
 @router.post("/news")

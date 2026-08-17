@@ -11,6 +11,7 @@ from app.db.database import execute, row, rows
 from app.schemas import LiveScoreUpdate
 from app.services.audit import log
 from app.services.events import event_hub
+from app.services.realtime import publish_realtime_async
 
 router = APIRouter(prefix="/live", tags=["live"])
 
@@ -80,6 +81,13 @@ async def update_score(match_id: str, payload: LiveScoreUpdate, user: dict = Dep
     updated = row("SELECT * FROM live_matches WHERE id = ?", (match_id,))
     updated_payload = _match_payload(updated, include_timeline=True)
     await broadcast(match_id, {"event": "score:update", "data": updated_payload})
+    await publish_realtime_async(
+        "score:changed",
+        entity="score",
+        action="updated",
+        payload={"match_id": match_id, "score": payload.score, "status": payload.status},
+        invalidates=["live", "home", "tournaments"],
+    )
     return ok(updated_payload, "Score updated")
 
 

@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, ImagePlus, Plus, X, FileText, MapPin, Search, Ban } from "lucide-react";
+import { Bell, CheckCircle2, GripVertical, ImagePlus, Plus, X, FileText, MapPin, School, Search, Ban } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import type React from "react";
 import type { FormEvent } from "react";
@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { DataTable, Page, PortalShell } from "../components/UI";
-import { logRows, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
+import { logRows, managementSidebar, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
 import { apiRequest, mediaUrl, uploadFile } from "../lib/api";
 import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
@@ -3646,6 +3646,621 @@ export function AdminManagerDetailPage() {
   );
 }
 
+type SportManageRecord = {
+  slug: string;
+  name: string;
+  title?: string;
+  image?: string;
+  description?: string;
+  operations?: string;
+  attribute_json?: string;
+  attributes?: SportAttributePair[];
+  color?: string;
+  active?: number;
+  published?: boolean | number;
+  sort_order?: number;
+  explore_label?: string;
+  explore_url?: string;
+};
+
+type SportAttributePair = {
+  label: string;
+  value: string;
+};
+
+type ChessStudentManageRecord = {
+  id?: string;
+  name: string;
+  grade?: string;
+  rank: number;
+  strength?: string;
+  note?: string;
+  avatar_image?: string;
+  published?: boolean | number;
+};
+
+type ChessSchoolManageRecord = {
+  slug: string;
+  name: string;
+  city?: string;
+  coordinator?: string;
+  summary?: string;
+  published?: boolean | number;
+  sort_order?: number;
+  student_count?: number;
+  students?: ChessStudentManageRecord[];
+};
+
+type ChessSchoolManageForm = {
+  name: string;
+  city: string;
+  coordinator: string;
+  summary: string;
+  published: boolean;
+  sort_order: number;
+  students: ChessStudentManageRecord[];
+};
+
+type SportManageForm = {
+  name: string;
+  title: string;
+  image: string;
+  description: string;
+  operations: string;
+  attributes: SportAttributePair[];
+  color: string;
+  active: number;
+  published: boolean;
+  sort_order: number;
+  show_explore: boolean;
+  explore_label: string;
+  explore_url: string;
+};
+
+const defaultSportAttributes: SportAttributePair[] = [
+  { label: "Season", value: "" },
+  { label: "Sponsor", value: "" },
+  { label: "Contact", value: "" },
+];
+
+const emptyChessSchoolForm: ChessSchoolManageForm = {
+  name: "",
+  city: "",
+  coordinator: "",
+  summary: "",
+  published: true,
+  sort_order: 99,
+  students: [
+    { name: "", grade: "", rank: 1, strength: "", note: "", avatar_image: "", published: true },
+    { name: "", grade: "", rank: 2, strength: "", note: "", avatar_image: "", published: true },
+  ],
+};
+
+const emptySportManageForm: SportManageForm = {
+  name: "",
+  title: "",
+  image: "",
+  description: "",
+  operations: "",
+  attributes: defaultSportAttributes,
+  color: "emerald",
+  active: 0,
+  published: true,
+  sort_order: 99,
+  show_explore: false,
+  explore_label: "Explore",
+  explore_url: "",
+};
+
+function parseSportAttributes(record?: SportManageRecord): SportAttributePair[] {
+  const raw = record?.attributes ?? (() => {
+    try {
+      return JSON.parse(record?.attribute_json || "[]") as SportAttributePair[];
+    } catch {
+      return [];
+    }
+  })();
+  const clean = Array.isArray(raw)
+    ? raw
+        .map((item) => ({ label: String(item.label || "").trim(), value: String(item.value || "").trim() }))
+        .filter((item) => item.label || item.value)
+    : [];
+  return clean.length ? clean : defaultSportAttributes;
+}
+
+function sportFormFromRecord(record?: SportManageRecord): SportManageForm {
+  if (!record) return emptySportManageForm;
+  return {
+    name: record.name || "",
+    title: record.title || record.name || "",
+    image: record.image || "",
+    description: record.description || "",
+    operations: record.operations || "",
+    attributes: parseSportAttributes(record),
+    color: record.color || "emerald",
+    active: Number(record.active || 0),
+    published: record.published !== false && record.published !== 0,
+    sort_order: Number(record.sort_order || 99),
+    show_explore: Boolean(record.explore_url),
+    explore_label: record.explore_label || "Explore",
+    explore_url: record.explore_url || "",
+  };
+}
+
+function SportManagementPanel({ role = "admin" }: { role?: "admin" | "manager" }) {
+  const { token } = useAuth();
+  const [message, setMessage] = useState("");
+  const [orderedSports, setOrderedSports] = useState<SportManageRecord[]>([]);
+  const [draggedSlug, setDraggedSlug] = useState("");
+  const listPath = role === "manager" ? "/management/sports" : "/admin/sports";
+  const { data = [], isLoading, refetch } = useQuery({
+    queryKey: ["managed-sports", role],
+    queryFn: () => apiRequest<SportManageRecord[]>("/management/sports", { silent: true }, token),
+  });
+
+  useEffect(() => {
+    setOrderedSports(data);
+  }, [data]);
+
+  async function deleteSport(item: SportManageRecord) {
+    if (!window.confirm(`Delete ${item.name}?`)) return;
+    setMessage("");
+    try {
+      await apiRequest(`/management/sports/${item.slug}`, { method: "DELETE", successToast: "Sport deleted." }, token);
+      setMessage(`${item.name} deleted from the sports page.`);
+      void refetch();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to delete sport.");
+    }
+  }
+
+  async function saveSportOrder(items: SportManageRecord[]) {
+    setMessage("");
+    try {
+      const updated = await apiRequest<SportManageRecord[]>("/management/sports/reorder", {
+        method: "PATCH",
+        body: JSON.stringify({ slugs: items.map((item) => item.slug) }),
+        successToast: "Sports order saved.",
+      }, token);
+      setOrderedSports(updated);
+      setMessage("Sports order updated.");
+      void refetch();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to save sports order.");
+      setOrderedSports(data);
+    }
+  }
+
+  function moveSport(targetSlug: string) {
+    if (!draggedSlug || draggedSlug === targetSlug) return;
+    const fromIndex = orderedSports.findIndex((item) => item.slug === draggedSlug);
+    const toIndex = orderedSports.findIndex((item) => item.slug === targetSlug);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const next = [...orderedSports];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setOrderedSports(next);
+  }
+
+  if (isLoading) return <SectionSkeleton rows={3} />;
+
+  return (
+    <div className="stack gap-4">
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="status emerald">Sport Page Manager</span>
+            <h2>Sports shown on public page</h2>
+            <p>Create sports with title, image, description, and an optional Explore button URL.</p>
+          </div>
+          <Link className="btn btn-primary" to={`${listPath}/new`}><Plus size={16} />Create Sport</Link>
+        </div>
+        {message && <div className="form-alert success-alert">{message}</div>}
+      </section>
+      <div className="sport-manage-grid">
+        {orderedSports.map((item) => (
+          <article
+            className={`sport-manage-card ${draggedSlug === item.slug ? "is-dragging" : ""}`}
+            key={item.slug}
+            draggable
+            onDragStart={(event) => {
+              setDraggedSlug(item.slug);
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", item.slug);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              moveSport(item.slug);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              const slug = event.dataTransfer.getData("text/plain") || draggedSlug;
+              setDraggedSlug("");
+              const next = orderedSports.some((sport) => sport.slug === slug) ? orderedSports : data;
+              void saveSportOrder(next);
+            }}
+            onDragEnd={() => {
+              setDraggedSlug("");
+            }}
+          >
+            <button className="sport-drag-handle" type="button" aria-label={`Drag ${item.name} to reorder`}>
+              <GripVertical size={18} />
+            </button>
+            <div className="sport-manage-thumb">
+              {item.image ? <img src={mediaUrl(item.image)} alt="" /> : <ImagePlus size={28} />}
+            </div>
+            <div className="sport-manage-copy">
+              <div>
+                <span className={`status ${item.published === false || item.published === 0 ? "orange" : "emerald"}`}>{item.published === false || item.published === 0 ? "Hidden" : "Published"}</span>
+                <h3>{item.title || item.name}</h3>
+                <p>{item.description || "No description added yet."}</p>
+              </div>
+              <div className="sport-manage-actions">
+                {item.explore_url && <Link className="btn btn-secondary" to={item.explore_url}>{item.explore_label || "Explore"}</Link>}
+                {item.slug === "chess" && <Link className="btn btn-secondary" to={`${listPath}/chess/schools`}><School size={16} />Edit School</Link>}
+                <Link className="btn btn-secondary" to={`${listPath}/${item.slug}/edit`}><EditIcon />Edit</Link>
+                <button className="btn btn-danger" type="button" onClick={() => deleteSport(item)}><DeleteIcon />Delete</button>
+              </div>
+            </div>
+          </article>
+        ))}
+        {!orderedSports.length && <section className="panel"><p>No sports created yet.</p></section>}
+      </div>
+    </div>
+  );
+}
+
+function freshChessSchoolForm(): ChessSchoolManageForm {
+  return {
+    ...emptyChessSchoolForm,
+    students: emptyChessSchoolForm.students.map((student) => ({ ...student })),
+  };
+}
+
+function chessSchoolFormFromRecord(record?: ChessSchoolManageRecord): ChessSchoolManageForm {
+  if (!record) return freshChessSchoolForm();
+  return {
+    name: record.name || "",
+    city: record.city || "",
+    coordinator: record.coordinator || "",
+    summary: record.summary || "",
+    published: record.published !== false && record.published !== 0,
+    sort_order: Number(record.sort_order || 99),
+    students: (record.students?.length ? record.students : freshChessSchoolForm().students).map((student, index) => ({
+      id: student.id,
+      name: student.name || "",
+      grade: student.grade || "",
+      rank: Number(student.rank || index + 1),
+      strength: student.strength || "",
+      note: student.note || "",
+      avatar_image: student.avatar_image || "",
+      published: student.published !== false && student.published !== 0,
+    })),
+  };
+}
+
+export function ChessSchoolManagementPage({ role = "admin" }: { role?: "admin" | "manager" }) {
+  const { token } = useAuth();
+  const listPath = role === "manager" ? "/management/sports" : "/admin/sports";
+  const [editingSlug, setEditingSlug] = useState("");
+  const [form, setForm] = useState<ChessSchoolManageForm>(() => freshChessSchoolForm());
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const schoolsQuery = useQuery({
+    queryKey: ["managed-chess-schools", role],
+    queryFn: () => apiRequest<ChessSchoolManageRecord[]>("/management/sports/chess/schools", { silent: true }, token),
+  });
+  const schools = schoolsQuery.data ?? [];
+
+  function resetForm() {
+    setEditingSlug("");
+    setForm(freshChessSchoolForm());
+    setMessage("");
+    setError("");
+  }
+
+  async function editSchool(slug: string) {
+    setError("");
+    setMessage("");
+    try {
+      const record = await apiRequest<ChessSchoolManageRecord>(`/management/sports/chess/schools/${slug}`, { silent: true }, token);
+      setEditingSlug(record.slug);
+      setForm(chessSchoolFormFromRecord(record));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load chess school.");
+    }
+  }
+
+  function patchStudent(index: number, patch: Partial<ChessStudentManageRecord>) {
+    setForm((current) => ({
+      ...current,
+      students: current.students.map((student, studentIndex) => studentIndex === index ? { ...student, ...patch } : student),
+    }));
+  }
+
+  function addStudent() {
+    setForm((current) => ({
+      ...current,
+      students: [...current.students, { name: "", grade: "", rank: current.students.length + 1, strength: "", note: "", avatar_image: "", published: true }],
+    }));
+  }
+
+  function removeStudent(index: number) {
+    setForm((current) => ({ ...current, students: current.students.filter((_, studentIndex) => studentIndex !== index) }));
+  }
+
+  async function uploadStudentAvatar(index: number, file?: File) {
+    if (!file) return;
+    setUploadingIndex(index);
+    setError("");
+    try {
+      const upload = await uploadFile(file, token, { silent: true });
+      patchStudent(index, { avatar_image: upload.url });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to upload student image.");
+    } finally {
+      setUploadingIndex(null);
+    }
+  }
+
+  async function saveSchool(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      const saved = await apiRequest<ChessSchoolManageRecord>(`/management/sports/chess/schools${editingSlug ? `/${editingSlug}` : ""}`, {
+        method: editingSlug ? "PATCH" : "POST",
+        body: JSON.stringify({
+          ...form,
+          students: form.students.filter((student) => student.name.trim()),
+        }),
+        successToast: editingSlug ? "Chess school updated." : "Chess school created.",
+      }, token);
+      setEditingSlug(saved.slug);
+      setForm(chessSchoolFormFromRecord(saved));
+      setMessage(`${saved.name} saved.`);
+      void schoolsQuery.refetch();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save chess school.");
+    }
+  }
+
+  return (
+    <PortalShell
+      title="Chess Schools"
+      subtitle=""
+      sidebar={role === "manager" ? managementSidebar : sidebar}
+      action={<Link className="btn btn-secondary" to={listPath}>All sports</Link>}
+    >
+      <div className="chess-school-admin-layout">
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="status emerald">Chess only</span>
+              <h2>School records</h2>
+              <p>Create or edit the schools and ranked students shown on the Chess page.</p>
+            </div>
+            <button className="btn btn-primary" type="button" onClick={resetForm}><Plus size={16} />Create School</button>
+          </div>
+          {schoolsQuery.isLoading ? <SectionSkeleton rows={3} /> : (
+            <div className="chess-school-admin-list">
+              {schools.map((school) => (
+                <button className={`chess-school-admin-item ${editingSlug === school.slug ? "active" : ""}`} type="button" key={school.slug} onClick={() => void editSchool(school.slug)}>
+                  <b>{school.name}</b>
+                  <span>{school.city || "City not set"} - {school.student_count ?? 0} students</span>
+                </button>
+              ))}
+              {!schools.length && <p>No chess schools created yet.</p>}
+            </div>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="status blue">{editingSlug ? "Edit school" : "Create school"}</span>
+              <h2>{editingSlug ? form.name || "Edit chess school" : "New chess school"}</h2>
+            </div>
+          </div>
+          {message && <div className="form-alert success-alert">{message}</div>}
+          {error && <div className="form-alert error-alert">{error}</div>}
+          <form className="form-grid" onSubmit={saveSchool}>
+            <label>School name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></label>
+            <label>City<input value={form.city} onChange={(event) => setForm((current) => ({ ...current, city: event.target.value }))} /></label>
+            <label>Coordinator<input value={form.coordinator} onChange={(event) => setForm((current) => ({ ...current, coordinator: event.target.value }))} /></label>
+            <label>Display order<input type="number" min={1} value={form.sort_order} onChange={(event) => setForm((current) => ({ ...current, sort_order: Number(event.target.value) }))} /></label>
+            <label className="form-span">Summary<textarea rows={3} value={form.summary} onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} /></label>
+            <label className="checkbox-row"><input type="checkbox" checked={form.published} onChange={(event) => setForm((current) => ({ ...current, published: event.target.checked }))} />Publish this school</label>
+
+            <div className="form-span chess-student-editor">
+              <div className="panel-head">
+                <div>
+                  <h3>Student rank details</h3>
+                  <p>Add students with rank. The public page displays rank 1 and rank 2.</p>
+                </div>
+                <button className="btn btn-secondary" type="button" onClick={addStudent}><Plus size={16} />Add Student</button>
+              </div>
+              {form.students.map((student, index) => (
+                <div className="chess-student-admin-row" key={index}>
+                  <label>Rank<input type="number" min={1} value={student.rank} onChange={(event) => patchStudent(index, { rank: Number(event.target.value) })} /></label>
+                  <label>Name<input value={student.name} onChange={(event) => patchStudent(index, { name: event.target.value })} placeholder="Student name" /></label>
+                  <label>Class<input value={student.grade || ""} onChange={(event) => patchStudent(index, { grade: event.target.value })} placeholder="Grade 8" /></label>
+                  <label>Strength<input value={student.strength || ""} onChange={(event) => patchStudent(index, { strength: event.target.value })} /></label>
+                  <label className="form-span">Note<textarea rows={2} value={student.note || ""} onChange={(event) => patchStudent(index, { note: event.target.value })} /></label>
+                  <label>Student image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void uploadStudentAvatar(index, event.target.files?.[0])} /></label>
+                  <label>Image URL<input value={student.avatar_image || ""} onChange={(event) => patchStudent(index, { avatar_image: event.target.value })} /></label>
+                  <label className="checkbox-row"><input type="checkbox" checked={student.published !== false && student.published !== 0} onChange={(event) => patchStudent(index, { published: event.target.checked })} />Published</label>
+                  <button className="btn btn-danger" type="button" onClick={() => removeStudent(index)}><DeleteIcon />Remove</button>
+                  {student.avatar_image && <div className="chess-student-admin-preview"><img src={mediaUrl(student.avatar_image)} alt="" /></div>}
+                </div>
+              ))}
+            </div>
+            <div className="form-actions form-span">
+              <button className="btn btn-primary" type="submit" disabled={uploadingIndex !== null}>{uploadingIndex !== null ? "Uploading..." : "Save School"}</button>
+              <button className="btn btn-secondary" type="button" onClick={resetForm}>Clear</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </PortalShell>
+  );
+}
+
+export function SportManagementPage({ role = "manager" }: { role?: "admin" | "manager" }) {
+  const listPath = role === "manager" ? "/management/sports" : "/admin/sports";
+  return (
+    <PortalShell
+      title="Sports"
+      subtitle=""
+      sidebar={role === "manager" ? managementSidebar : sidebar}
+      action={<Link className="btn btn-primary" to={`${listPath}/new`}><Plus size={16} />Create Sport</Link>}
+    >
+      <SportManagementPanel role={role} />
+    </PortalShell>
+  );
+}
+
+export function SportEditorPage({ role = "admin" }: { role?: "admin" | "manager" }) {
+  const { slug } = useParams();
+  const { token } = useAuth();
+  const navigate = useNavigate();
+  const isNew = !slug;
+  const listPath = role === "manager" ? "/management/sports" : "/admin/sports";
+  const [form, setForm] = useState<SportManageForm>(emptySportManageForm);
+  const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (!slug) {
+      setForm(emptySportManageForm);
+      return;
+    }
+    let alive = true;
+    apiRequest<SportManageRecord>(`/management/sports/${slug}`, { silent: true }, token)
+      .then((record) => {
+        if (alive) setForm(sportFormFromRecord(record));
+      })
+      .catch((caught) => {
+        if (alive) setError(caught instanceof Error ? caught.message : "Unable to load sport.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [slug, token]);
+
+  function patchForm(patch: Partial<SportManageForm>) {
+    setForm((current) => ({ ...current, ...patch }));
+  }
+
+  function updateAttribute(index: number, patch: Partial<SportAttributePair>) {
+    setForm((current) => ({
+      ...current,
+      attributes: current.attributes.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item),
+    }));
+  }
+
+  function addAttribute() {
+    setForm((current) => ({ ...current, attributes: [...current.attributes, { label: "", value: "" }] }));
+  }
+
+  function removeAttribute(index: number) {
+    setForm((current) => ({ ...current, attributes: current.attributes.filter((_, itemIndex) => itemIndex !== index) }));
+  }
+
+  async function handleImageUpload(file?: File) {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const upload = await uploadFile(file, token, { silent: true });
+      patchForm({ image: upload.url });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to upload sport image.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    if (form.show_explore && !form.explore_url.trim()) {
+      setError("Add the Explore URL or turn off the Explore button.");
+      return;
+    }
+    try {
+      await apiRequest(`/management/sports${isNew ? "" : `/${slug}`}`, {
+        method: isNew ? "POST" : "PATCH",
+        body: JSON.stringify(form),
+        successToast: isNew ? "Sport created." : "Sport updated.",
+      }, token);
+      navigate(listPath);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save sport.");
+    }
+  }
+
+  return (
+    <PortalShell
+      title={isNew ? "Create Sport" : "Edit Sport"}
+      subtitle=""
+      sidebar={role === "manager" ? managementSidebar : sidebar}
+      action={<Link className="btn btn-secondary" to={listPath}>All sports</Link>}
+    >
+      <section className="panel">
+        {error && <div className="form-alert error-alert">{error}</div>}
+        <form className="form-grid sport-editor-form" onSubmit={handleSubmit}>
+          <label>Sport name<input value={form.name} onChange={(event) => patchForm({ name: event.target.value })} placeholder="Chess" required /></label>
+          <label>Public title<input value={form.title} onChange={(event) => patchForm({ title: event.target.value })} placeholder="Chess Championship Operations" required /></label>
+          <label>Active count<input type="number" min={0} value={form.active} onChange={(event) => patchForm({ active: Number(event.target.value) })} /></label>
+          <label>Display order<input type="number" min={1} max={999} value={form.sort_order} onChange={(event) => patchForm({ sort_order: Number(event.target.value) })} /></label>
+          <label>Theme color<select value={form.color} onChange={(event) => patchForm({ color: event.target.value })}>
+            <option value="emerald">Emerald</option>
+            <option value="blue">Blue</option>
+            <option value="orange">Orange</option>
+            <option value="pink">Pink</option>
+            <option value="slate">Slate</option>
+          </select></label>
+          <label>Sport image<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void handleImageUpload(event.target.files?.[0])} /></label>
+          {form.image && <div className="sport-editor-preview"><img src={mediaUrl(form.image)} alt="" /></div>}
+          <label className="form-span">Image URL<input value={form.image} onChange={(event) => patchForm({ image: event.target.value })} placeholder="/assets/generated/sport-chess-sponsor.png" /></label>
+          <label className="form-span">Description<textarea value={form.description} onChange={(event) => patchForm({ description: event.target.value })} rows={4} required /></label>
+          <label className="form-span">Operations text<textarea value={form.operations} onChange={(event) => patchForm({ operations: event.target.value })} rows={3} placeholder="Optional second paragraph for the sport page." /></label>
+          <div className="form-span sport-attribute-editor">
+            <div className="panel-head">
+              <div>
+                <h3>Sport details</h3>
+                <p>Add the label and value pairs displayed under the sport description.</p>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={addAttribute}><Plus size={16} />Add</button>
+            </div>
+            {form.attributes.map((item, index) => (
+              <div className="sport-attribute-row" key={index}>
+                <label>Attribute<input value={item.label} onChange={(event) => updateAttribute(index, { label: event.target.value })} placeholder="Season" /></label>
+                <label>Value<input value={item.value} onChange={(event) => updateAttribute(index, { value: event.target.value })} placeholder="2026 meet schedule" /></label>
+                <button className="icon-btn" type="button" aria-label="Remove detail row" onClick={() => removeAttribute(index)}><X size={16} /></button>
+              </div>
+            ))}
+          </div>
+          <label className="checkbox-row"><input type="checkbox" checked={form.published} onChange={(event) => patchForm({ published: event.target.checked })} />Display on public Sports page</label>
+          <label className="checkbox-row"><input type="checkbox" checked={form.show_explore} onChange={(event) => patchForm({ show_explore: event.target.checked })} />Need Explore button</label>
+          {form.show_explore && (
+            <>
+              <label>Explore button text<input value={form.explore_label} onChange={(event) => patchForm({ explore_label: event.target.value })} placeholder="Explore" /></label>
+              <label>Explore URL<input value={form.explore_url} onChange={(event) => patchForm({ explore_url: event.target.value })} placeholder="/sports/chess/schools or https://example.com" /></label>
+            </>
+          )}
+          <div className="form-actions form-span">
+            <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? "Uploading..." : isNew ? "Create Sport" : "Save Sport"}</button>
+            <Link className="btn btn-secondary" to={listPath}>Cancel</Link>
+          </div>
+        </form>
+      </section>
+    </PortalShell>
+  );
+}
+
 export function AdminPage({ section = "dashboard" }: { section?: string }) {
   const title = section === "dashboard" ? "" : section.replace("-", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -3668,6 +4283,7 @@ export function AdminPage({ section = "dashboard" }: { section?: string }) {
         )}
         {section === "registrations" && <AdminRegistrationsPanel />}
         {section === "teams" && <AdminTournamentPickerPanel mode="teams" />}
+        {section === "sports" && <SportManagementPanel role="admin" />}
         {section === "players" && <AthleteProfile />}
         {section === "payments" && <AdminTournamentPickerPanel mode="payments" />}
         {section === "news" && <AdminNewsPage mode="news" />}

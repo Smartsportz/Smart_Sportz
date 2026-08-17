@@ -41,6 +41,8 @@ OPERATIONAL_TABLE_ORDER = [
     "news_social",
     "content_likes",
     "sport_home_visibility",
+    "chess_schools",
+    "chess_school_students",
     "manager_city_assignments",
     "tournament_manager_assignments",
     "leaderboard_records",
@@ -174,6 +176,12 @@ def execute(sql: str, params: Iterable[Any] = ()) -> int:
         lastrowid = int(getattr(cur, "lastrowid", 0) or 0)
     if _auto_mirror_sync_enabled():
         sync_mirror()
+    try:
+        from app.services.realtime import publish_database_change
+
+        publish_database_change(sql)
+    except Exception:
+        pass
     return lastrowid
 
 
@@ -184,6 +192,13 @@ def execute_many(statements: list[tuple[str, Iterable[Any]]]) -> None:
         conn.commit()
     if _auto_mirror_sync_enabled():
         sync_mirror()
+    if statements:
+        try:
+            from app.services.realtime import publish_database_change
+
+            publish_database_change(statements[0][0])
+        except Exception:
+            pass
 
 
 def ensure_column(table: str, column: str, definition: str) -> None:

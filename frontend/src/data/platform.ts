@@ -534,6 +534,7 @@ export const dashboardStats = [
 export const sidebar = [
   { label: "Dashboard", path: "/admin/dashboard", icon: BarChart3 },
   { label: "Tournaments", path: "/admin/tournaments", icon: Trophy },
+  { label: "Sports", path: "/admin/sports", icon: Medal },
   { label: "Group Bracket", path: "/admin/group-bracket", icon: Zap },
   { label: "Users", path: "/admin/users", icon: Users },
   { label: "Managers", path: "/admin/managers", icon: ShieldCheck },
@@ -562,6 +563,7 @@ export const userSidebar = [
 export const managementSidebar = [
   { label: "Dashboard", path: "/management/dashboard", icon: BarChart3 },
   { label: "Tournaments", path: "/management/tournaments", icon: Trophy },
+  { label: "Sports", path: "/management/sports", icon: Medal },
   { label: "Registrations", path: "/management/registrations", icon: FileText },
   { label: "Matches", path: "/management/matches", icon: Activity },
   { label: "Group Bracket", path: "/management/group-bracket", icon: Zap },

@@ -32,6 +32,7 @@ from app.services.cache import cache_key
 from app.services.database_architecture import compare_primary_mirror, database_status
 from app.services.job_queue import enqueue
 from app.services.media import normalize_media_record, normalize_media_records
+from app.services.realtime import publish_realtime
 from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -69,6 +70,13 @@ def clear_public_cache(*news_slugs: str) -> None:
         runtime_state.delete_prefix(prefix)
     for key in keys:
         runtime_state.delete(key)
+    publish_realtime(
+        "content:changed",
+        entity="content",
+        action="cache-cleared",
+        payload={"slugs": [slug for slug in news_slugs if slug]},
+        invalidates=["home", "tournaments", "sports", "news", "gallery", "management"],
+    )
 
 
 def optional_tournament_slug(value: str | None) -> str | None:

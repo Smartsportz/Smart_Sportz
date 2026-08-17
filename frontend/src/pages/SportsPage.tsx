@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Page } from "../components/UI";
-import { assets, sports } from "../data/platform";
-import { mediaUrl } from "../lib/api";
+import { assets, sports as fallbackSports } from "../data/platform";
+import { apiRequest, mediaUrl } from "../lib/api";
 
 const sportDetails: Record<string, {
   title: string;
@@ -11,6 +12,9 @@ const sportDetails: Record<string, {
   contact: string;
   description: string;
   operations: string;
+  attributes?: SportAttributePair[];
+  exploreUrl?: string;
+  exploreLabel?: string;
 }> = {
   chess: {
     title: "Chess Championship Operations",
@@ -20,6 +24,8 @@ const sportDetails: Record<string, {
     contact: "City academy coordinators and school tournament committees",
     description: "Chess events in Smart Sportz can be managed as school meets, academy leagues, open city championships, or corporate mind-sport festivals. The platform structure supports player identity, category selection, round allocation, result entry, certificates, and public ranking records.",
     operations: "Organizers can publish tournament rules, sponsor notes, venue details, round timing, arbiters, participant instructions, and final standings in one structured page.",
+    exploreUrl: "/sports/chess/schools",
+    exploreLabel: "Explore",
   },
   cricket: {
     title: "Cricket League Management",
@@ -97,15 +103,92 @@ const sportDetails: Record<string, {
 
 const sportOrder = ["chess", "cricket", "football", "basketball", "volleyball", "badminton", "table-tennis", "esports", "athletics"];
 
+type PublicSportRecord = {
+  slug: string;
+  name: string;
+  active?: number;
+  color?: string;
+  title?: string;
+  image?: string;
+  description?: string;
+  operations?: string;
+  attribute_json?: string;
+  attributes?: SportAttributePair[];
+  explore_label?: string;
+  explore_url?: string;
+};
+
+type SportAttributePair = {
+  label: string;
+  value: string;
+};
+
 function normaliseSlug(slug: string) {
   return slug === "e-sports" ? "esports" : slug;
 }
 
+function parseSportAttributes(sport: PublicSportRecord, fallback?: (typeof sportDetails)[string]): SportAttributePair[] {
+  const raw = sport.attributes ?? (() => {
+    try {
+      return JSON.parse(sport.attribute_json || "[]") as SportAttributePair[];
+    } catch {
+      return [];
+    }
+  })();
+  const clean = Array.isArray(raw)
+    ? raw
+        .map((item) => ({ label: String(item.label || "").trim(), value: String(item.value || "").trim() }))
+        .filter((item) => item.label || item.value)
+    : [];
+  if (clean.length) return clean;
+  return [
+    { label: "Season", value: fallback?.season || "Manager scheduled" },
+    { label: "Sponsor", value: fallback?.sponsor || "SmartSportz" },
+    { label: "Contact", value: fallback?.contact || "Admin and manager sports desk" },
+  ];
+}
+
 export function SportsPage() {
-  const items = sportOrder.map((slug) => {
-    const sport = sports.find((item) => normaliseSlug(item.slug) === slug) ?? { name: slug.replace("-", " "), slug };
-    return { sport, detail: sportDetails[slug] };
-  }).filter((item) => item.detail);
+  const { data } = useQuery({
+    queryKey: ["public-sports-page"],
+    queryFn: () => apiRequest<PublicSportRecord[]>("/public/sports", { silent: true, toast: false }),
+  });
+  const apiSports: PublicSportRecord[] = data?.length
+    ? data
+    : fallbackSports.map(({ slug, name, active, color }) => ({ slug, name, active, color }));
+  const sortedSports = [...apiSports].sort((left, right) => {
+    const leftIndex = sportOrder.indexOf(normaliseSlug(left.slug));
+    const rightIndex = sportOrder.indexOf(normaliseSlug(right.slug));
+    const leftScore = leftIndex >= 0 ? leftIndex : sportOrder.length;
+    const rightScore = rightIndex >= 0 ? rightIndex : sportOrder.length;
+    return leftScore === rightScore ? left.name.localeCompare(right.name) : leftScore - rightScore;
+  });
+  const items = sortedSports.map((sport) => {
+    const normalized = normaliseSlug(sport.slug);
+    const fallback = sportDetails[normalized];
+    const title = sport.title || fallback?.title || `${sport.name} Tournament Operations`;
+    const description = sport.description || fallback?.description || `${sport.name} programs can publish tournaments, sponsor details, registration information, media, and public records from Smart Sportz.`;
+    const operations = sport.operations || fallback?.operations || "Admins and managers can keep the public sport page updated with images, descriptions, tournaments, and optional Explore links.";
+    const image = sport.image || fallback?.image || assets.cricket;
+    const exploreUrl = sport.explore_url || fallback?.exploreUrl || "";
+    const exploreLabel = sport.explore_label || fallback?.exploreLabel || "Explore";
+    const attributes = parseSportAttributes(sport, fallback);
+    return {
+      sport,
+      detail: {
+        title,
+        image,
+        season: fallback?.season || "Manager scheduled",
+        sponsor: fallback?.sponsor || "SmartSportz",
+        contact: fallback?.contact || "Admin and manager sports desk",
+        description,
+        operations,
+        attributes,
+        exploreUrl,
+        exploreLabel,
+      },
+    };
+  });
 
   return (
     <Page className="sports-editorial-page">
@@ -122,11 +205,14 @@ export function SportsPage() {
               <p>{detail.description}</p>
               <p>{detail.operations}</p>
               <dl>
-                <div><dt>Season</dt><dd>{detail.season}</dd></div>
-                <div><dt>Sponsor</dt><dd>{detail.sponsor}</dd></div>
-                <div><dt>Contact</dt><dd>{detail.contact}</dd></div>
+                {detail.attributes.map((item) => (
+                  <div key={`${sport.slug}-${item.label}-${item.value}`}><dt>{item.label}</dt><dd>{item.value}</dd></div>
+                ))}
               </dl>
-              <Link className="inline-link" to={`/sports/${sport.slug}`}>Open {sport.name} tournaments</Link>
+              <div className="sports-editorial-actions">
+                <Link className="inline-link" to={`/sports/${sport.slug}`}>Open {sport.name} tournaments</Link>
+                {detail.exploreUrl && <Link className="btn btn-secondary" to={detail.exploreUrl}>{detail.exploreLabel}</Link>}
+              </div>
             </div>
             <div className="sports-editorial-image">
               <img src={mediaUrl(detail.image)} alt="" />

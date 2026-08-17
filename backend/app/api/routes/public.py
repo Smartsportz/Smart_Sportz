@@ -15,6 +15,7 @@ from app.services.cache import cache_key, get_or_set_json
 from app.services.job_queue import enqueue
 from app.services.likes import like_states
 from app.services.media import normalize_media_record, normalize_media_records
+from app.services.sports_schema import ensure_chess_school_tables, ensure_chess_sport_content, ensure_sport_content_columns
 from app.services.tournament_status import apply_registration_window_statuses, with_runtime_status
 
 router = APIRouter(prefix="/public", tags=["public"])
@@ -493,7 +494,58 @@ def tournament_bracket(slug: str):
 
 @router.get("/sports")
 def sports():
-    return ok(get_or_set_json(cache_key("public:sports"), lambda: rows("SELECT * FROM sports ORDER BY name")))
+    ensure_chess_sport_content()
+    return ok(get_or_set_json(cache_key("public:sports"), lambda: normalize_media_records(rows("SELECT * FROM sports WHERE COALESCE(published, 1) = 1 ORDER BY sort_order, name"), "public-sports", {"image"}, "sports")))
+
+
+@router.get("/sports/chess/schools")
+def chess_schools():
+    ensure_chess_school_tables()
+    def build():
+        return rows(
+            """
+            SELECT slug, name, city, coordinator, summary
+            FROM chess_schools
+            WHERE published = 1
+            ORDER BY sort_order, name
+            """
+        )
+
+    return ok(get_or_set_json(cache_key("public:sports:chess:schools"), build))
+
+
+@router.get("/sports/chess/schools/{school_slug}")
+def chess_school_detail(school_slug: str):
+    ensure_chess_school_tables()
+    def build():
+        school = row(
+            """
+            SELECT slug, name, city, coordinator, summary
+            FROM chess_schools
+            WHERE slug = ? AND published = 1
+            """,
+            (school_slug,),
+        )
+        if not school:
+            raise HTTPException(status_code=404, detail="Chess school not found")
+        students = normalize_media_records(
+            rows(
+                """
+                SELECT id, school_slug, name, grade, rank, strength, note, avatar_image
+                FROM chess_school_students
+                WHERE school_slug = ? AND published = 1 AND rank IN (1, 2)
+                ORDER BY rank
+                """,
+                (school_slug,),
+            ),
+            "chess-school-student",
+            {"avatar_image"},
+            "chess_school_students",
+            "id",
+        )
+        return {"school": school, "students": students}
+
+    return ok(get_or_set_json(cache_key("public:sports:chess:school", school_slug), build))
 
 
 @router.get("/home-discovery/{slug}")
@@ -512,7 +564,8 @@ def home_discovery_detail(slug: str):
                     card = item
                     break
         if not card:
-            sport = row("SELECT * FROM sports WHERE slug = ?", (slug,))
+            ensure_sport_content_columns()
+            sport = row("SELECT * FROM sports WHERE slug = ? AND COALESCE(published, 1) = 1", (slug,))
             if not sport:
                 raise HTTPException(status_code=404, detail="Discovery card not found")
             tournament = row("SELECT * FROM tournaments WHERE COALESCE(published, 1) = 1 AND lower(sport) = lower(?) ORDER BY show_on_home DESC, name LIMIT 1", (sport["name"],))
@@ -546,8 +599,9 @@ def home_discovery_detail(slug: str):
 @router.get("/sports/{slug}")
 def sport_detail(slug: str):
     def build():
+        ensure_sport_content_columns()
         apply_registration_window_statuses()
-        sport = row("SELECT * FROM sports WHERE slug = ?", (slug,))
+        sport = row("SELECT * FROM sports WHERE slug = ? AND COALESCE(published, 1) = 1", (slug,))
         if not sport:
             raise HTTPException(status_code=404, detail="Sport not found")
         items = attach_tournament_metadata(rows("SELECT * FROM tournaments WHERE lower(sport) = lower(?)", (sport["name"],)))

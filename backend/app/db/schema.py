@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.db.database import connect, ensure_storage, sync_mirror, using_postgres
@@ -26,7 +27,19 @@ CREATE TABLE IF NOT EXISTS sports (
   slug TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   active INTEGER NOT NULL,
-  color TEXT NOT NULL
+  color TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  image TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  operations TEXT NOT NULL DEFAULT '',
+  attribute_json TEXT NOT NULL DEFAULT '[]',
+  explore_label TEXT NOT NULL DEFAULT '',
+  explore_url TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER NOT NULL DEFAULT 99,
+  published INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS tournaments (
@@ -384,6 +397,34 @@ CREATE TABLE IF NOT EXISTS sport_home_visibility (
   FOREIGN KEY(updated_by) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS chess_schools (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  city TEXT NOT NULL DEFAULT '',
+  coordinator TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL DEFAULT '',
+  published INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chess_school_students (
+  id TEXT PRIMARY KEY,
+  school_slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  grade TEXT NOT NULL DEFAULT '',
+  rank INTEGER NOT NULL,
+  strength TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  avatar_image TEXT NOT NULL DEFAULT '',
+  published INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(school_slug, rank),
+  FOREIGN KEY(school_slug) REFERENCES chess_schools(slug)
+);
+
 CREATE TABLE IF NOT EXISTS manager_city_assignments (
   id TEXT PRIMARY KEY,
   manager_user_id TEXT NOT NULL,
@@ -576,7 +617,10 @@ CREATE INDEX IF NOT EXISTS idx_news_status_dates ON news_posts(status, published
 CREATE INDEX IF NOT EXISTS idx_news_slug_status ON news_posts(slug, status);
 CREATE INDEX IF NOT EXISTS idx_news_sport_city ON news_posts(sport, city);
 CREATE INDEX IF NOT EXISTS idx_news_blocks_post_order ON news_blocks(post_slug, sort_order);
+CREATE INDEX IF NOT EXISTS idx_sports_published_sort ON sports(published, sort_order, name);
 CREATE INDEX IF NOT EXISTS idx_sport_home_visibility_sort ON sport_home_visibility(show_on_home, sort_order);
+CREATE INDEX IF NOT EXISTS idx_chess_schools_published_sort ON chess_schools(published, sort_order);
+CREATE INDEX IF NOT EXISTS idx_chess_students_school_rank ON chess_school_students(school_slug, rank);
 CREATE INDEX IF NOT EXISTS idx_manager_city_user ON manager_city_assignments(manager_user_id, city);
 CREATE INDEX IF NOT EXISTS idx_manager_city_city ON manager_city_assignments(city, manager_user_id);
 CREATE INDEX IF NOT EXISTS idx_tournament_manager_user ON tournament_manager_assignments(manager_user_id, tournament_slug);
@@ -640,9 +684,123 @@ def _add_column(conn, table: str, column: str, definition: str) -> None:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
+CHESS_SCHOOL_SEED = [
+    {
+        "slug": "green-valley-public-school",
+        "name": "Green Valley Public School",
+        "city": "Bengaluru",
+        "coordinator": "Academy meet desk",
+        "summary": "Green Valley entered a confident junior squad with disciplined opening preparation and strong endgame focus.",
+        "sort_order": 1,
+        "students": [
+            ("green-valley-public-school-rank-1", "Aarav Nair", "Grade 8", 1, "Queen's Pawn structures", "Aarav kept calm in long positions and converted two close rook endings with mature timing."),
+            ("green-valley-public-school-rank-2", "Meera Iyer", "Grade 7", 2, "Tactical calculation", "Meera created sharp middle-game pressure and showed excellent board awareness under time control."),
+        ],
+    },
+    {
+        "slug": "st-marys-central-school",
+        "name": "St. Mary's Central School",
+        "city": "Mysuru",
+        "coordinator": "School sports committee",
+        "summary": "St. Mary's brought steady match temperament, careful notation, and impressive sportsmanship across every round.",
+        "sort_order": 2,
+        "students": [
+            ("st-marys-central-school-rank-1", "Rohan D'Souza", "Grade 9", 1, "King-side attacks", "Rohan built initiative early and handled decisive positions with clean calculation."),
+            ("st-marys-central-school-rank-2", "Anika Rao", "Grade 8", 2, "Defensive resourcefulness", "Anika saved difficult positions and turned balanced endings into practical chances."),
+        ],
+    },
+    {
+        "slug": "national-model-school",
+        "name": "National Model School",
+        "city": "Chennai",
+        "coordinator": "Mind sports faculty",
+        "summary": "National Model combined strong preparation with patient board discipline, making the school one of the most consistent teams.",
+        "sort_order": 3,
+        "students": [
+            ("national-model-school-rank-1", "Kabir Menon", "Grade 10", 1, "Endgame technique", "Kabir's precise pawn play and clock management stood out during the final session."),
+            ("national-model-school-rank-2", "Diya Krishnan", "Grade 9", 2, "Open-file control", "Diya found active piece placements early and kept pressure through every transition."),
+        ],
+    },
+    {
+        "slug": "bright-future-academy",
+        "name": "Bright Future Academy",
+        "city": "Mumbai",
+        "coordinator": "Tournament mentor group",
+        "summary": "Bright Future's students played ambitious chess, showing creativity in openings and resilience after tense middle games.",
+        "sort_order": 4,
+        "students": [
+            ("bright-future-academy-rank-1", "Vivaan Shah", "Grade 8", 1, "Rapid development", "Vivaan used fast piece activity to create clear plans and finish games efficiently."),
+            ("bright-future-academy-rank-2", "Sara Khan", "Grade 7", 2, "Counterplay creation", "Sara stayed resourceful in complex positions and earned points through practical decisions."),
+        ],
+    },
+    {
+        "slug": "lotus-international-school",
+        "name": "Lotus International School",
+        "city": "Hyderabad",
+        "coordinator": "Student excellence cell",
+        "summary": "Lotus International delivered a polished performance with balanced positional play and strong peer support.",
+        "sort_order": 5,
+        "students": [
+            ("lotus-international-school-rank-1", "Ishaan Reddy", "Grade 9", 1, "Positional planning", "Ishaan improved small advantages patiently and showed strong understanding of weak squares."),
+            ("lotus-international-school-rank-2", "Nisha Varma", "Grade 8", 2, "Piece coordination", "Nisha's games were marked by smooth development and accurate defensive choices."),
+        ],
+    },
+    {
+        "slug": "riverdale-scholar-school",
+        "name": "Riverdale Scholar School",
+        "city": "Delhi",
+        "coordinator": "Inter-school chess desk",
+        "summary": "Riverdale's campaign was built on focused preparation, polite competitive conduct, and confident finishing technique.",
+        "sort_order": 6,
+        "students": [
+            ("riverdale-scholar-school-rank-1", "Arjun Batra", "Grade 10", 1, "Strategic exchanges", "Arjun chose practical simplifications and converted advantages without allowing counterplay."),
+            ("riverdale-scholar-school-rank-2", "Tara Malhotra", "Grade 9", 2, "Initiative building", "Tara handled dynamic positions with clarity and found strong attacking continuations."),
+        ],
+    },
+]
+
+
+def _seed_chess_schools(conn) -> None:
+    count_row = conn.execute("SELECT COUNT(*) AS count FROM chess_schools").fetchone()
+    count = int((count_row["count"] if isinstance(count_row, dict) else count_row[0]) or 0)
+    if count:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    placeholder = "%s" if using_postgres() else "?"
+    school_insert = (
+        "INSERT INTO chess_schools(slug, name, city, coordinator, summary, published, sort_order, created_at, updated_at) "
+        f"VALUES ({', '.join([placeholder] * 9)})"
+    )
+    student_insert = (
+        "INSERT INTO chess_school_students(id, school_slug, name, grade, rank, strength, note, avatar_image, published, created_at, updated_at) "
+        f"VALUES ({', '.join([placeholder] * 11)})"
+    )
+    for school in CHESS_SCHOOL_SEED:
+        conn.execute(
+            school_insert,
+            (
+                school["slug"],
+                school["name"],
+                school["city"],
+                school["coordinator"],
+                school["summary"],
+                1,
+                school["sort_order"],
+                now,
+                now,
+            ),
+        )
+        for student_id, name, grade, rank, strength, note in school["students"]:
+            conn.execute(
+                student_insert,
+                (student_id, school["slug"], name, grade, rank, strength, note, "", 1, now, now),
+            )
+
+
 def _apply_operational_schema(path=None) -> None:
     with connect(path) as conn:
         _executescript(conn, SCHEMA)
+        _seed_chess_schools(conn)
         registration_columns = {
             "user_id": "TEXT NOT NULL DEFAULT ''",
             "team_code": "TEXT NOT NULL DEFAULT ''",
@@ -660,6 +818,22 @@ def _apply_operational_schema(path=None) -> None:
         }
         for column, definition in registration_columns.items():
             _add_column(conn, "registrations", column, definition)
+        sport_columns = {
+            "title": "TEXT NOT NULL DEFAULT ''",
+            "image": "TEXT NOT NULL DEFAULT ''",
+            "description": "TEXT NOT NULL DEFAULT ''",
+            "operations": "TEXT NOT NULL DEFAULT ''",
+            "attribute_json": "TEXT NOT NULL DEFAULT '[]'",
+            "explore_label": "TEXT NOT NULL DEFAULT ''",
+            "explore_url": "TEXT NOT NULL DEFAULT ''",
+            "sort_order": "INTEGER NOT NULL DEFAULT 99",
+            "published": "INTEGER NOT NULL DEFAULT 1",
+            "created_by": "TEXT NOT NULL DEFAULT ''",
+            "created_at": "TEXT NOT NULL DEFAULT ''",
+            "updated_at": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in sport_columns.items():
+            _add_column(conn, "sports", column, definition)
         tournament_columns = {
             "min_team_size": "INTEGER NOT NULL DEFAULT 2",
             "max_team_size": "INTEGER NOT NULL DEFAULT 16",

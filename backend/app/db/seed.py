@@ -206,7 +206,7 @@ def seed_data() -> None:
         """,
         item,
     ) for item in users]
-    statements += [("INSERT INTO sports VALUES (?, ?, ?, ?)", item) for item in sports]
+    statements += [("INSERT INTO sports(slug, name, active, color) VALUES (?, ?, ?, ?)", item) for item in sports]
     statements += [(
         """
         INSERT INTO tournaments (

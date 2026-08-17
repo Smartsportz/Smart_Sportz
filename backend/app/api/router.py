@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 
-from app.api.routes import admin, auth, content, likes, live, management, payments, public, registrations, storage, user
+from app.api.routes import admin, auth, content, likes, live, management, payments, public, realtime, registrations, storage, user
 from app.core.config import settings
 from app.core.responses import ok
 from app.db.database import audit_db_path, connect, connect_audit, connect_mirror, db_path, mirror_db_path, using_postgres
@@ -65,5 +65,6 @@ api_router.include_router(admin.router)
 api_router.include_router(management.router)
 api_router.include_router(likes.router)
 api_router.include_router(live.router)
+api_router.include_router(realtime.router)
 api_router.include_router(storage.router)
 api_router.include_router(user.router)

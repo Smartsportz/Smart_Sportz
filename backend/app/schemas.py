@@ -252,6 +252,47 @@ class SportHomeVisibilityPayload(BaseModel):
     sort_order: int = Field(default=1, ge=1, le=99)
 
 
+class SportManagePayload(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    title: str = Field(min_length=2, max_length=160)
+    image: str = Field(default="", max_length=20000000)
+    description: str = Field(min_length=10, max_length=1200)
+    operations: str = Field(default="", max_length=1200)
+    attributes: list[dict[str, str]] = Field(default_factory=list, max_length=20)
+    color: str = Field(default="emerald", max_length=40)
+    active: int = Field(default=0, ge=0, le=100000)
+    published: bool = True
+    sort_order: int = Field(default=99, ge=1, le=999)
+    show_explore: bool = False
+    explore_label: str = Field(default="Explore", max_length=40)
+    explore_url: str = Field(default="", max_length=500)
+
+
+class SportReorderPayload(BaseModel):
+    slugs: list[str] = Field(min_length=1, max_length=200)
+
+
+class ChessStudentManagePayload(BaseModel):
+    id: str | None = Field(default=None, max_length=80)
+    name: str = Field(min_length=2, max_length=120)
+    grade: str = Field(default="", max_length=80)
+    rank: int = Field(default=1, ge=1, le=99)
+    strength: str = Field(default="", max_length=180)
+    note: str = Field(default="", max_length=800)
+    avatar_image: str = Field(default="", max_length=20000000)
+    published: bool = True
+
+
+class ChessSchoolManagePayload(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    city: str = Field(default="", max_length=100)
+    coordinator: str = Field(default="", max_length=160)
+    summary: str = Field(default="", max_length=1200)
+    published: bool = True
+    sort_order: int = Field(default=99, ge=1, le=999)
+    students: list[ChessStudentManagePayload] = Field(default_factory=list, max_length=30)
+
+
 class ManagerCreatePayload(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
