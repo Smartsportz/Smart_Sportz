@@ -124,7 +124,7 @@ export function Footer() {
       </div>
       <p className="footer-rights">
         <span>all rights received by smartsportz.in@2026</span>
-        <span>powered by brillaris global pro</span>
+        <span>powered by <span className="footer-brand-credit">Brillaris Global Pro</span></span>
       </p>
     </footer>
   );
