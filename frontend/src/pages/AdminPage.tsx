@@ -3275,13 +3275,14 @@ export function AdminTournamentPaymentsPage() {
               <label>Method<select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">All methods</option>{methodOptions.map((method) => <option value={method} key={method}>{method}</option>)}</select></label>
             </section>
             <DataTable
-              columns={["Team", "Captain", "Receipt", "Amount", "Method", "Status", "Action"]}
+              columns={["Team", "Captain", "Receipt", "Amount", "Method", "Transaction ID", "Status", "Action"]}
               rows={filteredPayments.map((payment) => [
                 payment.team_name,
                 payment.captain_name,
                 payment.receipt_number,
                 formatAdminMoney(payment.amount),
                 payment.method,
+                payment.transaction_reference || "-",
                 <span className={`status ${payment.status === "paid" ? "emerald" : payment.status === "cancelled" ? "pink" : "orange"}`}>{payment.status}</span>,
                 payment.source === "intent" && payment.status !== "paid" ? (
                   <button className="btn btn-primary tiny-btn" type="button" onClick={() => openPaymentAction(payment, "verify")}>Verify</button>
