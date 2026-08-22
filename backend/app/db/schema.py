@@ -211,6 +211,7 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE TABLE IF NOT EXISTS payment_intents (
   id TEXT PRIMARY KEY,
+  registration_id TEXT NOT NULL DEFAULT '',
   tournament_slug TEXT NOT NULL,
   team_name TEXT NOT NULL,
   amount INTEGER NOT NULL,
@@ -866,6 +867,7 @@ def _apply_operational_schema(path=None) -> None:
         for column, definition in payment_columns.items():
             _add_column(conn, "payments", column, definition)
         payment_intent_columns = {
+            "registration_id": "TEXT NOT NULL DEFAULT ''",
             "receiver_upi_id": "TEXT NOT NULL DEFAULT ''",
             "transaction_reference": "TEXT NOT NULL DEFAULT ''",
             "verified_at": "TEXT NOT NULL DEFAULT ''",

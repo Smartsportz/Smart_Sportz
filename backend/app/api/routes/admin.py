@@ -10,7 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from app.api.deps import require_roles
 from app.core.responses import ok
 from app.core.security import hash_password
-from app.db.database import audit_rows, execute, execute_many, row, rows
+from app.db.database import audit_rows, ensure_column, execute, execute_many, row, rows
 from app.schemas import (
     AdminTeamUpdatePayload,
     AdminUserCreatePayload,
@@ -36,6 +36,24 @@ from app.services.realtime import publish_realtime
 from app.services.runtime_state import runtime_state
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+_payment_intent_listing_columns_ready = False
+
+
+def ensure_payment_intent_listing_columns() -> None:
+    global _payment_intent_listing_columns_ready
+    if _payment_intent_listing_columns_ready:
+        return
+    columns = {
+        "registration_id": "TEXT NOT NULL DEFAULT ''",
+        "receiver_upi_id": "TEXT NOT NULL DEFAULT ''",
+        "transaction_reference": "TEXT NOT NULL DEFAULT ''",
+        "verified_at": "TEXT NOT NULL DEFAULT ''",
+        "verified_by": "TEXT NOT NULL DEFAULT ''",
+        "verification_note": "TEXT NOT NULL DEFAULT ''",
+    }
+    for column, definition in columns.items():
+        ensure_column("payment_intents", column, definition)
+    _payment_intent_listing_columns_ready = True
 
 
 def slugify(title: str) -> str:
@@ -1231,18 +1249,22 @@ def admin_tournament_payments(
 
 
 def _admin_tournament_payments_payload(tournament_slug: str):
+    ensure_payment_intent_listing_columns()
     tournament = row("SELECT * FROM tournaments WHERE slug = ?", (tournament_slug,))
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    payment_rows = rows(
+    completed_payment_rows = rows(
         """
         SELECT
           p.id,
           p.registration_id,
+          'payment' AS source,
           p.status,
           p.amount,
           p.method,
           p.receipt_number,
+          '' AS transaction_reference,
+          '' AS verification_note,
           p.refund_destination,
           p.refund_reference,
           p.action_note,
@@ -1260,12 +1282,48 @@ def _admin_tournament_payments_payload(tournament_slug: str):
         """,
         (tournament_slug,),
     )
-    total_paid = sum(int(item["amount"] or 0) for item in payment_rows if item["status"] == "paid")
+    intent_rows = rows(
+        """
+        SELECT
+          pi.id,
+          pi.registration_id,
+          'intent' AS source,
+          pi.status,
+          pi.amount,
+          pi.method,
+          pi.receipt_number,
+          pi.transaction_reference,
+          pi.verification_note,
+          '' AS refund_destination,
+          '' AS refund_reference,
+          pi.verification_note AS action_note,
+          pi.updated_at AS action_at,
+          pi.created_at,
+          COALESCE(r.team_name, pi.team_name) AS team_name,
+          COALESCE(r.captain_name, '') AS captain_name,
+          COALESCE(r.email, pi.contact) AS email,
+          COALESCE(r.city, '') AS city,
+          COALESCE(r.payment_status, pi.status) AS payment_status,
+          COALESCE(r.status, 'pending_payment') AS registration_status
+        FROM payment_intents pi
+        LEFT JOIN registrations r ON r.id = pi.registration_id
+        LEFT JOIN payments p ON p.receipt_number = pi.receipt_number
+        WHERE pi.tournament_slug = ? AND p.id IS NULL
+        ORDER BY pi.updated_at DESC
+        """,
+        (tournament_slug,),
+    )
+    payment_rows = sorted(
+        [*completed_payment_rows, *intent_rows],
+        key=lambda item: str(item.get("created_at") or item.get("action_at") or ""),
+        reverse=True,
+    )
+    total_paid = sum(int(item["amount"] or 0) for item in completed_payment_rows if item["status"] == "paid")
     return {
         "tournament": tournament,
         "summary": {
             "total": total_paid,
-            "paidPayments": len([item for item in payment_rows if item["status"] == "paid"]),
+            "paidPayments": len([item for item in completed_payment_rows if item["status"] == "paid"]),
             "payments": len(payment_rows),
             "teams": row(
                 "SELECT COUNT(*) AS count FROM registrations WHERE tournament_slug = ?",

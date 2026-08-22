@@ -346,10 +346,15 @@ class LocalPaymentCreate(BaseModel):
 
 class PaymentIntentCreate(BaseModel):
     tournament_slug: str = Field(min_length=2, max_length=120)
+    registration_id: str = Field(default="", max_length=120)
     team_name: str = Field(min_length=2, max_length=120)
     amount: int = Field(gt=0, le=10000000)
     method: str = Field(pattern="^(card|upi)$")
     contact: str = Field(min_length=3, max_length=80)
+
+
+class PaymentIntentSubmit(BaseModel):
+    transaction_reference: str = Field(min_length=6, max_length=120)
 
 
 class PaymentIntentConfirm(BaseModel):

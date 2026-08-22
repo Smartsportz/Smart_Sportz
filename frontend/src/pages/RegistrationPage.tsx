@@ -60,6 +60,8 @@ type PaymentIntentRecord = {
   qr_payload?: string;
   receiver_upi_id?: string;
   payee_name?: string;
+  transaction_reference?: string;
+  verification_note?: string;
 };
 
 type BackendRegistration = {
@@ -294,7 +296,7 @@ function encodeUpiValue(value: string) {
 
 function buildUpiIntent({ amount, registrationId, teamName, tournamentName }: { amount: number; registrationId: string; teamName: string; tournamentName: string }) {
   const params = [
-    ["pa", "6374409006@ybl"],
+    ["pa", "7871357999@axl"],
     ["pn", "SmartSportz"],
     ["am", (amount / 100).toFixed(2)],
     ["cu", "INR"],
@@ -1435,6 +1437,7 @@ export function RegistrationRosterPage() {
 export function RegistrationPaymentPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const routeSlug = slug ?? tournaments[0].slug;
   const fallbackTournament = tournaments.find((item) => item.slug === routeSlug) ?? { ...tournaments[0], slug: routeSlug };
   const [remoteTournament, setRemoteTournament] = useState<Record<string, any> | null>(null);
@@ -1450,7 +1453,9 @@ export function RegistrationPaymentPage() {
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntentRecord | null>(() => readSavedPaymentIntent(saved?.registrationId));
   const [status, setStatus] = useState<"idle" | "checking">("idle");
   const [error, setError] = useState("");
-  const phonepeUpiId = paymentIntent?.receiver_upi_id || "6374409006@ybl";
+  const [paymentNotice, setPaymentNotice] = useState("");
+  const [transactionReference, setTransactionReference] = useState(paymentIntent?.transaction_reference ?? "");
+  const phonepeUpiId = paymentIntent?.receiver_upi_id || "7871357999@axl";
   const phonepePayeeName = paymentIntent?.payee_name || "SmartSportz";
   const upiIntent = sanitizeUpiIntent(paymentIntent?.qr_payload || (saved
     ? buildUpiIntent({ amount: totalPayable, registrationId: saved.registrationId, teamName: saved.teamName, tournamentName: tournament.name })
@@ -1474,8 +1479,8 @@ export function RegistrationPaymentPage() {
     if (paymentIntent && paymentIntent.method === selectedMethod && paymentIntent.amount === totalPayable) return paymentIntent;
     const intent = await apiRequest<PaymentIntentRecord>("/payments/local-intent", {
       method: "POST",
-      body: JSON.stringify({ tournament_slug: routeSlug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
-    });
+      body: JSON.stringify({ registration_id: saved.registrationId, tournament_slug: routeSlug, team_name: saved.teamName, amount: totalPayable, method: selectedMethod, contact }),
+    }, token);
     setPaymentIntent(intent);
     writeSavedPaymentIntent(saved.registrationId, intent);
     return intent;
@@ -1487,17 +1492,42 @@ export function RegistrationPaymentPage() {
     if (latest.status !== "paid") {
       setPaymentIntent(latest);
       writeSavedPaymentIntent(saved.registrationId, latest);
-      throw new Error("Payment not received yet. Please complete PhonePe UPI payment to 6374409006@ybl and wait for verification.");
+      setPaymentNotice(latest.status === "submitted" || latest.status === "pending"
+        ? "Payment submitted. Please wait for admin verification. You can check again after approval."
+        : "");
+      throw new Error("Payment not received yet. Please complete PhonePe UPI payment to 7871357999@axl and wait for verification.");
     }
     const registrationPayment = await apiRequest<{ id: string; receipt_number: string; amount: number; method: "card" | "upi" }>(`/registrations/${saved.registrationId}/local-payment`, {
       method: "POST",
       body: JSON.stringify({ registration_id: saved.registrationId, method: selectedMethod, amount: totalPayable, payment_intent_id: intent.id }),
-    });
+    }, token);
     const updatedRegistration = await apiRequest<BackendRegistration>(`/registrations/${saved.registrationId}`);
     writeSavedRegistration(routeSlug, { ...saved, teamCode: updatedRegistration.team_code || "" });
     const payment: SavedPayment = { id: registrationPayment.id, receiptNumber: registrationPayment.receipt_number, amount: registrationPayment.amount, method: registrationPayment.method, status: "paid", paidAt: new Date().toISOString() };
     writeSavedPayment(routeSlug, payment);
     navigate(`/tournaments/${routeSlug}/register/review`);
+  }
+
+  async function submitPaymentForVerification() {
+    if (!saved) return;
+    setStatus("checking");
+    setError("");
+    setPaymentNotice("");
+    try {
+      const intent = await ensurePaymentIntent("upi");
+      if (!intent) return;
+      const updated = await apiRequest<PaymentIntentRecord>(`/payments/local-intent/${intent.id}/submit`, {
+        method: "POST",
+        body: JSON.stringify({ transaction_reference: transactionReference.trim() }),
+      }, token);
+      setPaymentIntent(updated);
+      writeSavedPaymentIntent(saved.registrationId, updated);
+      setPaymentNotice("Payment submitted. Please wait for admin verification. This page will move to confirmation after approval.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to submit payment for verification.");
+    } finally {
+      setStatus("idle");
+    }
   }
 
   async function completePayment(selectedMethod: "upi" | "card") {
@@ -1509,7 +1539,9 @@ export function RegistrationPaymentPage() {
       if (intent) await completeVerifiedPayment(selectedMethod, intent);
     } catch (caught) {
       setStatus("idle");
-      setError(caught instanceof Error ? caught.message : "Payment not received yet.");
+      const message = caught instanceof Error ? caught.message : "Payment not received yet.";
+      if (/wait|verification|not received/i.test(message)) setPaymentNotice(message);
+      else setError(message);
     }
   }
 
@@ -1547,6 +1579,7 @@ export function RegistrationPaymentPage() {
               <small>{tournament.name} - {formatInr(totalPayable)}</small>
             </div>
             {error && <div className="form-alert">{error}</div>}
+            {paymentNotice && <div className="form-alert success-alert">{paymentNotice}</div>}
             <div className="payment-method-tabs">
               <button className={method === "upi" ? "active" : ""} onClick={() => setMethod("upi")}>UPI</button>
               <button className={method === "card" ? "active" : ""} onClick={() => setMethod("card")}>Card</button>
@@ -1560,6 +1593,10 @@ export function RegistrationPaymentPage() {
                   <small>Registration completes only after SmartSportz verifies that the payment was received.</small>
                 </div>
                 <button className="btn btn-primary wide" onClick={openUpiApps} disabled={status === "checking"}>Open UPI Apps</button>
+                <label className="payment-reference-field">Transaction / UTR Reference
+                  <input value={transactionReference} onChange={(event) => setTransactionReference(event.target.value)} placeholder="Enter UPI transaction ID" />
+                </label>
+                <button className="btn btn-primary wide" onClick={submitPaymentForVerification} disabled={status === "checking" || transactionReference.trim().length < 6}>Submit Payment For Verification</button>
                 <button className="btn btn-secondary wide" onClick={startUpiFlow} disabled={status === "checking"}>Check Payment Status</button>
                 {upiChooserOpen && (
                   <div className="upi-app-sheet">

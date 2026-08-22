@@ -300,6 +300,12 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate, user: dict 
             raise HTTPException(status_code=400, detail="Payment amount does not match")
         if intent["status"] != "paid":
             raise HTTPException(status_code=409, detail="Payment not received yet. Please complete PhonePe UPI payment and wait for verification.")
+        existing_payment = row(
+            "SELECT * FROM payments WHERE receipt_number = ? OR (registration_id = ? AND status = 'paid') ORDER BY created_at DESC LIMIT 1",
+            (intent["receipt_number"], registration_id),
+        )
+        if existing_payment:
+            return ok(existing_payment, "Local payment completed")
     elif payload.method == "upi":
         raise HTTPException(status_code=409, detail="Payment not received yet. PhonePe UPI payment must be verified before registration completion.")
     payment_id = f"pay_{uuid4().hex[:12]}"

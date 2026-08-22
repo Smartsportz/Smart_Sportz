@@ -3182,7 +3182,7 @@ export function AdminTournamentPaymentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
   const [actionPayment, setActionPayment] = useState<Record<string, any> | null>(null);
-  const [actionType, setActionType] = useState<"refund" | "cancel">("refund");
+  const [actionType, setActionType] = useState<"verify" | "refund" | "cancel">("refund");
   const [actionForm, setActionForm] = useState({ destination: "", reference: "", note: "" });
   const [actionMessage, setActionMessage] = useState("");
 
@@ -3204,13 +3204,13 @@ export function AdminTournamentPaymentsPage() {
     return matchesSearch && matchesStatus && matchesMethod;
   });
 
-  function openPaymentAction(payment: Record<string, any>, type: "refund" | "cancel") {
+  function openPaymentAction(payment: Record<string, any>, type: "verify" | "refund" | "cancel") {
     setActionPayment(payment);
     setActionType(type);
     setActionMessage("");
     setActionForm({
       destination: payment.method === "upi" ? String(payment.upi_id || "") : String(payment.card_reference || ""),
-      reference: "",
+      reference: String(payment.transaction_reference || ""),
       note: "",
     });
   }
@@ -3219,6 +3219,25 @@ export function AdminTournamentPaymentsPage() {
     if (!actionPayment) return;
     setActionMessage("");
     try {
+      if (actionPayment.source === "intent") {
+        await apiRequest(
+          `/payments/local-intent/${actionPayment.id}/confirm`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              status: actionType === "cancel" ? "cancelled" : "paid",
+              method: actionPayment.method || "upi",
+              transaction_reference: actionForm.reference || actionPayment.transaction_reference || actionPayment.receipt_number,
+              verification_note: actionForm.note || (actionType === "cancel" ? "Cancelled by admin payment page." : "Verified by admin payment page."),
+            }),
+          },
+          token,
+        );
+        const refreshed = await apiRequest<{ tournament: Record<string, any>; summary: Record<string, number>; payments: Array<Record<string, any>> }>(`/admin/tournaments/${slug}/payments`, {}, token);
+        setData(refreshed);
+        setActionPayment(null);
+        return;
+      }
       const updated = await apiRequest<{ tournament: Record<string, any>; summary: Record<string, number>; payments: Array<Record<string, any>> }>(
         `/admin/payments/${actionPayment.id}/${actionType}`,
         {
@@ -3264,7 +3283,11 @@ export function AdminTournamentPaymentsPage() {
                 formatAdminMoney(payment.amount),
                 payment.method,
                 <span className={`status ${payment.status === "paid" ? "emerald" : payment.status === "cancelled" ? "pink" : "orange"}`}>{payment.status}</span>,
-                <button className="btn btn-secondary tiny-btn" type="button" onClick={() => openPaymentAction(payment, "refund")}>Set</button>,
+                payment.source === "intent" && payment.status !== "paid" ? (
+                  <button className="btn btn-primary tiny-btn" type="button" onClick={() => openPaymentAction(payment, "verify")}>Verify</button>
+                ) : (
+                  <button className="btn btn-secondary tiny-btn" type="button" onClick={() => openPaymentAction(payment, "refund")}>Set</button>
+                ),
               ])}
             />
             {actionPayment && (
@@ -3274,10 +3297,17 @@ export function AdminTournamentPaymentsPage() {
                   <p className="eyebrow">Payment Action</p>
                   <h2>{actionPayment.team_name}</h2>
                   <div className="payment-action-tabs">
-                    <button className={actionType === "refund" ? "active" : ""} type="button" onClick={() => setActionType("refund")}>Refund</button>
+                    {actionPayment.source === "intent" && <button className={actionType === "verify" ? "active" : ""} type="button" onClick={() => setActionType("verify")}>Verify</button>}
+                    {actionPayment.source !== "intent" && <button className={actionType === "refund" ? "active" : ""} type="button" onClick={() => setActionType("refund")}>Refund</button>}
                     <button className={actionType === "cancel" ? "active" : ""} type="button" onClick={() => setActionType("cancel")}>Cancel</button>
                   </div>
                   <div className="form-grid">
+                    {actionType === "verify" && (
+                      <>
+                        <label>Transaction / UTR Reference<input value={actionForm.reference} onChange={(event) => setActionForm((current) => ({ ...current, reference: event.target.value }))} /></label>
+                        <label>Submitted Status<input value={actionPayment.status || "submitted"} readOnly /></label>
+                      </>
+                    )}
                     {actionType === "refund" && (
                       <>
                         <label>Receiver Info<input value={actionForm.destination} onChange={(event) => setActionForm((current) => ({ ...current, destination: event.target.value }))} /></label>
@@ -3287,7 +3317,7 @@ export function AdminTournamentPaymentsPage() {
                     <label>Admin note<textarea value={actionForm.note} onChange={(event) => setActionForm((current) => ({ ...current, note: event.target.value }))} /></label>
                   </div>
                   <div className="registration-actions compact-actions">
-                    <button className="btn btn-primary" type="button" onClick={submitPaymentAction}>{actionType === "refund" ? "Record Refund" : "Cancel Payment"}</button>
+                    <button className="btn btn-primary" type="button" onClick={submitPaymentAction}>{actionType === "verify" ? "Verify Payment" : actionType === "refund" ? "Record Refund" : "Cancel Payment"}</button>
                   </div>
                 </article>
               </div>
