@@ -682,6 +682,8 @@ img { max-width: 100%; display: block; }
 .upi-payment-box { display: grid; gap: 16px; }
 .qr-shell { display: grid; justify-items: center; gap: 12px; padding: 18px; border: 1px solid rgba(11, 136, 82, .2); border-radius: 18px; background: linear-gradient(135deg, rgba(11, 136, 82, .08), rgba(37, 99, 235, .08)); text-align: center; }
 .qr-shell small { color: var(--muted); font-weight: 800; }
+.payment-receiver-note { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid rgba(11, 136, 82, .18); border-radius: 14px; background: rgba(11, 136, 82, .06); color: var(--ink); font-weight: 800; }
+.payment-receiver-note span, .payment-receiver-note small { color: var(--muted); font-size: 13px; font-weight: 700; }
 .upi-open-button { min-height: 52px; }
 .upi-app-sheet { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; padding: 18px; background: rgba(7, 18, 32, .44); backdrop-filter: blur(10px); }
 .upi-app-sheet-card { width: min(520px, 100%); display: grid; gap: 16px; padding: 20px; border: 1px solid rgba(11, 136, 82, .2); border-radius: 22px; background: var(--surface); box-shadow: 0 30px 80px rgba(15, 23, 42, .24); }

@@ -219,6 +219,11 @@ CREATE TABLE IF NOT EXISTS payment_intents (
   status TEXT NOT NULL,
   receipt_number TEXT NOT NULL,
   qr_payload TEXT,
+  receiver_upi_id TEXT NOT NULL DEFAULT '',
+  transaction_reference TEXT NOT NULL DEFAULT '',
+  verified_at TEXT NOT NULL DEFAULT '',
+  verified_by TEXT NOT NULL DEFAULT '',
+  verification_note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY(tournament_slug) REFERENCES tournaments(slug)
@@ -860,6 +865,15 @@ def _apply_operational_schema(path=None) -> None:
         }
         for column, definition in payment_columns.items():
             _add_column(conn, "payments", column, definition)
+        payment_intent_columns = {
+            "receiver_upi_id": "TEXT NOT NULL DEFAULT ''",
+            "transaction_reference": "TEXT NOT NULL DEFAULT ''",
+            "verified_at": "TEXT NOT NULL DEFAULT ''",
+            "verified_by": "TEXT NOT NULL DEFAULT ''",
+            "verification_note": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in payment_intent_columns.items():
+            _add_column(conn, "payment_intents", column, definition)
         bracket_node_columns = {
             "bucket": "TEXT NOT NULL DEFAULT 'main'",
             "scheduled_at": "TEXT NOT NULL DEFAULT ''",

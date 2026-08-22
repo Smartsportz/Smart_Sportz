@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Results</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="school-page">
+    <header class="navbar">
+        <div class="header-content" style="width: 100%;">
+            <div class="logo">
+                <img src="images/logo.png" alt="Smatsportz Logo" class="brand-logo" onerror="this.style.display='none'">
+                <div class="logo-text">
+                    <h1>Smatsportz</h1>
+                    <p>Celebrating Strategy, Skill & Sportsmanship</p>
+                </div>
+            </div>
+            <a href="index.html" class="back-link btn-outline">← Back to Tournament</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="page-titles text-center">
+            <span class="crown-icon">👑</span>
+            <h1 class="page-heading">Chess Tournament Results</h1>
+            <p class="page-subheading">Select a school to view the top two players</p>
+        </div>
+
+        <section class="selection-section">
+            <div class="card design-card">
+                <div class="card-title-group">
+                    <span class="icon-circle">🏫</span>
+                    <h2>Select School</h2>
+                </div>
+                <div class="ornate-divider">
+                    <hr>
+                    <span class="diamond">♦</span>
+                    <hr>
+                </div>
+                <div class="custom-select with-icon">
+                    <span class="input-icon">🎓</span>
+                    <select id="school-select">
+                        <option value="" disabled selected>Choose a school</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section id="results-section" class="results-section hidden">
+            <h2 class="section-title" style="color: var(--white); text-shadow: 0 2px 4px rgba(0,0,0,0.5);">Top Two Players</h2>
+            <div id="player-cards" class="player-grid">
+                <!-- Player cards dynamically inserted here -->
+            </div>
+        </section>
+        
+        <section id="empty-state" class="empty-state design-card">
+            <div class="checker-watermark left"></div>
+            <div class="checker-watermark right"></div>
+            
+            <div class="empty-content">
+                <span class="icon-circle small">♟</span>
+                <h3>Select a school to view the top two players.</h3>
+                <p>Results will appear here.</p>
+            </div>
+        </section>
+        
+        <div class="bottom-stats-bar">
+            <div class="stat-item">
+                <span class="stat-icon">👥</span>
+                <div class="stat-text">
+                    <strong>Inter-School</strong>
+                    <span>Competition</span>
+                </div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-icon">🏆</span>
+                <div class="stat-text">
+                    <strong>Top Young</strong>
+                    <span>Talents</span>
+                </div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-icon">🎯</span>
+                <div class="stat-text">
+                    <strong>Strategy</strong>
+                    <span>Mindset</span>
+                </div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-icon">🤝</span>
+                <div class="stat-text">
+                    <strong>Sportsmanship</strong>
+                    <span>& Fair Play</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/script.js"></script>
+</body>
+</html>

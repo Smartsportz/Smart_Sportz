@@ -54,6 +54,8 @@ class Settings:
     redis_url: str = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
     upstash_redis_rest_url: str = os.getenv("UPSTASH_REDIS_REST_URL", "")
     upstash_redis_rest_token: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
+    phonepe_upi_id: str = os.getenv("PHONEPE_UPI_ID", "6374409006@ybl")
+    phonepe_payee_name: str = os.getenv("PHONEPE_PAYEE_NAME", "SmartSportz")
     init_db_on_startup: bool = os.getenv("INIT_DB_ON_STARTUP", "true").lower() in {"1", "true", "yes", "on"}
     public_cache_ttl_seconds: int = int(os.getenv("PUBLIC_CACHE_TTL_SECONDS", "45"))
     dashboard_cache_ttl_seconds: int = int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "20"))

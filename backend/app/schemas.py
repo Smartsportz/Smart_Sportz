@@ -341,6 +341,7 @@ class LocalPaymentCreate(BaseModel):
     registration_id: str
     method: str = "local"
     amount: int | None = Field(default=None, gt=0, le=10000000)
+    payment_intent_id: str | None = Field(default=None, max_length=120)
 
 
 class PaymentIntentCreate(BaseModel):
@@ -354,6 +355,8 @@ class PaymentIntentCreate(BaseModel):
 class PaymentIntentConfirm(BaseModel):
     status: str = Field(default="paid", pattern="^(paid|failed|cancelled)$")
     method: str = Field(pattern="^(card|upi)$")
+    transaction_reference: str = Field(default="", max_length=120)
+    verification_note: str = Field(default="", max_length=500)
 
 
 class LiveScoreUpdate(BaseModel):

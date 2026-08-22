@@ -289,8 +289,21 @@ def local_payment(registration_id: str, payload: LocalPaymentCreate, user: dict 
     if not item:
         raise HTTPException(status_code=404, detail="Registration not found")
     _ensure_registration_access(item, user)
+    intent = None
+    if payload.payment_intent_id:
+        intent = row("SELECT * FROM payment_intents WHERE id = ?", (payload.payment_intent_id,))
+        if not intent:
+            raise HTTPException(status_code=404, detail="Payment intent not found")
+        if intent["tournament_slug"] != item["tournament_slug"] or intent["team_name"].strip().lower() != item["team_name"].strip().lower():
+            raise HTTPException(status_code=400, detail="Payment intent does not match this registration")
+        if int(intent["amount"] or 0) != int(payload.amount or item["amount"]):
+            raise HTTPException(status_code=400, detail="Payment amount does not match")
+        if intent["status"] != "paid":
+            raise HTTPException(status_code=409, detail="Payment not received yet. Please complete PhonePe UPI payment and wait for verification.")
+    elif payload.method == "upi":
+        raise HTTPException(status_code=409, detail="Payment not received yet. PhonePe UPI payment must be verified before registration completion.")
     payment_id = f"pay_{uuid4().hex[:12]}"
-    receipt_number = f"SS-RCPT-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:5].upper()}"
+    receipt_number = intent["receipt_number"] if intent else f"SS-RCPT-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:5].upper()}"
     confirmation_code = _confirmation_code(registration_id)
     team_code = item.get("team_code") or _random_team_code(item["tournament_slug"])
     tournament = row("SELECT name, slug FROM tournaments WHERE slug = ?", (item["tournament_slug"],))

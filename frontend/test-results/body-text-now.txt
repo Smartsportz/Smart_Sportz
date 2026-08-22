@@ -1,0 +1,35 @@
+SmartSportz.in
+Dashboard
+Tournaments
+Group Bracket
+Users
+Managers
+Registrations
+Teams
+Payments
+CMS
+News
+Gallery
+Announcements
+Reports
+Logs
+Settings
+Logout
+
+SMART SPORTZ ENTERPRISE
+
+Cms
+SUPER ADMIN
+SYSTEM OPTIMAL
+CMS CONTENT
+Website content
+
+Backend database records for public website sections, publish state, and page routes.
+
+Download
+SECTION	TYPE	PATH	STATUS	ACTION
+The Future of AI in Professional Sports Analytics	Article	/blog/ai-sports-analytics	PUBLISHED	
+Edit
+Preview
+
+Tournament Payment and

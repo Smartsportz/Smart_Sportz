@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Results</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="school-page">
+    <header class="navbar">
+        <div class="header-content">
+            <div class="logo">
+                <img src="images/logo.png" alt="Smatsportz Logo" class="brand-logo" onerror="this.style.display='none'">
+                <div class="logo-text">
+                    <h1>Smatsportz</h1>
+                    <p>Celebrating Strategy, Skill & Sportsmanship</p>
+                </div>
+            </div>
+            <a href="index.html" class="back-link">← Back to Tournament</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="selection-section">
+            <div class="card selection-card">
+                <h2>Select School</h2>
+                <div class="custom-select">
+                    <select id="school-select">
+                        <option value="" disabled selected>Choose a school</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section id="results-section" class="results-section hidden">
+            <h2 class="section-title">Top Two Players</h2>
+            <div id="player-cards" class="player-grid">
+                <!-- Player cards dynamically inserted here -->
+            </div>
+        </section>
+        
+        <section id="empty-state" class="empty-state">
+            <p>Select a school to view the top two players.</p>
+        </section>
+    </main>
+
+    <script src="js/script.js"></script>
+</body>
+</html>

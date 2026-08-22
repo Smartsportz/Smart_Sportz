@@ -1,0 +1,3 @@
+TypeError: locErrShot.screenshot is not a function
+    at D:\JOB\Brillaris\Smart_Sportz-main\.node_repl_cell_11.mjs:28:45
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
