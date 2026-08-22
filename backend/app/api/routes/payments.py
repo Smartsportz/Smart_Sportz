@@ -64,8 +64,6 @@ def create_local_payment_intent(payload: PaymentIntentCreate):
             "pn": settings.phonepe_payee_name,
             "am": f"{payload.amount / 100:.2f}",
             "cu": "INR",
-            "tr": payment_id,
-            "tid": payment_id,
             "tn": f"{tournament['name']} - {payload.team_name}",
         }
         qr_payload = "upi://pay?" + "&".join(f"{key}={quote_plus(value)}" for key, value in qr_values.items())

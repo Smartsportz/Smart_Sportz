@@ -298,15 +298,22 @@ function buildUpiIntent({ amount, registrationId, teamName, tournamentName }: { 
     ["pn", "SmartSportz"],
     ["am", (amount / 100).toFixed(2)],
     ["cu", "INR"],
-    ["tr", registrationId],
-    ["tid", registrationId],
     ["tn", `${tournamentName} - ${teamName}`],
   ];
   return `upi://pay?${params.map(([key, value]) => `${key}=${encodeUpiValue(value)}`).join("&")}`;
 }
 
+function sanitizeUpiIntent(value: string) {
+  if (!value.startsWith("upi://pay?")) return value;
+  const query = value.replace("upi://pay?", "");
+  const params = new URLSearchParams(query);
+  params.delete("tr");
+  params.delete("tid");
+  return `upi://pay?${params.toString()}`;
+}
+
 function buildAppUpiLinks(upiIntent: string) {
-  const query = upiIntent.replace("upi://pay?", "");
+  const query = sanitizeUpiIntent(upiIntent).replace("upi://pay?", "");
   return [
     { label: "Google Pay", href: `gpay://upi/pay?${query}` },
     { label: "PhonePe", href: `phonepe://pay?${query}` },
@@ -1445,9 +1452,9 @@ export function RegistrationPaymentPage() {
   const [error, setError] = useState("");
   const phonepeUpiId = paymentIntent?.receiver_upi_id || "6374409006@ybl";
   const phonepePayeeName = paymentIntent?.payee_name || "SmartSportz";
-  const upiIntent = paymentIntent?.qr_payload || (saved
+  const upiIntent = sanitizeUpiIntent(paymentIntent?.qr_payload || (saved
     ? buildUpiIntent({ amount: totalPayable, registrationId: saved.registrationId, teamName: saved.teamName, tournamentName: tournament.name })
-    : "");
+    : ""));
   const upiAppLinks = useMemo(() => buildAppUpiLinks(upiIntent), [upiIntent]);
 
   useEffect(() => {
