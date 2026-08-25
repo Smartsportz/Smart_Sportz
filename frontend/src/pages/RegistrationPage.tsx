@@ -296,7 +296,7 @@ function encodeUpiValue(value: string) {
 
 function buildUpiIntent({ amount, registrationId, teamName, tournamentName }: { amount: number; registrationId: string; teamName: string; tournamentName: string }) {
   const params = [
-    ["pa", "7871357999@axl"],
+    ["pa", "6374409006@ybl"], //7871357999@axl
     ["pn", "SmartSportz"],
     ["am", (amount / 100).toFixed(2)],
     ["cu", "INR"],
@@ -437,14 +437,14 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
 async function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
   const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
-  const isPdfSource = /^data:application\/pdf/i.test(uploadedRulesPdf) || /^https?:\/\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf) || /^\/media\/.+\.pdf(\?|#|$)/i.test(uploadedRulesPdf);
-  if (!uploadedRulesPdf || !isPdfSource) {
+  if (!uploadedRulesPdf) {
     window.alert("Rules PDF is not uploaded for this tournament.");
     return;
   }
   const filename = uploadedRulesPdf.split("/").pop()?.split("?")[0] || `${tournament.slug}-rules-and-conditions.pdf`;
-  if (/^https?:\/\//i.test(uploadedRulesPdf)) {
-    const response = await fetch(uploadedRulesPdf);
+  const downloadUrl = mediaUrl(uploadedRulesPdf);
+  if (/^https?:\/\//i.test(downloadUrl) || downloadUrl.startsWith("/")) {
+    const response = await fetch(downloadUrl);
     if (!response.ok) {
       window.alert("Rules PDF could not be downloaded.");
       return;
@@ -461,7 +461,7 @@ async function downloadRulesFile(tournament: (typeof tournaments)[number]) {
     return;
   }
   const link = document.createElement("a");
-  link.href = uploadedRulesPdf;
+  link.href = downloadUrl;
   link.download = filename;
   document.body.appendChild(link);
   link.click();
@@ -870,7 +870,7 @@ export function RegistrationPage() {
     const timer = window.setTimeout(() => {
       apiRequest<{ exists: boolean }>(
         `/registrations/check-team-name?tournament_slug=${encodeURIComponent(routeSlug)}&team_name=${encodeURIComponent(name)}`,
-        {},
+        { silent: true },
         token,
       )
         .then((result) => {
@@ -1241,8 +1241,9 @@ export function RegistrationPage() {
                         placeholder="e.g. Mumbai Mavericks"
                         aria-invalid={teamNameCheck === "exists"}
                       />
-                      {teamNameCheck === "checking" && <small className="field-hint">Checking team name...</small>}
-                      {teamNameCheck === "exists" && <small className="field-error">This team name is already registered, so change other name.</small>}
+                      {teamNameCheck === "checking" && <small className="field-hint">Finding available team name...</small>}
+                      {teamNameCheck === "exists" && <small className="field-error">Already exist</small>}
+                      {teamNameCheck === "available" && <small className="field-success">Accepted</small>}
                     </label>
                     <label>City<select value={teamDetails.city} onChange={(event) => updateTeamDetails("city", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
                     <label>Home state<select value={teamDetails.districtState} onChange={(event) => updateTeamDetails("districtState", event.target.value)}>{tournament.cities.map((city) => <option key={city}>{city}</option>)}</select></label>
@@ -1455,7 +1456,7 @@ export function RegistrationPaymentPage() {
   const [error, setError] = useState("");
   const [paymentNotice, setPaymentNotice] = useState("");
   const [transactionReference, setTransactionReference] = useState(paymentIntent?.transaction_reference ?? "");
-  const phonepeUpiId = paymentIntent?.receiver_upi_id || "7871357999@axl";
+  const phonepeUpiId = paymentIntent?.receiver_upi_id || "6374409006@ybl"; //7871357999@axl
   const phonepePayeeName = paymentIntent?.payee_name || "SmartSportz";
   const upiIntent = sanitizeUpiIntent(paymentIntent?.qr_payload || (saved
     ? buildUpiIntent({ amount: totalPayable, registrationId: saved.registrationId, teamName: saved.teamName, tournamentName: tournament.name })
@@ -1589,7 +1590,7 @@ export function RegistrationPaymentPage() {
                 <div className="qr-shell"><QRCodeSVG value={upiIntent} size={150} /></div>
                 <div className="payment-receiver-note">
                   <strong>{phonepePayeeName}</strong>
-                  <span>PhonePe UPI ID: {phonepeUpiId}</span>
+                  {/* <span>PhonePe UPI ID: {phonepeUpiId}</span> */}
                   <small>Registration completes only after SmartSportz verifies that the payment was received.</small>
                 </div>
                 <button className="btn btn-primary wide" onClick={openUpiApps} disabled={status === "checking"}>Open UPI Apps</button>

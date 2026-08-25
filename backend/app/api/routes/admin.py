@@ -641,8 +641,8 @@ def admin_tournament_teams(
           r.selected_jersey_image AS selected_jersey,
           r.amount,
           r.created_at,
-          u.name AS user_name,
-          u.email AS user_email,
+          MAX(u.name) AS user_name,
+          MAX(u.email) AS user_email,
           COUNT(m.id) AS players_count
         FROM registrations r
         LEFT JOIN users u ON u.id = r.user_id
@@ -683,11 +683,11 @@ def admin_teams(_: dict = Depends(require_roles("super_admin"))):
           r.team_logo,
           r.team_motto,
           r.created_at,
-          t.name AS tournament_name,
-          t.sport,
-          t.location,
-          u.name AS user_name,
-          u.email AS user_email,
+          MAX(t.name) AS tournament_name,
+          MAX(t.sport) AS sport,
+          MAX(t.location) AS location,
+          MAX(u.name) AS user_name,
+          MAX(u.email) AS user_email,
           COUNT(DISTINCT m.id) AS players_count,
           COUNT(DISTINCT p.id) AS payments_count,
           COALESCE(MAX(p.amount), 0) AS latest_payment
@@ -1263,8 +1263,8 @@ def _admin_tournament_payments_payload(tournament_slug: str):
           p.amount,
           p.method,
           p.receipt_number,
-          '' AS transaction_reference,
-          '' AS verification_note,
+          COALESCE(pi.transaction_reference, '') AS transaction_reference,
+          COALESCE(pi.verification_note, '') AS verification_note,
           p.refund_destination,
           p.refund_reference,
           p.action_note,
@@ -1276,7 +1276,9 @@ def _admin_tournament_payments_payload(tournament_slug: str):
           r.city,
           r.payment_status,
           r.status AS registration_status
-        FROM payments p        INNER JOIN registrations r ON r.id = p.registration_id
+        FROM payments p
+        INNER JOIN registrations r ON r.id = p.registration_id
+        LEFT JOIN payment_intents pi ON pi.receipt_number = p.receipt_number
         WHERE r.tournament_slug = ?
         ORDER BY p.created_at DESC
         """,
@@ -1841,7 +1843,20 @@ def approve_registration(
     if item["payment_status"] != "paid":
         raise HTTPException(status_code=409, detail="Registration payment is not complete")
     execute("UPDATE registrations SET status = ? WHERE id = ?", ("approved", registration_id))
-    execute("UPDATE tournaments SET teams = teams + 1 WHERE slug = ?", (item["tournament_slug"],))
+    execute(
+        """
+        UPDATE tournaments
+        SET teams = (
+            SELECT COUNT(*)
+            FROM registrations
+            WHERE tournament_slug = ?
+              AND payment_status = 'paid'
+              AND COALESCE(status, '') NOT IN ('rejected', 'cancelled')
+        )
+        WHERE slug = ?
+        """,
+        (item["tournament_slug"], item["tournament_slug"]),
+    )
     clear_public_cache(item["tournament_slug"])
     log(
         user["email"],

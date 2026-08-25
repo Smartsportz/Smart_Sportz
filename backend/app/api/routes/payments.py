@@ -69,6 +69,23 @@ def _invalidate_registration_views(registration: dict) -> None:
         runtime_state.delete(f"cache:public:tournament:{registration['tournament_slug']}")
 
 
+def _sync_tournament_registered_count(tournament_slug: str) -> None:
+    execute(
+        """
+        UPDATE tournaments
+        SET teams = (
+            SELECT COUNT(*)
+            FROM registrations
+            WHERE tournament_slug = ?
+              AND payment_status = 'paid'
+              AND COALESCE(status, '') NOT IN ('rejected', 'cancelled')
+        )
+        WHERE slug = ?
+        """,
+        (tournament_slug, tournament_slug),
+    )
+
+
 def _finalize_paid_intent(intent: dict, method: str) -> dict:
     registration_id = intent.get("registration_id") or ""
     registration = row("SELECT * FROM registrations WHERE id = ?", (registration_id,)) if registration_id else None
@@ -124,6 +141,7 @@ def _finalize_paid_intent(intent: dict, method: str) -> dict:
         ),
     )
     execute("UPDATE payment_intents SET registration_id = ? WHERE id = ?", (registration["id"], intent["id"]))
+    _sync_tournament_registered_count(registration["tournament_slug"])
     _invalidate_registration_views(registration)
     return existing_payment
 

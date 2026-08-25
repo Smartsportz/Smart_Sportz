@@ -2699,6 +2699,7 @@ export function GalleryManagerPanel() {
 type AdminTeamRow = {
   id: string;
   team_name: string;
+  team_code?: string;
   tournament_name: string;
   tournament_slug: string;
   sport: string;
@@ -2791,6 +2792,7 @@ function AdminTeamsPanel() {
       const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(team => 
         team.team_name?.toLowerCase().includes(term) ||
+        team.team_code?.toLowerCase().includes(term) ||
         team.captain_name?.toLowerCase().includes(term) ||
         team.tournament_name?.toLowerCase().includes(term) ||
         team.city?.toLowerCase().includes(term)
@@ -2881,12 +2883,13 @@ function AdminTeamsPanel() {
       </section>
 
       <DataTable
-        columns={["Team Name", "Tournament", "Captain", "City", "Jersey", "Age", "Size", "Players", "Payment", "Status", "Actions"]}
+        columns={["Team Name", "Team Registration Code", "Tournament", "Captain", "City", "Jersey", "Age", "Size", "Players", "Payment", "Status", "Actions"]}
         rows={teams.map((team) => [
           <span>
             <b>{team.team_name}</b>
             <small style={{ display: 'block', opacity: 0.7 }}>{team.user_email || team.sport}</small>
           </span>,
+          team.team_code || "-",
           team.tournament_name,
           team.captain_name,
           team.city,
@@ -3008,9 +3011,10 @@ export function AdminTournamentTeamsPage() {
               <Metric label="City" value={data.tournament.location} />
             </div>
             <DataTable
-              columns={["Team", "Captain", "Jersey", "Age", "Size", "Players", "Payment", "Status", "Action"]}
+              columns={["Team", "Team Registration Code", "Captain", "Jersey", "Age", "Size", "Players", "Payment", "Status", "Action"]}
               rows={data.teams.map((team) => [
                 team.team_name,
+                team.team_code || "-",
                 team.captain_name,
                 getJerseyDisplayName(team.selected_jersey),
                 teamAgeSummary(team as AdminTeamRow),
