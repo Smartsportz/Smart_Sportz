@@ -113,18 +113,12 @@ export function PublicHeader() {
 export function Footer() {
   return (
     <footer className="footer">
-      <div>
-        <BrandLogo compact />
-        <p>Enterprise sports tournament management for registrations, payments, live scoring, and analytics.</p>
-      </div>
-      <div className="footer-grid">
-        <div><b>Platform</b><Link to="/tournaments">Tournaments</Link><Link to="/live">Live</Link><Link to="/teams">Teams</Link></div>
-        <div><b>Resources</b><Link to="/news">News</Link><Link to="/gallery">Gallery</Link><Link to="/faq">FAQ</Link></div>
-        <div>
-          <b>Company</b>
-          <Link to="/about">About</Link>
-          <Link to="/contact">Contact</Link>
-          <Link to="/sponsors">Sponsors</Link>
+      <div className="footer-top">
+        <div className="footer-brand-section">
+          <BrandLogo compact />
+          <p>Enterprise sports tournament management for registrations, payments, live scoring, and analytics.</p>
+        </div>
+        <div className="footer-social-section">
           <div className="footer-social-links">
             <a href="https://www.linkedin.com/in/smart-sportz-in-825454430/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -148,6 +142,11 @@ export function Footer() {
             </a>
           </div>
         </div>
+      </div>
+      <div className="footer-grid">
+        <div><b>Platform</b><Link to="/tournaments">Tournaments</Link><Link to="/live">Live</Link><Link to="/teams">Teams</Link></div>
+        <div><b>Resources</b><Link to="/news">News</Link><Link to="/gallery">Gallery</Link><Link to="/faq">FAQ</Link></div>
+        <div><b>Company</b><Link to="/about">About</Link><Link to="/contact">Contact</Link><Link to="/sponsors">Sponsors</Link></div>
       </div>
       <p className="footer-rights">
         <span>all rights received by smartsportz.in@2026</span>
