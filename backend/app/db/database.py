@@ -115,9 +115,15 @@ def connect(path: Path | None = None):
         _configure_postgres_connection(conn, schema)
         return conn
 
-    conn = sqlite3.connect(path or settings.database_path)
+    conn = sqlite3.connect(path or settings.database_path, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA temp_store = MEMORY")
+    conn.execute("PRAGMA cache_size = -20000")
+    conn.execute("PRAGMA busy_timeout = 15000")
+    conn.execute("PRAGMA mmap_size = 268435456")
     return conn
 
 
@@ -281,7 +287,17 @@ def table_names(path: Path | None = None) -> list[str]:
 def table_checksum(path: Path, table: str) -> str:
     with connect(path) as conn:
         records = [dict(item) for item in conn.execute(f'SELECT * FROM "{table}" ORDER BY 1').fetchall()]
-    return sha256(json.dumps(records, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    return sha256(json.dumps(_json_safe(records), sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return {"__bytes__": value.hex()}
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def sync_mirror() -> None:
@@ -314,7 +330,7 @@ def sync_mirror() -> None:
                 records = primary.execute(f'SELECT * FROM "{table}"').fetchall()
                 table_records = [dict(record) for record in records]
                 table_stats[table] = (
-                    sha256(json.dumps(table_records, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
+                    sha256(json.dumps(_json_safe(table_records), sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest(),
                     len(table_records),
                 )
                 if not records:

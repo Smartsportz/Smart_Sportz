@@ -1,6 +1,24 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+def _phone_digits(value: str | None) -> str:
+    return "".join(char for char in str(value or "") if char.isdigit())[-10:]
+
+
+def _required_phone(value: str | None) -> str:
+    digits = _phone_digits(value)
+    if len(digits) != 10:
+        raise ValueError("Phone number must contain exactly 10 digits.")
+    return digits
+
+
+def _optional_phone(value: str | None) -> str:
+    digits = _phone_digits(value)
+    if digits and len(digits) != 10:
+        raise ValueError("Phone number must contain exactly 10 digits.")
+    return digits
 
 
 class LoginRequest(BaseModel):
@@ -20,9 +38,14 @@ class GoogleLoginRequest(BaseModel):
 class SignupStartRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
-    phone: str = Field(min_length=7, max_length=20)
+    phone: str = Field(min_length=10, max_length=10)
     password: str = Field(min_length=6, max_length=80)
     channel: str = Field(default="whatsapp", pattern="^(whatsapp)$")
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str:
+        return _required_phone(value)
 
 
 class SignupVerifyRequest(BaseModel):
@@ -58,6 +81,11 @@ class RegistrationMemberCreate(BaseModel):
     age: int | None = Field(default=None, ge=0, le=120)
     jersey_size: str | None = Field(default=None, max_length=20)
 
+    @field_validator("contact", mode="before")
+    @classmethod
+    def validate_contact(cls, value: str | None) -> str:
+        return _optional_phone(value)
+
 
 class RegistrationDocumentCreate(BaseModel):
     document_type: str = Field(min_length=2, max_length=80)
@@ -74,7 +102,7 @@ class RegistrationCreate(BaseModel):
     sub_captain_name: str = Field(min_length=2, max_length=120)
     coach_name: str = Field(default="", max_length=120)
     email: EmailStr
-    phone: str = Field(min_length=7, max_length=20)
+    phone: str = Field(min_length=10, max_length=10)
     city: str = Field(min_length=2, max_length=80)
     district_state: str = Field(default="", max_length=120)
     team_logo: str = Field(default="", max_length=20000000)
@@ -83,6 +111,11 @@ class RegistrationCreate(BaseModel):
     category: str = Field(default="", max_length=80)
     members: list[RegistrationMemberCreate] = []
     documents: list[RegistrationDocumentCreate] = []
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str:
+        return _required_phone(value)
 
 
 class BracketNodePayload(BaseModel):
@@ -304,14 +337,24 @@ class AdminUserCreatePayload(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(min_length=3, max_length=80)
-    phone: str = Field(default="", max_length=20)
+    phone: str = Field(default="", max_length=10)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str:
+        return _optional_phone(value)
 
 
 class AdminUserUpdatePayload(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr
-    phone: str = Field(default="", max_length=20)
+    phone: str = Field(default="", max_length=10)
     password: str | None = Field(default=None, min_length=3, max_length=80)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str:
+        return _optional_phone(value)
 
 
 class ManagerUpdatePayload(BaseModel):
@@ -331,10 +374,15 @@ class AdminTeamUpdatePayload(BaseModel):
     sub_captain_name: str = Field(default="", max_length=120)
     coach_name: str = Field(default="", max_length=120)
     email: EmailStr
-    phone: str = Field(default="", max_length=20)
+    phone: str = Field(default="", max_length=10)
     city: str = Field(min_length=2, max_length=80)
     team_logo: str = Field(default="", max_length=20000000)
     team_motto: str = Field(default="", max_length=180)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str:
+        return _optional_phone(value)
 
 
 class LocalPaymentCreate(BaseModel):
@@ -350,7 +398,12 @@ class PaymentIntentCreate(BaseModel):
     team_name: str = Field(min_length=2, max_length=120)
     amount: int = Field(gt=0, le=10000000)
     method: str = Field(pattern="^(card|upi)$")
-    contact: str = Field(min_length=3, max_length=80)
+    contact: str = Field(min_length=10, max_length=10)
+
+    @field_validator("contact", mode="before")
+    @classmethod
+    def validate_contact(cls, value: str | None) -> str:
+        return _required_phone(value)
 
 
 class PaymentIntentSubmit(BaseModel):

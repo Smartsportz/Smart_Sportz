@@ -24,10 +24,21 @@ _load_local_env()
 
 
 def _default_database_backend() -> str:
-    url = os.getenv("DATABASE_URL", os.getenv("SUPABASE_DIRECT_DATABASE_URL", "")).lower()
-    if url.startswith(("postgres://", "postgresql://")):
-        return "postgres"
     return "sqlite"
+
+
+def _database_backend() -> str:
+    requested = os.getenv("DATABASE_BACKEND", _default_database_backend()).lower()
+    if requested == "postgres" and os.getenv("ENABLE_POSTGRES", "false").lower() not in {"1", "true", "yes", "on"}:
+        return "sqlite"
+    return requested
+
+
+def _database_url(name: str) -> str:
+    if _database_backend() != "postgres":
+        return ""
+    fallback = os.getenv("DATABASE_URL", os.getenv("SUPABASE_DIRECT_DATABASE_URL", ""))
+    return os.getenv(name, fallback)
 
 
 @dataclass(frozen=True)
@@ -35,16 +46,16 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "Smart Sportz Backend")
     app_env: str = os.getenv("APP_ENV", "development")
     secret_key: str = os.getenv("APP_SECRET_KEY", "change-this-local-secret")
-    database_path: Path = BASE_DIR / os.getenv("DATABASE_PATH", "storage/smart_sportz.db")
-    mirror_database_path: Path = BASE_DIR / os.getenv("MIRROR_DATABASE_PATH", "storage/smart_sportz_mirror.db")
-    audit_database_path: Path = BASE_DIR / os.getenv("AUDIT_DATABASE_PATH", "storage/smart_sportz_audit.db")
-    database_backend: str = os.getenv("DATABASE_BACKEND", _default_database_backend()).lower()
+    database_path: Path = BASE_DIR / os.getenv("DATABASE_PATH", "storage/smartsportz.db")
+    mirror_database_path: Path = BASE_DIR / os.getenv("MIRROR_DATABASE_PATH", "storage/smartsportz_mirror.db")
+    audit_database_path: Path = BASE_DIR / os.getenv("AUDIT_DATABASE_PATH", "storage/smartsportz_audit.db")
+    database_backend: str = _database_backend()
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_publishable_key: str = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
     supabase_direct_database_url: str = os.getenv("SUPABASE_DIRECT_DATABASE_URL", "")
-    database_url: str = os.getenv("DATABASE_URL", os.getenv("SUPABASE_DIRECT_DATABASE_URL", ""))
-    mirror_database_url: str = os.getenv("MIRROR_DATABASE_URL", os.getenv("DATABASE_URL", os.getenv("SUPABASE_DIRECT_DATABASE_URL", "")))
-    audit_database_url: str = os.getenv("AUDIT_DATABASE_URL", os.getenv("DATABASE_URL", os.getenv("SUPABASE_DIRECT_DATABASE_URL", "")))
+    database_url: str = _database_url("DATABASE_URL")
+    mirror_database_url: str = _database_url("MIRROR_DATABASE_URL")
+    audit_database_url: str = _database_url("AUDIT_DATABASE_URL")
     postgres_primary_schema: str = os.getenv("POSTGRES_PRIMARY_SCHEMA", "primary_app")
     postgres_mirror_schema: str = os.getenv("POSTGRES_MIRROR_SCHEMA", "mirror_backup")
     postgres_audit_schema: str = os.getenv("POSTGRES_AUDIT_SCHEMA", "audit_event")
@@ -57,6 +68,8 @@ class Settings:
     phonepe_upi_id: str = os.getenv("PHONEPE_UPI_ID", "7871357999@axl") #6374409006@ybl
     phonepe_payee_name: str = os.getenv("PHONEPE_PAYEE_NAME", "LIYANS VASTRA")
     init_db_on_startup: bool = os.getenv("INIT_DB_ON_STARTUP", "true").lower() in {"1", "true", "yes", "on"}
+    seed_db_on_startup: bool = os.getenv("SEED_DB_ON_STARTUP", "false").lower() in {"1", "true", "yes", "on"}
+    cleanup_media_on_startup: bool = os.getenv("CLEANUP_MEDIA_ON_STARTUP", "false").lower() in {"1", "true", "yes", "on"}
     public_cache_ttl_seconds: int = int(os.getenv("PUBLIC_CACHE_TTL_SECONDS", "45"))
     dashboard_cache_ttl_seconds: int = int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "20"))
     upload_dir: Path = BASE_DIR / os.getenv("UPLOAD_DIR", "storage/uploads")

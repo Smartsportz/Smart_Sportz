@@ -17,31 +17,13 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: DATABASE_BACKEND
-        value: postgres
+        value: sqlite
       - key: DATABASE_PATH
-        value: storage/smart_sportz.db
+        value: storage/smartsportz.db
       - key: MIRROR_DATABASE_PATH
-        value: storage/smart_sportz_mirror.db
+        value: storage/smartsportz_mirror.db
       - key: AUDIT_DATABASE_PATH
-        value: storage/smart_sportz_audit.db
-      - key: DATABASE_URL
-        value: postgresql://postgres.kuoclwkexuzmkepokite:Smartsportz$001@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
-      - key: MIRROR_DATABASE_URL
-        value: postgresql://postgres.kuoclwkexuzmkepokite:Smartsportz$001@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
-      - key: AUDIT_DATABASE_URL
-        value: postgresql://postgres.kuoclwkexuzmkepokite:Smartsportz$001@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
-      - key: SUPABASE_URL
-        value: https://kuoclwkexuzmkepokite.supabase.co
-      - key: SUPABASE_PUBLISHABLE_KEY
-        value: sb_publishable_7NK_JFApSHcNepEbAaUKTA_NjAoZmQB
-      - key: SUPABASE_DIRECT_DATABASE_URL
-        value: postgresql://postgres:Smartsportz$001@db.kuoclwkexuzmkepokite.supabase.co:5432/postgres?sslmode=require
-      - key: POSTGRES_PRIMARY_SCHEMA
-        value: primary_app
-      - key: POSTGRES_MIRROR_SCHEMA
-        value: mirror_backup
-      - key: POSTGRES_AUDIT_SCHEMA
-        value: audit_event
+        value: storage/smartsportz_audit.db
       - key: AUTO_MIRROR_SYNC
         value: "false"
       - key: BACKUP_DIR
@@ -55,6 +37,10 @@ services:
       - key: UPSTASH_REDIS_REST_TOKEN
         value: gQAAAAAAApiyAAIgcDFlM2UwZjMzOTNhNDA0MDliOTFkNzAwYjcyNjJmNGUwNA
       - key: INIT_DB_ON_STARTUP
+        value: "true"
+      - key: SEED_DB_ON_STARTUP
+        value: "false"
+      - key: CLEANUP_MEDIA_ON_STARTUP
         value: "false"
       - key: PUBLIC_CACHE_TTL_SECONDS
         value: "300"

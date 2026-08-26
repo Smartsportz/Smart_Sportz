@@ -10,17 +10,16 @@ metadata:
   namespace: smart-sportz
 data:
   APP_ENV: production
-  DATABASE_BACKEND: postgres
-  POSTGRES_PRIMARY_SCHEMA: primary_app
-  POSTGRES_MIRROR_SCHEMA: mirror_backup
-  POSTGRES_AUDIT_SCHEMA: audit_event
+  DATABASE_BACKEND: sqlite
+  DATABASE_PATH: storage/smartsportz.db
+  MIRROR_DATABASE_PATH: storage/smartsportz_mirror.db
+  AUDIT_DATABASE_PATH: storage/smartsportz_audit.db
   REDIS_URL: redis://redis:6379/0
-  INIT_DB_ON_STARTUP: "false"
+  INIT_DB_ON_STARTUP: "true"
+  SEED_DB_ON_STARTUP: "false"
+  CLEANUP_MEDIA_ON_STARTUP: "false"
   PUBLIC_CACHE_TTL_SECONDS: "45"
   DASHBOARD_CACHE_TTL_SECONDS: "20"
-  POSTGRES_POOL_MIN_SIZE: "1"
-  POSTGRES_POOL_MAX_SIZE: "12"
-  POSTGRES_POOL_TIMEOUT_SECONDS: "5"
   READ_FROM_MIRROR: "false"
   ALLOWED_ORIGINS: https://smart-sportz.example.com,http://localhost:8080
   WEB_CONCURRENCY: "4"
@@ -33,9 +32,6 @@ metadata:
 type: Opaque
 stringData:
   APP_SECRET_KEY: replace-with-long-random-secret
-  DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DATABASE
-  MIRROR_DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DATABASE
-  AUDIT_DATABASE_URL: postgresql://USER:PASSWORD@HOST:5432/DATABASE
   RESEND_API_KEY: ""
   TWILIO_ACCOUNT_SID: ""
   TWILIO_AUTH_TOKEN: ""
@@ -98,7 +94,7 @@ spec:
         - name: backend-init-db
           image: smartsportz/backend:latest
           imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.cli", "init-db"]
+          command: ["python", "-m", "app.cli", "init-db", "--no-seed"]
           envFrom:
             - configMapRef:
                 name: smart-sportz-config

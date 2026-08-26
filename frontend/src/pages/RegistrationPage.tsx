@@ -7,6 +7,7 @@ import type React from "react";
 import { tournaments, withRuntimeTournamentStatus } from "../data/platform";
 import { apiRequest, mediaUrl } from "../lib/api";
 import { downloadRegistrationPassPdf } from "../lib/downloads";
+import { phoneDigits } from "../lib/formInputs";
 import { getCompletedRegistration, saveCompletedRegistration } from "../lib/registrationStatus";
 import { useAuth } from "../auth/AuthContext";
 import * as XLSX from "xlsx";
@@ -357,6 +358,23 @@ function isAgeInRange(age: number, tournament: (typeof tournaments)[number]): bo
   return true;
 }
 
+function tournamentRulesPdfPath(tournament: Record<string, any>) {
+  const candidates = [
+    tournament.rulesPdf,
+    tournament.rules_pdf,
+    tournament.rulesPdfUrl,
+    tournament.rules_pdf_url,
+    tournament.rulebook,
+    tournament.rulebook_url,
+  ];
+  for (const candidate of candidates) {
+    const rawValue = typeof candidate === "object" && candidate !== null && "url" in candidate ? candidate.url : candidate;
+    const value = String(rawValue ?? "").trim().replace(/\\/g, "/");
+    if (value) return value;
+  }
+  return "";
+}
+
 function tournamentRulesText(tournament: (typeof tournaments)[number]) {
   const customRules = String((tournament as any).rulesText ?? (tournament as any).rules_text ?? "").trim();
   if (customRules) {
@@ -436,7 +454,7 @@ function buildRulesPdf(tournament: (typeof tournaments)[number]) {
 
 async function downloadRulesFile(tournament: (typeof tournaments)[number]) {
   if (typeof document === "undefined") return;
-  const uploadedRulesPdf = String((tournament as any).rulesPdf ?? (tournament as any).rules_pdf ?? "").trim();
+  const uploadedRulesPdf = tournamentRulesPdfPath(tournament as any);
   if (!uploadedRulesPdf) {
     window.alert("Rules PDF is not uploaded for this tournament.");
     return;
@@ -784,7 +802,10 @@ export function RegistrationPage() {
     if (index === 1) return "Sub-captain";
     return `Player ${index + 1}`;
   });
-  const [teamDetails, setTeamDetails] = useState(() => savedDraft?.teamDetails ?? {
+  const [teamDetails, setTeamDetails] = useState(() => savedDraft?.teamDetails ? {
+    ...savedDraft.teamDetails,
+    phone: phoneDigits(savedDraft.teamDetails.phone || ""),
+  } : {
     teamName: "",
     teamCode: "",
     captainName: "",
@@ -893,8 +914,9 @@ export function RegistrationPage() {
   }
 
   function updateTeamDetails(field: keyof typeof teamDetails, value: string) {
+    const nextValue = field === "phone" ? phoneDigits(value) : value;
     setTeamDetails((current) => {
-      const next = { ...current, [field]: value };
+      const next = { ...current, [field]: nextValue };
       if (field === "captainName") {
         setMembers((items) => items.map((name, index) => index === 0 ? value : name));
       }
@@ -1019,6 +1041,10 @@ export function RegistrationPage() {
     }
     if (teamNameCheck === "exists") {
       showMissing("This team name is already registered, so change other name.");
+      return;
+    }
+    if (teamDetails.phone.length !== 10) {
+      showMissing("Phone number must contain exactly 10 digits.");
       return;
     }
     if (missingMemberLabels.length) {
@@ -1260,10 +1286,13 @@ export function RegistrationPage() {
                     <label>Email<input value={teamDetails.email} onChange={(event) => updateTeamDetails("email", event.target.value)} placeholder="contact@team.com" /></label>
                     <label>Phone
                       <input 
-                        type="number" 
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        pattern="[0-9]{10}"
                         value={teamDetails.phone} 
                         onChange={(event) => updateTeamDetails("phone", event.target.value)} 
-                        placeholder="+91" 
+                        placeholder="10 digit phone" 
                       />
                     </label>
                   </div>
@@ -1447,7 +1476,7 @@ export function RegistrationPaymentPage() {
   const amount = amountForTournament(routeSlug, tournament);
   const totalPayable = totalPayableForAmount(amount);
   const [method, setMethod] = useState<"upi" | "card">("upi");
-  const [contact, setContact] = useState(saved?.phone ?? "");
+  const [contact, setContact] = useState(phoneDigits(saved?.phone ?? ""));
   const [card, setCard] = useState({ name: "", number: "", expiry: "", cvv: "" });
   const [qrGenerated, setQrGenerated] = useState(false);
   const [upiChooserOpen, setUpiChooserOpen] = useState(false);

@@ -9,6 +9,7 @@ import { DataTable, Page, PortalShell } from "../components/UI";
 import { logRows, managementSidebar, paymentRows, reports, sidebar, sports, teams, tournaments } from "../data/platform";
 import type { TournamentNotice } from "../data/platform";
 import { apiRequest, mediaUrl, uploadFile } from "../lib/api";
+import { phoneDigits } from "../lib/formInputs";
 import { ProgressiveSection, SectionSkeleton } from "../lib/progressive";
 import { AthleteProfile, ListPanel, Metric } from "./shared";
 import { RichTextToolbarPreview } from "./NewsPages";
@@ -265,12 +266,12 @@ function formatDateInput(value?: string) {
   const trimmed = String(value).trim();
   if (!trimmed || trimmed.toUpperCase() === "TBA") return "";
   const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (dmy) return `${dmy[1].padStart(2, "0")}/${dmy[2].padStart(2, "0")}/${dmy[3]}`;
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return trimmed;
-  return `${String(parsed.getDate()).padStart(2, "0")}/${String(parsed.getMonth() + 1).padStart(2, "0")}/${parsed.getFullYear()}`;
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
 }
 
 function parseJsonArray(value: unknown) {
@@ -786,9 +787,9 @@ function AdminTournamentsDbPanel() {
                   <input value={form.newCity} onChange={(event) => patchForm({ newCity: event.target.value })} onBlur={saveNewPrimaryPlace} placeholder="e.g. Trichy" />
                 </label>
               )}
-              <label>Tournament date<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
-              <label>Registration opens<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
-              <label>Registration closes<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
+              <label>Tournament date<input type="date" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
+              <label>Registration opens<input type="date" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
+              <label>Registration closes<input type="date" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
               <label>Capacity<input type="number" value={form.capacity} onChange={(event) => patchForm({ capacity: Number(event.target.value) })} /></label>
               <label>Min members<input type="number" value={form.minTeamSize} onChange={(event) => patchForm({ minTeamSize: Number(event.target.value) })} /></label>
               <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
@@ -1011,6 +1012,10 @@ function AdminRegistrationsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [rejectingId, setRejectingId] = useState("");
+  const [search, setSearch] = useState("");
+  const [tournamentFilter, setTournamentFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
     let alive = true;
@@ -1045,6 +1050,33 @@ function AdminRegistrationsPanel() {
     }
   }
 
+  const tournamentOptions = useMemo(() => Array.from(new Set(registrations.map((item) => String(item.tournament_name ?? item.tournament_slug ?? "").trim()).filter(Boolean))).sort(), [registrations]);
+  const paymentOptions = useMemo(() => Array.from(new Set(registrations.map((item) => String(item.payment_status ?? "").trim()).filter(Boolean))).sort(), [registrations]);
+  const statusOptions = useMemo(() => Array.from(new Set(registrations.map((item) => String(item.status ?? "").trim()).filter(Boolean))).sort(), [registrations]);
+  const filteredRegistrations = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return registrations.filter((item) => {
+      const tournamentName = String(item.tournament_name ?? item.tournament_slug ?? "").trim();
+      const paymentStatus = String(item.payment_status ?? "").trim();
+      const registrationStatus = String(item.status ?? "").trim();
+      const haystack = [
+        item.team_name,
+        item.tournament_name,
+        item.tournament_slug,
+        item.captain_name,
+        item.city,
+        item.email,
+        item.phone,
+        paymentStatus,
+        registrationStatus,
+      ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+      return (!needle || haystack.includes(needle))
+        && (tournamentFilter === "all" || tournamentName === tournamentFilter)
+        && (paymentFilter === "all" || paymentStatus === paymentFilter)
+        && (statusFilter === "all" || registrationStatus === statusFilter);
+    });
+  }, [paymentFilter, registrations, search, statusFilter, tournamentFilter]);
+
   if (loading) {
     return <section className="panel"><SectionSkeleton rows={3} /></section>;
   }
@@ -1062,25 +1094,37 @@ function AdminRegistrationsPanel() {
       {registrations.length === 0 ? (
         <section className="panel user-empty-state"><h2>No registrations</h2><p>New database registrations will appear here.</p></section>
       ) : (
-        <DataTable
-          columns={["Team", "Tournament", "Captain", "City", "Payment", "Status", "Created", "Action"]}
-          rows={registrations.map((item) => [
-            item.team_name,
-            item.tournament_slug,
-            item.captain_name,
-            item.city,
-            <span className={`status ${item.payment_status === "paid" ? "emerald" : "orange"}`}>{item.payment_status}</span>,
-            item.status,
-            item.created_at ? new Date(item.created_at).toLocaleDateString() : "-",
-            <span className="table-actions">
-              <Link className="inline-link" to={`/admin/teams/registrations/${item.id}`}>Open</Link>
-              <button type="button" className="reject-registration-button" disabled={item.status === "rejected" || rejectingId === item.id} onClick={() => rejectRegistration(item)}>
-                <Ban size={14} /> {item.status === "rejected" ? "Rejected" : rejectingId === item.id ? "Rejecting" : "Reject"}
-              </button>
-            </span>,
-          ])}
-          rowClassName={(_, index) => registrations[index]?.status === "rejected" ? "rejected-registration-row" : ""}
-        />
+        <>
+          <section className="panel form-grid">
+            <label>Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Team, captain, city, phone..." /></label>
+            <label>Tournament<select value={tournamentFilter} onChange={(event) => setTournamentFilter(event.target.value)}><option value="all">All tournaments</option>{tournamentOptions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+            <label>Payment<select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">All payments</option>{paymentOptions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+            <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option>{statusOptions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+          </section>
+          {filteredRegistrations.length === 0 ? (
+            <section className="panel user-empty-state"><h2>No matching registrations</h2><p>Change the search or filter options to show more saved registrations.</p></section>
+          ) : (
+            <DataTable
+              columns={["Team", "Tournament", "Captain", "City", "Payment", "Status", "Created", "Action"]}
+              rows={filteredRegistrations.map((item) => [
+                item.team_name,
+                item.tournament_name ?? item.tournament_slug,
+                item.captain_name,
+                item.city,
+                <span className={`status ${item.payment_status === "paid" ? "emerald" : "orange"}`}>{item.payment_status}</span>,
+                item.status,
+                item.created_at ? new Date(item.created_at).toLocaleDateString() : "-",
+                <span className="table-actions">
+                  <Link className="inline-link" to={`/admin/teams/registrations/${item.id}`}>Open</Link>
+                  <button type="button" className="reject-registration-button" disabled={item.status === "rejected" || rejectingId === item.id} onClick={() => rejectRegistration(item)}>
+                    <Ban size={14} /> {item.status === "rejected" ? "Rejected" : rejectingId === item.id ? "Rejecting" : "Reject"}
+                  </button>
+                </span>,
+              ])}
+              rowClassName={(_, index) => filteredRegistrations[index]?.status === "rejected" ? "rejected-registration-row" : ""}
+            />
+          )}
+        </>
       )}
     </>
   );
@@ -2018,9 +2062,9 @@ export function AdminTournamentEditorPage() {
                       <input value={form.newCity} onChange={(event) => patchForm({ newCity: event.target.value })} onBlur={saveNewPrimaryPlace} placeholder="e.g. Trichy" />
                     </label>
                   )}
-                  <label>Tournament date<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
-                  <label>Registration opens<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
-                  <label>Registration closes<input inputMode="numeric" placeholder="dd/mm/yyyy" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
+                  <label>Tournament date<input type="date" value={form.date} onChange={(event) => patchForm({ date: event.target.value })} /></label>
+                  <label>Registration opens<input type="date" value={form.registrationStart} onChange={(event) => patchForm({ registrationStart: event.target.value })} /></label>
+                  <label>Registration closes<input type="date" value={form.registrationEnd} onChange={(event) => patchForm({ registrationEnd: event.target.value })} /></label>
                   <label>Capacity<input type="number" value={form.capacity} onChange={(event) => patchForm({ capacity: Number(event.target.value) })} /></label>
                   <label>Min members<input type="number" value={form.minTeamSize} onChange={(event) => patchForm({ minTeamSize: Number(event.target.value) })} /></label>
                   <label>Max members<input type="number" value={form.maxTeamSize} onChange={(event) => patchForm({ maxTeamSize: Number(event.target.value) })} /></label>
@@ -3127,7 +3171,7 @@ export function AdminTeamEditPage() {
           sub_captain_name: item.sub_captain_name || "",
           coach_name: item.coach_name || "",
           email: item.email || item.user_email || "",
-          phone: item.phone || "",
+          phone: phoneDigits(item.phone || ""),
           city: item.city || "",
           team_logo: item.team_logo || "",
           team_motto: item.team_motto || "",
@@ -3162,7 +3206,7 @@ export function AdminTeamEditPage() {
             <label>Sub-captain name<input value={form.sub_captain_name} onChange={(event) => setForm({ ...form, sub_captain_name: event.target.value })} /></label>
             <label>Coach name<input value={form.coach_name} onChange={(event) => setForm({ ...form, coach_name: event.target.value })} /></label>
             <label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
-            <label>Phone<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+            <label>Phone<input type="tel" inputMode="numeric" maxLength={10} pattern="[0-9]{10}" value={form.phone} onChange={(event) => setForm({ ...form, phone: phoneDigits(event.target.value) })} /></label>
             <label>City<input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} required /></label>
             <label>Team logo URL<input value={form.team_logo} onChange={(event) => setForm({ ...form, team_logo: event.target.value })} placeholder="/assets/logo.png" /></label>
           </div>
@@ -3419,7 +3463,7 @@ export function AdminUserCreatePage() {
         <form className="panel form-grid" onSubmit={submit}>
           <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
           <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
-          <label>Phone<input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /></label>
+          <label>Phone<input type="tel" inputMode="numeric" maxLength={10} pattern="[0-9]{10}" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: phoneDigits(event.target.value) }))} /></label>
           <label>Temporary password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></label>
           <button className="btn btn-primary" type="submit">Create User</button>
         </form>
@@ -3445,7 +3489,7 @@ export function AdminUserDetailPage() {
     try {
       const payload = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, {}, token);
       setData(payload);
-      setForm({ name: payload.user.name, email: payload.user.email, phone: payload.user.phone || "", password: "" });
+      setForm({ name: payload.user.name, email: payload.user.email, phone: phoneDigits(payload.user.phone || ""), password: "" });
       const storedPassword = sessionStorage.getItem(temporaryPasswordKey("user", payload.user.id));
       if (storedPassword) setTemporaryPassword(storedPassword);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not load user."); }
@@ -3462,7 +3506,7 @@ export function AdminUserDetailPage() {
       const payload = { name: form.name, email: form.email, phone: form.phone, ...(form.password ? { password: form.password } : {}) };
       const updated = await apiRequest<AdminUserDetailData>(`/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
       setData(updated);
-      setForm({ name: updated.user.name, email: updated.user.email, phone: updated.user.phone || "", password: "" });
+      setForm({ name: updated.user.name, email: updated.user.email, phone: phoneDigits(updated.user.phone || ""), password: "" });
       setMessage("User updated.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not update user."); }
   }
@@ -3501,7 +3545,7 @@ export function AdminUserDetailPage() {
             <form className="panel form-grid" onSubmit={saveUser}>
               <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
               <label>Email<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></label>
-              <label>Phone<input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /></label>
+              <label>Phone<input type="tel" inputMode="numeric" maxLength={10} pattern="[0-9]{10}" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: phoneDigits(event.target.value) }))} /></label>
               <label>New password<input value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></label>
               <button className="btn btn-primary" type="submit">Save User</button>
               <button className="btn btn-secondary" type="button" onClick={() => setDeleteOpen(true)}>Delete User</button>

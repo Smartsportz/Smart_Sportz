@@ -204,16 +204,16 @@ The free web service runs:
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-The committed Blueprint uses SQLite for a zero-secret free deployment. For Supabase/PostgreSQL production mode, set these Render environment variables in the dashboard instead of committing credentials:
+The committed Blueprint uses SQLite for a zero-secret deployment. Keep the SQLite files on persistent disk and do not set Supabase/PostgreSQL URLs:
 
 ```text
-DATABASE_BACKEND=postgres
-DATABASE_URL=<supabase pooled connection string with sslmode=require>
-MIRROR_DATABASE_URL=<same or protected mirror connection string>
-AUDIT_DATABASE_URL=<same or audit connection string>
-POSTGRES_PRIMARY_SCHEMA=primary_app
-POSTGRES_MIRROR_SCHEMA=mirror_backup
-POSTGRES_AUDIT_SCHEMA=audit_event
+DATABASE_BACKEND=sqlite
+DATABASE_PATH=storage/smartsportz.db
+MIRROR_DATABASE_PATH=storage/smartsportz_mirror.db
+AUDIT_DATABASE_PATH=storage/smartsportz_audit.db
+INIT_DB_ON_STARTUP=true
+SEED_DB_ON_STARTUP=false
+CLEANUP_MEDIA_ON_STARTUP=false
 ```
 
 ## Design Direction

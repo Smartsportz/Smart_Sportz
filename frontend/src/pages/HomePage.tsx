@@ -515,33 +515,6 @@ export function HomePage() {
         </div>
       </section>
 
-      <ProgressiveSection query={homeApi.liveHighlight} prefetch={[homeApi.organizers]} skeletonRows={3}>
-      {(liveHighlight) => liveHighlight ? <section className="section split live-analytics-section">
-        <motion.div className="live-video-card" {...fade}>
-          <ProgressiveImage src={mediaUrl(liveHighlight.image)} alt="Live analytics match" />
-          <button type="button"><Radio size={24} /></button>
-        </motion.div>
-        <motion.div {...fade}>
-          <span className="live-dot">{liveHighlight.stage_label || "Live Now"}</span>
-          <h2>{liveHighlight.title}</h2>
-          <div className="live-action-row">
-            <div className="score-mini-card">
-              <span>{liveHighlight.home_team}</span>
-              <strong>{liveHighlight.home_score} - {liveHighlight.away_score}</strong>
-              <span>{liveHighlight.away_team}</span>
-            </div>
-            <Link className="btn btn-primary live-center-btn" to={liveHighlight?.link_path || "/live"}>Open Match Center</Link>
-          </div>
-          <p className="live-highlight-copy">{liveHighlight.description}</p>
-          <div className="feature-list">
-            {String(liveHighlight.impact_notes || "").split(/\.|\|/).filter(Boolean).slice(0, 2).map((feature) => (
-              <div className="feature-label" key={feature}><CheckCircle2 size={18} />{feature}</div>
-            ))}
-          </div>
-        </motion.div>
-      </section> : null}
-      </ProgressiveSection>
-
       <ProgressiveSection query={homeApi.organizers} prefetch={[homeApi.news]} skeletonRows={3}>
       {(organizerQueue) => organizerQueue.length > 0 ? <section className="section">
         <div className="section-title row-title">

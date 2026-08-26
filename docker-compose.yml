@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: smart_sportz
-      POSTGRES_USER: smart_sportz
-      POSTGRES_PASSWORD: smart_sportz_local
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smart_sportz -d smart_sportz"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    ports:
-      - "5433:5432"
-    volumes:
-      - smart_sportz_postgres:/var/lib/postgresql/data
-
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
@@ -31,28 +15,24 @@ services:
   backend-init:
     build:
       context: ./backend
-    command: ["python", "-m", "app.cli", "init-db"]
+    command: ["python", "-m", "app.cli", "init-db", "--no-seed"]
     environment:
       APP_ENV: docker
       APP_SECRET_KEY: change-this-docker-secret
-      DATABASE_BACKEND: postgres
-      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      POSTGRES_PRIMARY_SCHEMA: primary_app
-      POSTGRES_MIRROR_SCHEMA: mirror_backup
-      POSTGRES_AUDIT_SCHEMA: audit_event
-      POSTGRES_POOL_MIN_SIZE: "1"
-      POSTGRES_POOL_MAX_SIZE: "12"
-      POSTGRES_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_BACKEND: sqlite
+      DATABASE_PATH: storage/smartsportz.db
+      MIRROR_DATABASE_PATH: storage/smartsportz_mirror.db
+      AUDIT_DATABASE_PATH: storage/smartsportz_audit.db
       READ_FROM_MIRROR: "false"
       REDIS_URL: redis://redis:6379/0
       INIT_DB_ON_STARTUP: "false"
+      SEED_DB_ON_STARTUP: "false"
+      CLEANUP_MEDIA_ON_STARTUP: "false"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - smart_sportz_storage:/app/storage
 
   backend:
     build:
@@ -60,15 +40,14 @@ services:
     environment:
       APP_ENV: docker
       APP_SECRET_KEY: change-this-docker-secret
-      DATABASE_BACKEND: postgres
-      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      POSTGRES_PRIMARY_SCHEMA: primary_app
-      POSTGRES_MIRROR_SCHEMA: mirror_backup
-      POSTGRES_AUDIT_SCHEMA: audit_event
+      DATABASE_BACKEND: sqlite
+      DATABASE_PATH: storage/smartsportz.db
+      MIRROR_DATABASE_PATH: storage/smartsportz_mirror.db
+      AUDIT_DATABASE_PATH: storage/smartsportz_audit.db
       REDIS_URL: redis://redis:6379/0
-      INIT_DB_ON_STARTUP: "false"
+      INIT_DB_ON_STARTUP: "true"
+      SEED_DB_ON_STARTUP: "false"
+      CLEANUP_MEDIA_ON_STARTUP: "false"
       PUBLIC_CACHE_TTL_SECONDS: "45"
       DASHBOARD_CACHE_TTL_SECONDS: "20"
       ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
@@ -76,6 +55,8 @@ services:
     depends_on:
       backend-init:
         condition: service_completed_successfully
+    volumes:
+      - smart_sportz_storage:/app/storage
     ports:
       - "8000:8000"
 
@@ -86,20 +67,21 @@ services:
     environment:
       APP_ENV: docker
       APP_SECRET_KEY: change-this-docker-secret
-      DATABASE_BACKEND: postgres
-      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      POSTGRES_PRIMARY_SCHEMA: primary_app
-      POSTGRES_MIRROR_SCHEMA: mirror_backup
-      POSTGRES_AUDIT_SCHEMA: audit_event
+      DATABASE_BACKEND: sqlite
+      DATABASE_PATH: storage/smartsportz.db
+      MIRROR_DATABASE_PATH: storage/smartsportz_mirror.db
+      AUDIT_DATABASE_PATH: storage/smartsportz_audit.db
       REDIS_URL: redis://redis:6379/0
       INIT_DB_ON_STARTUP: "false"
+      SEED_DB_ON_STARTUP: "false"
+      CLEANUP_MEDIA_ON_STARTUP: "false"
     depends_on:
       backend-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    volumes:
+      - smart_sportz_storage:/app/storage
 
   celery-worker:
     build:
@@ -108,20 +90,21 @@ services:
     environment:
       APP_ENV: docker
       APP_SECRET_KEY: change-this-docker-secret
-      DATABASE_BACKEND: postgres
-      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      POSTGRES_PRIMARY_SCHEMA: primary_app
-      POSTGRES_MIRROR_SCHEMA: mirror_backup
-      POSTGRES_AUDIT_SCHEMA: audit_event
+      DATABASE_BACKEND: sqlite
+      DATABASE_PATH: storage/smartsportz.db
+      MIRROR_DATABASE_PATH: storage/smartsportz_mirror.db
+      AUDIT_DATABASE_PATH: storage/smartsportz_audit.db
       REDIS_URL: redis://redis:6379/1
       INIT_DB_ON_STARTUP: "false"
+      SEED_DB_ON_STARTUP: "false"
+      CLEANUP_MEDIA_ON_STARTUP: "false"
     depends_on:
       backend-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    volumes:
+      - smart_sportz_storage:/app/storage
 
   celery-beat:
     build:
@@ -130,20 +113,21 @@ services:
     environment:
       APP_ENV: docker
       APP_SECRET_KEY: change-this-docker-secret
-      DATABASE_BACKEND: postgres
-      DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      MIRROR_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      AUDIT_DATABASE_URL: postgresql://smart_sportz:smart_sportz_local@postgres:5432/smart_sportz
-      POSTGRES_PRIMARY_SCHEMA: primary_app
-      POSTGRES_MIRROR_SCHEMA: mirror_backup
-      POSTGRES_AUDIT_SCHEMA: audit_event
+      DATABASE_BACKEND: sqlite
+      DATABASE_PATH: storage/smartsportz.db
+      MIRROR_DATABASE_PATH: storage/smartsportz_mirror.db
+      AUDIT_DATABASE_PATH: storage/smartsportz_audit.db
       REDIS_URL: redis://redis:6379/1
       INIT_DB_ON_STARTUP: "false"
+      SEED_DB_ON_STARTUP: "false"
+      CLEANUP_MEDIA_ON_STARTUP: "false"
     depends_on:
       backend-init:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    volumes:
+      - smart_sportz_storage:/app/storage
 
   frontend:
     build:
@@ -185,7 +169,7 @@ services:
       - "3000:3000"
 
 volumes:
-  smart_sportz_postgres:
+  smart_sportz_storage:
   smart_sportz_redis:
   smart_sportz_prometheus:
   smart_sportz_grafana:

@@ -6,6 +6,7 @@ import { useAuth, type OtpChallenge } from "../auth/AuthContext";
 import { Page } from "../components/UI";
 import { assets } from "../data/platform";
 import { apiRequest } from "../lib/api";
+import { phoneDigits } from "../lib/formInputs";
 import { showToast } from "../lib/toast";
 
 type IconProps = {
@@ -61,7 +62,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
   const [password, setPassword] = useState("");
   const [loginPreset, setLoginPreset] = useState<"super_admin" | "management" | "participant" | null>(null);
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("+916374409006");
+  const [phone, setPhone] = useState("6374409006");
   const [channel] = useState<"whatsapp">("whatsapp");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
@@ -232,7 +233,7 @@ export function LoginPage({ recovery = false }: { recovery?: boolean }) {
           </p>
           {!challenge && mode === "signup" && <label>Full name<input placeholder="Team captain name" value={name} onChange={(event) => setName(event.target.value)} /></label>}
           {!challenge && <label>Email address<input placeholder='example@gmail.com' value={email} onChange={(event) => setEmail(event.target.value)} /></label>}   {/* removed the placeholder of emailPlaceholder */}
-          {!challenge && mode === "signup" && <label>Phone number<input placeholder="+916374409006" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>}
+          {!challenge && mode === "signup" && <label>Phone number<input type="tel" inputMode="numeric" maxLength={10} pattern="[0-9]{10}" placeholder="10 digit phone" value={phone} onChange={(event) => setPhone(phoneDigits(event.target.value))} /></label>}
           {!challenge && !recovery && (
             <label className="password-field">
               Password

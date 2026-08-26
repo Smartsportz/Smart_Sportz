@@ -168,6 +168,55 @@ def seed_live_match_details() -> None:
         execute_many(live_detail_update_rows())
 
 
+def seed_public_page_base_data() -> None:
+    statements: list[tuple[str, tuple]] = []
+    tournaments = [
+        ("mumbai-premier-bash", "Mumbai Premier Bash 2026", "Cricket", "Registration Open", "Mumbai", "Aug 14 - Sep 02", "Jul 24, 2026", "Aug 10, 2026", 32, 48, 16, 18, 45, "INR 25,00,000", "/assets/cricket-stadium.png", "/assets/poster.jpeg", "emerald"),
+        ("bangalore-corporate-t20", "Bangalore Corporate T20", "Cricket", "Live", "Bengaluru", "Jul 25 - Aug 05", "Jul 01, 2026", "Jul 20, 2026", 18, 24, 16, 18, 50, "INR 12,00,000", "/assets/cricket-stadium.png", "/assets/poster.jpeg", "orange"),
+        ("national-youth-football", "National Youth Football Cup", "Football", "Upcoming", "Delhi", "Sep 12 - Sep 20", "Aug 01, 2026", "Sep 05, 2026", 24, 32, 22, 14, 19, "INR 8,50,000", "/assets/football-match.png", "/assets/poster.jpeg", "blue"),
+        ("pro-elite-basketball", "Pro Elite Basketball Series", "Basketball", "Registration Open", "Chennai", "Oct 04 - Oct 12", "Jul 24, 2026", "Sep 25, 2026", 16, 16, 12, 18, 40, "INR 10,00,000", "/assets/basketball-match.png", "/assets/poster.jpeg", "emerald"),
+        ("kerala-volleyball-classic", "Kerala Volleyball Classic 2025", "Volleyball", "Completed", "Kochi", "Dec 02 - Dec 12", "Oct 15, 2025", "Nov 25, 2025", 20, 20, 12, 18, 45, "INR 6,00,000", "/assets/volleyball-match.png", "/assets/poster.jpeg", "pink"),
+        ("delhi-cricket-champions", "Delhi Cricket Champions 2025", "Cricket", "Completed", "Delhi", "Nov 05 - Nov 24", "Sep 20, 2025", "Oct 25, 2025", 20, 20, 16, 18, 45, "INR 15,00,000", "/assets/cricket-stadium.png", "/assets/poster.jpeg", "blue"),
+    ]
+    statements += [
+        (
+            """
+            INSERT OR IGNORE INTO tournaments (
+              slug, name, sport, status, location, date, registration_start, registration_end,
+              teams, capacity, team_size, min_age, max_age, prize, image, poster, accent
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            item,
+        )
+        for item in tournaments
+    ]
+    teams = [
+        ("mumbai-mavericks", "Mumbai Mavericks", "#01", "Cricket", 18, 15, 92, "/assets/cricket-stadium.png"),
+        ("bangalore-blaze", "Bangalore Blaze", "#04", "Football", 22, 12, 88, "/assets/football-match.png"),
+        ("chennai-chargers", "Chennai Chargers", "#12", "Basketball", 15, 9, 81, "/assets/basketball-match.png"),
+        ("kerala-spikers", "Kerala Spikers", "#07", "Volleyball", 12, 10, 86, "/assets/volleyball-match.png"),
+    ]
+    statements += [("INSERT OR IGNORE INTO teams(slug, name, rank, sport, players, wins, rating, image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", item) for item in teams]
+    matches = [
+        ("match-48", "Bangalore Corporate T20", "Cricket", "India Forge", "England XI", "156/4", "Yet to bat", "Over 18.4", "Live Now", "/assets/cricket-stadium.png"),
+        ("match-72", "Pro Elite Basketball Series", "Basketball", "Titans United", "Phoenix Fire", "58", "62", "Q3 08:39", "Live Now", "/assets/basketball-match.png"),
+        ("match-21", "Youth Football Cup", "Football", "Bengaluru Bulls", "Mumbai Mavericks", "2", "1", "78 min", "Second Half", "/assets/football-match.png"),
+    ]
+    statements += [
+        (
+            """
+            INSERT OR IGNORE INTO live_matches (
+              id, tournament, sport, home, away, score, away_score, stage, status, image
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            item,
+        )
+        for item in matches
+    ]
+    if statements:
+        execute_many(statements)
+
+
 def seed_data() -> None:
     if row("SELECT id FROM users LIMIT 1"):
         return
@@ -235,7 +284,7 @@ def seed_data() -> None:
 
 
 def seed_operational_data() -> None:
-    return
+    seed_public_page_base_data()
     operational_ready = (
         row("SELECT slug FROM tournaments WHERE slug = ?", ("kerala-volleyball-classic",))
         and row("SELECT slug FROM news_posts LIMIT 1")
@@ -323,10 +372,6 @@ def seed_operational_data() -> None:
             """,
             item,
         ) for item in registrations]
-    default_bracket_count = row("SELECT COUNT(*) AS total FROM bracket_nodes WHERE tournament_slug = ?", ("bangalore-corporate-t20",))
-    if default_bracket_count and int(default_bracket_count["total"]) != 19:
-        execute("DELETE FROM bracket_connections WHERE tournament_slug = ?", ("bangalore-corporate-t20",))
-        execute("DELETE FROM bracket_nodes WHERE tournament_slug = ?", ("bangalore-corporate-t20",))
     if not row("SELECT id FROM bracket_nodes WHERE tournament_slug = ?", ("bangalore-corporate-t20",)):
         nodes = [
             ("r1a", "bangalore-corporate-t20", "Seed 1", "Mumbai Mavericks", "Round-1", 7, 16, "paired"),

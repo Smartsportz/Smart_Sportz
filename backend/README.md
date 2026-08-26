@@ -4,9 +4,9 @@ Python FastAPI backend for the Smart Sportz frontend.
 
 This backend intentionally uses local services only:
 
-- DB-1 primary SQLite database in `storage/smart_sportz.db`
-- DB-2 mirror SQLite database in `storage/smart_sportz_mirror.db`
-- DB-3 audit/event SQLite database in `storage/smart_sportz_audit.db`
+- DB-1 primary SQLite database in `storage/smartsportz.db`
+- DB-2 mirror SQLite database in `storage/smartsportz_mirror.db`
+- DB-3 audit/event SQLite database in `storage/smartsportz_audit.db`
 - JSON backups in `storage/backups`
 - Local file uploads in `storage/uploads`
 - Local simulated payments
@@ -34,26 +34,19 @@ POST /api/v1/admin/database/backups/json
 GET  /api/v1/admin/logs
 ```
 
-Production should map `DATABASE_PATH`, `MIRROR_DATABASE_PATH`, and `AUDIT_DATABASE_PATH` to separate PostgreSQL connection strings with DB-2 write access granted only to replication/backup workers.
+Production should keep `DATABASE_PATH`, `MIRROR_DATABASE_PATH`, and `AUDIT_DATABASE_PATH` on persistent disk. DB-1 is the active SQLite database, DB-2 is the mirror/backup SQLite database, and DB-3 is audit/event storage.
 
-For Supabase local testing, use PostgreSQL mode with environment variables instead of committing credentials:
+The backend is disconnected from Supabase by default. If `storage/smartsportz.db` does not exist, startup creates the SQLite file and schema without clearing existing data. Startup seeding is disabled unless `SEED_DB_ON_STARTUP=true` is explicitly set.
+
+SQLite environment:
 
 ```powershell
-$env:DATABASE_BACKEND="postgres"
-$env:DATABASE_URL="postgresql://postgres.<project-ref>:<password>@<pooler-host>:5432/postgres?sslmode=require"
-$env:MIRROR_DATABASE_URL=$env:DATABASE_URL
-$env:AUDIT_DATABASE_URL=$env:DATABASE_URL
-$env:POSTGRES_PRIMARY_SCHEMA="primary_app"
-$env:POSTGRES_MIRROR_SCHEMA="mirror_backup"
-$env:POSTGRES_AUDIT_SCHEMA="audit_event"
+$env:DATABASE_BACKEND="sqlite"
+$env:DATABASE_PATH="storage/smartsportz.db"
+$env:MIRROR_DATABASE_PATH="storage/smartsportz_mirror.db"
+$env:AUDIT_DATABASE_PATH="storage/smartsportz_audit.db"
 python -m app.main
 ```
-
-In Supabase mode the backend creates three schemas in the same Supabase PostgreSQL database:
-
-- `primary_app` for live editable application data.
-- `mirror_backup` for DB-2 mirror data written only by the mirror worker/admin sync route.
-- `audit_event` for DB-3 login, audit, and system events.
 
 ## Run
 

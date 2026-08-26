@@ -309,6 +309,10 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
   const [quickFeatureMode, setQuickFeatureMode] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<Record<string, any> | null>(null);
   const [confirmNextStep, setConfirmNextStep] = useState<"news" | "announcements" | null>(null);
+  const [registrationSearch, setRegistrationSearch] = useState("");
+  const [registrationCityFilter, setRegistrationCityFilter] = useState("all");
+  const [registrationPaymentFilter, setRegistrationPaymentFilter] = useState("all");
+  const [registrationStatusFilter, setRegistrationStatusFilter] = useState("all");
 
   useEffect(() => {
     setRegistrationEnd(selectedWindowTournament?.registrationEnd ?? "");
@@ -501,6 +505,32 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     }
   }
   const pendingRegistrations = managerDashboard?.pendingRegistrations ?? [];
+  const registrationCityOptions = useMemo(() => Array.from(new Set(pendingRegistrations.map((item) => String(item.city ?? "").trim()).filter(Boolean))).sort(), [pendingRegistrations]);
+  const registrationPaymentOptions = useMemo(() => Array.from(new Set(pendingRegistrations.map((item) => String(item.payment_status ?? "").trim()).filter(Boolean))).sort(), [pendingRegistrations]);
+  const registrationStatusOptions = useMemo(() => Array.from(new Set(pendingRegistrations.map((item) => String(item.status ?? "").trim()).filter(Boolean))).sort(), [pendingRegistrations]);
+  const filteredPendingRegistrations = useMemo(() => {
+    const needle = registrationSearch.trim().toLowerCase();
+    return pendingRegistrations.filter((item) => {
+      const city = String(item.city ?? "").trim();
+      const paymentStatus = String(item.payment_status ?? "").trim();
+      const registrationStatus = String(item.status ?? "").trim();
+      const haystack = [
+        item.team_name,
+        item.tournament_name,
+        item.tournament_slug,
+        item.captain_name,
+        city,
+        item.email,
+        item.phone,
+        paymentStatus,
+        registrationStatus,
+      ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+      return (!needle || haystack.includes(needle))
+        && (registrationCityFilter === "all" || city === registrationCityFilter)
+        && (registrationPaymentFilter === "all" || paymentStatus === registrationPaymentFilter)
+        && (registrationStatusFilter === "all" || registrationStatus === registrationStatusFilter);
+    });
+  }, [pendingRegistrations, registrationCityFilter, registrationPaymentFilter, registrationSearch, registrationStatusFilter]);
   const assignedTournaments = sectionRecords.length ? sectionRecords : (managerDashboard?.assignedTournaments ?? []);
   const assignedCities = managerDashboard?.assignedCities ?? [];
   const liveMatches = section === "matches" ? sectionRecords : (managerDashboard?.liveMatches ?? []);
@@ -555,21 +585,33 @@ export function ManagementSectionPage({ section }: { section: keyof typeof manag
     pendingRegistrations.length === 0 ? (
       <section className="panel user-empty-state"><h2>No pending registrations</h2><p>Registration approvals are filtered by your assigned cities and will appear here from the database.</p></section>
     ) : (
-      <DataTable
-        columns={["Team", "Captain", "City", "Payment", "Status", "Action"]}
-        rows={pendingRegistrations.map((item) => [
-          item.team_name,
-          item.captain_name,
-          item.city,
-          item.payment_status,
-          <span className="status orange">{item.status}</span>,
-          <span className="table-actions">
-            <button type="button" onClick={() => updateRegistrationStatus(item.id, "approve")}>Accept</button>
-            <button type="button" onClick={() => updateRegistrationStatus(item.id, "reject")}>Reject</button>
-            <Link to={`/management/tournaments/${item.tournament_slug}/bracket`}>Allocate</Link>
-          </span>,
-        ])}
-      />
+      <>
+        <section className="panel form-grid">
+          <label>Search<input value={registrationSearch} onChange={(event) => setRegistrationSearch(event.target.value)} placeholder="Team, captain, city, phone..." /></label>
+          <label>City<select value={registrationCityFilter} onChange={(event) => setRegistrationCityFilter(event.target.value)}><option value="all">All cities</option>{registrationCityOptions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+          <label>Payment<select value={registrationPaymentFilter} onChange={(event) => setRegistrationPaymentFilter(event.target.value)}><option value="all">All payments</option>{registrationPaymentOptions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+          <label>Status<select value={registrationStatusFilter} onChange={(event) => setRegistrationStatusFilter(event.target.value)}><option value="all">All statuses</option>{registrationStatusOptions.map((item) => <option value={item} key={item}>{item}</option>)}</select></label>
+        </section>
+        {filteredPendingRegistrations.length === 0 ? (
+          <section className="panel user-empty-state"><h2>No matching registrations</h2><p>Change the search or filter options to show more pending registrations.</p></section>
+        ) : (
+          <DataTable
+            columns={["Team", "Captain", "City", "Payment", "Status", "Action"]}
+            rows={filteredPendingRegistrations.map((item) => [
+              item.team_name,
+              item.captain_name,
+              item.city,
+              item.payment_status,
+              <span className="status orange">{item.status}</span>,
+              <span className="table-actions">
+                <button type="button" onClick={() => updateRegistrationStatus(item.id, "approve")}>Accept</button>
+                <button type="button" onClick={() => updateRegistrationStatus(item.id, "reject")}>Reject</button>
+                <Link to={`/management/tournaments/${item.tournament_slug}/bracket`}>Allocate</Link>
+              </span>,
+            ])}
+          />
+        )}
+      </>
     )
   ) : section === "tournaments" ? (
     assignedTournaments.length === 0 ? (
