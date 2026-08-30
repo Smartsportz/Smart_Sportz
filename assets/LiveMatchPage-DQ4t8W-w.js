@@ -1,0 +1,1 @@
+import{e as r,j as i}from"./react-rTT5Q2CH.js";import{LiveMatchCenter as o}from"./LiveHubPage-BEi39doT.js";import"./useQuery-Ngz8OGHy.js";import"./index-BpLjvBXn.js";import"./icons-B1nM0n_E.js";import"./motion-C7Rs-iY0.js";import"./progressive-DAwAWd3e.js";function h(){const{matchId:t}=r();return i.jsx(o,{initialMatchId:t})}export{h as LiveMatchPage};
